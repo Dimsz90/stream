@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>StreamVault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<style>
+/* ══════════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════════ */
+:root {
+  --bg:       #070709;
+  --surface:  #0f0f12;
+  --surface2: #161619;
+  --surface3: #1c1c20;
+  --border:   #1e1e24;
+  --border2:  #2a2a32;
+  --border3:  #38383f;
+  --text:     #eeeef0;
+  --text2:    #888896;
+  --text3:    #44444e;
+  --accent:   #ff3c5f;
+  --accent2:  #ff6b85;
+  --accent-dim: rgba(255,60,95,0.12);
+  --green:    #3dffa0;
+  --amber:    #ffb83d;
+  --blue:     #3d9dff;
+  --mono:     'Space Mono', monospace;
+  --display:  'Bebas Neue', sans-serif;
+  --body:     'DM Sans', sans-serif;
+  --r:        10px;
+  --r-sm:     6px;
+}
+
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grain overlay */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.4;
+}
+
+/* Glow accent di bg */
+body::after {
+  content: '';
+  position: fixed;
+  top: -20vh; left: 50%;
+  transform: translateX(-50%);
+  width: 60vw; height: 40vh;
+  background: radial-gradient(ellipse at center, rgba(255,60,95,0.06) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ══════════════════════════════════════════
+   HEADER
+══════════════════════════════════════════ */
+header {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(7,7,9,0.92);
+  backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem; height: 58px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 26px; letter-spacing: 3px;
+  display: flex; align-items: center; gap: 0;
+}
+.logo span { color: var(--accent); }
+.logo-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin: 0 6px 2px;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.8); }
+}
+
+.header-right {
+  display: flex; align-items: center; gap: 14px;
+}
+.ver-tag {
+  font-size: 10px; color: var(--text3);
+  font-family: var(--mono);
+  border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 20px;
+}
+
+/* ══════════════════════════════════════════
+   MAIN
+══════════════════════════════════════════ */
+main {
+  max-width: 900px; margin: 0 auto;
+  padding: 3.5rem 1.5rem 7rem;
+  position: relative; z-index: 1;
+}
+
+/* ══════════════════════════════════════════
+   HERO / SEARCH
+══════════════════════════════════════════ */
+.hero { margin-bottom: 3rem; }
+
+.hero-eyebrow {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--accent); letter-spacing: 2px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.hero-eyebrow::before {
+  content: '';
+  display: inline-block; width: 20px; height: 1px;
+  background: var(--accent);
+}
+
+.search-title {
+  font-family: var(--display);
+  font-size: 62px; letter-spacing: 1px; line-height: 0.95;
+  margin-bottom: 24px;
+}
+.search-title .hi { color: var(--accent); }
+.search-title .dim { color: var(--text3); }
+
+/* Search box */
+.search-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.search-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.search-row {
+  display: flex;
+}
+
+#urlInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  padding: 16px 20px; font-size: 13px;
+  font-family: var(--mono); color: var(--text);
+  min-width: 0;
+}
+#urlInput::placeholder { color: var(--text3); }
+
+.btn-go {
+  background: var(--accent); color: #fff; border: none;
+  padding: 16px 32px; font-family: var(--display);
+  font-size: 20px; letter-spacing: 1px;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+  white-space: nowrap; flex-shrink: 0;
+}
+.btn-go:hover  { background: var(--accent2); }
+.btn-go:active { transform: scale(0.98); }
+.btn-go:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.search-hints {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.hint-pill {
+  font-size: 10px; font-family: var(--mono);
+  color: var(--text3); padding: 3px 10px;
+  border-radius: 20px; border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+}
+.hint-pill:hover { border-color: var(--accent); color: var(--accent); }
+
+/* SPA Toggle */
+.controls-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+
+.spa-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text3);
+  font-family: var(--mono); cursor: pointer;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color 0.2s, color 0.2s;
+  user-select: none;
+}
+.spa-toggle:hover { border-color: var(--border3); color: var(--text2); }
+.spa-toggle.on    { border-color: var(--accent); color: var(--accent); }
+
+.spa-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1.5px solid currentColor;
+  flex-shrink: 0; transition: background 0.2s;
+}
+.spa-toggle.on .spa-dot { background: var(--accent); }
+
+/* Status */
+.status {
+  display: none; align-items: center; gap: 10px;
+  margin-top: 14px; font-size: 12px;
+  font-family: var(--mono); color: var(--text2);
+}
+.spinner {
+  width: 13px; height: 13px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error */
+.error-box {
+  display: none;
+  background: rgba(255,60,95,0.06);
+  border: 1px solid rgba(255,60,95,0.2);
+  color: var(--accent2); border-radius: var(--r-sm);
+  padding: 12px 16px; font-size: 12px;
+  font-family: var(--mono); margin-top: 14px;
+  line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════
+   LIST MODE
+══════════════════════════════════════════ */
+#list-mode { display: none; }
+
+.list-header {
+  display: flex; align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 8px;
+}
+.list-h {
+  font-family: var(--display); font-size: 36px;
+  letter-spacing: 1px;
+}
+.list-ct {
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+}
+
+.video-list { display: flex; flex-direction: column; gap: 10px; }
+
+.video-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex; gap: 14px; padding: 14px;
+  transition: border-color 0.2s, background 0.2s;
+  animation: fadeUp 0.3s ease both;
+}
+.video-item:hover { border-color: var(--border3); background: var(--surface2); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.item-thumb {
+  width: 130px; height: 75px; border-radius: 7px;
+  background: var(--surface2); flex-shrink: 0;
+  overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-icon { font-size: 22px; opacity: 0.15; }
+.item-dur {
+  position: absolute; bottom: 4px; right: 5px;
+  background: rgba(0,0,0,0.8);
+  font-size: 10px; font-family: var(--mono); color: #fff;
+  padding: 1px 5px; border-radius: 3px;
+}
+
+.item-info { flex: 1; min-width: 0; }
+.item-title {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
+.item-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+
+.tag {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+  padding: 2px 8px; border-radius: 20px;
+}
+.tag-p { background: #1a1030; color: #a78bfa; border: 1px solid #2a1a50; }
+.tag-s { background: #0a1e10; color: #6ee7a0; border: 1px solid #163220; }
+.tag-n { background: #1e1600; color: #fcd34d; border: 1px solid #3a2e00; }
+.tag-b { background: #0a1626; color: #60a5fa; border: 1px solid #162440; }
+
+.item-url {
+  font-family: var(--mono); font-size: 10px; color: var(--text3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 10px;
+}
+.item-actions { display: flex; gap: 8px; }
+
+.btn-dl {
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-sm); padding: 6px 14px;
+  font-size: 11px; font-weight: 600; font-family: var(--body);
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-dl:hover { background: var(--accent2); }
+.btn-dl:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.empty {
+  display: none; text-align: center; padding: 5rem 2rem;
+  color: var(--text3);
+}
+.empty h3 {
+  font-family: var(--display); font-size: 30px;
+  color: var(--text2); margin-bottom: 10px; letter-spacing: 1px;
+}
+.empty p {
+  font-size: 12px; font-family: var(--mono);
+  color: var(--text3); line-height: 1.9;
+}
+
+/* ══════════════════════════════════════════
+   CINEMA MODE (shared base)
+══════════════════════════════════════════ */
+.cinema-screen {
+  display: none;
+  position: fixed; inset: 0;
+  background: #000; z-index: 200;
+}
+
+.cinema-bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  z-index: 210;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, transparent 100%);
+  transition: opacity 0.35s;
+  gap: 12px;
+}
+.cinema-bar.faded { opacity: 0; pointer-events: none; }
+
+.cinema-title {
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 50vw;
+}
+
+.cinema-btns { display: flex; gap: 7px; flex-wrap: nowrap; }
+
+.cbtn {
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.85); border-radius: var(--r-sm);
+  padding: 6px 12px; font-size: 11px;
+  font-family: var(--mono); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.cbtn:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.25); }
+.cbtn.active { border-color: var(--accent); color: var(--accent); }
+
+/* Video element — shared */
+.cinema-video {
+  width: 100vw; height: 100vh;
+  object-fit: contain;
+  position: absolute; top: 0; left: 0;
+  z-index: 201; background: #000;
+  display: none;
+}
+
+/* Subtitle styling */
+.cinema-video::cue {
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-family: var(--body);
+  font-size: 1.05em;
+  line-height: 1.5;
+  border-radius: 4px;
+}
+
+/* Loading / error overlay */
+.cinema-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; background: #000;
+  z-index: 205; transition: opacity 0.3s;
+}
+.cinema-overlay.hidden { display: none !important; }
+
+.big-spinner {
+  width: 42px; height: 42px;
+  border: 3px solid #1a1a1a;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.cinema-overlay p  { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.cinema-overlay h3 { font-family: var(--display); font-size: 36px; color: var(--accent); letter-spacing: 2px; }
+
+/* ══════════════════════════════════════════
+   SUBTITLE PANEL
+══════════════════════════════════════════ */
+.sub-panel {
+  position: absolute;
+  bottom: 70px; right: 16px;
+  background: rgba(10,10,14,0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 14px;
+  width: 310px;
+  z-index: 215;
+  display: none;
+  backdrop-filter: blur(14px);
+  animation: subSlide 0.2s ease;
+}
+.sub-panel.visible { display: block; }
+
+@keyframes subSlide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sub-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sub-header-title {
+  font-family: var(--mono); font-size: 10px;
+  color: rgba(255,255,255,0.3); letter-spacing: 1.5px;
+}
+.sub-off-btn {
+  font-size: 10px; font-family: var(--mono);
+  color: rgba(255,255,255,0.3); cursor: pointer;
+  padding: 2px 8px; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px; transition: all 0.15s;
+}
+.sub-off-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.sub-lang-row {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.sub-lang-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.55);
+  border-radius: 4px; padding: 4px 10px;
+  font-size: 11px; font-family: var(--mono);
+  cursor: pointer; transition: all 0.15s;
+}
+.sub-lang-btn:hover  { border-color: rgba(255,255,255,0.25); color: #fff; }
+.sub-lang-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+.sub-list {
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.sub-list::-webkit-scrollbar { width: 3px; }
+.sub-list::-webkit-scrollbar-track { background: transparent; }
+.sub-list::-webkit-scrollbar-thumb { background: var(--border3); border-radius: 3px; }
+
+.sub-item {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-radius: 7px;
+  cursor: pointer; transition: background 0.15s;
+}
+.sub-item:hover  { background: rgba(255,255,255,0.06); }
+.sub-item.active { background: rgba(255,60,95,0.12); }
+
+.sub-item-left { flex: 1; min-width: 0; }
+.sub-item-name {
+  font-size: 11px; font-family: var(--mono);
+  color: rgba(255,255,255,0.65);
+  white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.sub-item.active .sub-item-name { color: var(--accent); }
+
+.sub-item-meta {
+  display: flex; gap: 6px; align-items: center;
+}
+.sub-badge {
+  font-size: 9px; font-family: var(--mono);
+  padding: 1px 5px; border-radius: 3px;
+}
+.sub-badge-hi   { background: rgba(61,255,160,0.12); color: var(--green); }
+.sub-badge-dl   { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.3); }
+
+.sub-item-load {
+  font-size: 10px; font-family: var(--mono);
+  color: var(--accent); flex-shrink: 0;
+  align-self: center;
+  display: none;
+}
+.sub-item.loading .sub-item-load { display: block; }
+.sub-item.loading .sub-item-name { opacity: 0.5; }
+
+.sub-empty {
+  font-size: 11px; font-family: var(--mono);
+  color: rgba(255,255,255,0.2);
+  padding: 16px 10px; text-align: center;
+  line-height: 1.8;
+}
+.sub-searching {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-family: var(--mono);
+  color: rgba(255,255,255,0.3); padding: 12px 10px;
+}
+
+.sub-status-bar {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 10px; font-family: var(--mono);
+  color: rgba(255,255,255,0.25);
+  display: flex; align-items: center; gap: 6px;
+}
+.sub-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text3); flex-shrink: 0;
+}
+.sub-status-dot.active { background: var(--green); }
+
+/* ══════════════════════════════════════════
+   IMDB INFO BAR
+══════════════════════════════════════════ */
+.imdb-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.imdb-poster {
+  width: 34px; height: 50px; border-radius: 4px;
+  object-fit: cover; flex-shrink: 0; background: #222;
+}
+
+.imdb-meta { min-width: 0; }
+.imdb-title-bar {
+  font-family: var(--display); font-size: 18px;
+  letter-spacing: 1px; color: #fff;
+  white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 45vw;
+}
+.imdb-sub {
+  font-family: var(--mono); font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* IMDB frame fallback */
+#imdbFrame {
+  width: 100vw; height: 100vh;
+  border: none; background: #000;
+  position: absolute; top: 0; left: 0;
+  z-index: 201; display: none;
+}
+
+/* ══════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════ */
+footer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  text-align: center; font-size: 10px;
+  font-family: var(--mono); color: var(--text3);
+  padding: 10px;
+  background: rgba(7,7,9,0.94);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+  letter-spacing: 0.5px;
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .search-title { font-size: 44px; }
+  .item-thumb { width: 90px; height: 55px; }
+  .btn-go { padding: 16px 18px; font-size: 17px; }
+  .sub-panel { width: calc(100vw - 24px); right: 12px; }
+  .cinema-btns .cbtn:not(:last-child):not(#btnSubCinema) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════
+     HEADER
+════════════════════════════ -->
+<header>
+  <div class="logo">
+    STREAM<div class="logo-dot"></div><span>VAULT</span>
+  </div>
+  <div class="header-right">
+    <div class="ver-tag">v2.2</div>
+  </div>
+</header>
+
+<!-- ════════════════════════════
+     MAIN / SEARCH
+════════════════════════════ -->
+<main>
+  <div class="hero">
+    <div class="hero-eyebrow">UNIVERSAL STREAM EXTRACTOR</div>
+    <div class="search-title">
+      SCAN &amp; <span class="hi">STREAM</span><br>
+      <span class="dim">ANYTHING</span>
+    </div>
+
+    <div class="search-wrap">
+      <div class="search-row">
+        <input id="urlInput" type="url"
+          placeholder="imdb.com/title/tt... · vidgf.com/d/... · URL halaman lain"
+          autocomplete="off" spellcheck="false">
+        <button class="btn-go" id="btnGo" onclick="handleSubmit()">SCAN</button>
+      </div>
+      <div class="search-hints">
+        <div class="hint-pill" onclick="fillHint('https://www.imdb.com/title/tt0111161/')">IMDB · The Shawshank Redemption</div>
+        <div class="hint-pill" onclick="fillHint('https://www.imdb.com/title/tt0468569/')">IMDB · The Dark Knight</div>
+        <div class="hint-pill" onclick="fillHint('https://www.imdb.com/title/tt1375666/')">IMDB · Inception</div>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <div class="spa-toggle" id="spaToggle" onclick="toggleSpa()">
+        <div class="spa-dot"></div>
+        <span id="spaLabel">Mode SPA (off)</span>
+      </div>
+    </div>
+
+    <div class="status" id="status">
+      <div class="spinner"></div>
+      <span id="statusText"></span>
+    </div>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <!-- List mode -->
+  <div id="list-mode">
+    <div class="list-header">
+      <div class="list-h">HASIL SCAN</div>
+      <div class="list-ct" id="listCount"></div>
+    </div>
+    <div class="video-list" id="videoList"></div>
+    <div class="empty" id="emptyState">
+      <h3>TIDAK ADA VIDEO</h3>
+      <p>Halaman tidak mengandung video terdeteksi.<br>
+         Coba aktifkan Mode SPA untuk halaman React / Vue / Next.js</p>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════
+     CINEMA MODE — vidgf
+════════════════════════════ -->
+<div id="cinema-mode" class="cinema-screen">
+
+  <!-- Loading overlay -->
+  <div class="cinema-overlay" id="cinemaLoading">
+    <div class="big-spinner"></div>
+    <p id="cinemaLoadText">Mengekstrak link video...</p>
+  </div>
+
+  <!-- Error overlay -->
+  <div class="cinema-overlay hidden" id="cinemaError">
+    <h3>GAGAL</h3>
+    <p id="cinemaErrText">Tidak bisa mengambil link video.</p>
+    <button class="cbtn" style="margin-top:10px" onclick="closeCinema()">← KEMBALI</button>
+  </div>
+
+  <!-- Video -->
+  <video id="cinemaVideo" class="cinema-video" controls autoplay playsinline></video>
+
+  <!-- Subtitle panel -->
+  <div class="sub-panel" id="subPanelCinema">
+    <div class="sub-header">
+      <div class="sub-header-title">// SUBTITLE</div>
+      <div class="sub-off-btn" onclick="disableSubtitle('cinemaVideo', 'subPanelCinema', 'btnSubCinema')">MATIKAN</div>
+    </div>
+    <div class="sub-lang-row" id="subLangCinema"></div>
+    <div class="sub-list" id="subListCinema">
+      <div class="sub-empty">Pilih bahasa terlebih dahulu</div>
+    </div>
+    <div class="sub-status-bar">
+      <div class="sub-status-dot" id="subDotCinema"></div>
+      <span id="subStatusCinema">Tidak ada subtitle aktif</span>
+    </div>
+  </div>
+
+  <!-- Bar -->
+  <div class="cinema-bar" id="cinemaBar">
+    <div class="cinema-title" id="cinemaTitle">vidgf player</div>
+    <div class="cinema-btns">
+      <button class="cbtn" id="btnSubCinema" onclick="toggleSubPanel('Cinema')">CC SUB</button>
+      <button class="cbtn" onclick="copyUrl()">COPY URL</button>
+      <button class="cbtn" onclick="dlCinema()">↓ UNDUH</button>
+      <button class="cbtn" onclick="closeCinema()">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     IMDB CINEMA MODE
+════════════════════════════ -->
+<div id="imdb-mode" class="cinema-screen">
+
+  <!-- Loading overlay -->
+  <div class="cinema-overlay" id="imdbLoading">
+    <div class="big-spinner"></div>
+    <p id="imdbLoadText">Mengambil info film...</p>
+  </div>
+
+  <!-- Stream loading -->
+  <div class="cinema-overlay hidden" id="imdbStreamLoading">
+    <div class="big-spinner"></div>
+    <p>Mengekstrak stream URL...</p>
+  </div>
+
+  <!-- Video -->
+  <video id="imdbVideo" class="cinema-video" controls autoplay playsinline></video>
+
+  <!-- Iframe fallback -->
+  <iframe id="imdbFrame"
+    allowfullscreen
+    allow="autoplay; fullscreen; picture-in-picture"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
+  </iframe>
+
+  <!-- Subtitle panel -->
+  <div class="sub-panel" id="subPanelImdb">
+    <div class="sub-header">
+      <div class="sub-header-title">// SUBTITLE</div>
+      <div class="sub-off-btn" onclick="disableSubtitle('imdbVideo', 'subPanelImdb', 'btnSubImdb')">MATIKAN</div>
+    </div>
+    <div class="sub-lang-row" id="subLangImdb"></div>
+    <div class="sub-list" id="subListImdb">
+      <div class="sub-empty">Pilih bahasa terlebih dahulu</div>
+    </div>
+    <div class="sub-status-bar">
+      <div class="sub-status-dot" id="subDotImdb"></div>
+      <span id="subStatusImdb">Tidak ada subtitle aktif</span>
+    </div>
+  </div>
+
+  <!-- Bar -->
+  <div class="cinema-bar" id="imdbBar">
+    <div class="imdb-info">
+      <img class="imdb-poster" id="imdbPoster" src="" alt="" style="display:none">
+      <div class="imdb-meta">
+        <div class="imdb-title-bar" id="imdbTitle">Memuat...</div>
+        <div class="imdb-sub">
+          <span id="imdbYear"></span>
+          <span id="imdbRating"></span>
+          <span id="imdbGenre"></span>
+          <span id="imdbRuntime"></span>
+        </div>
+      </div>
+    </div>
+    <div class="cinema-btns">
+      <button class="cbtn" id="btnSubImdb" onclick="toggleSubPanel('Imdb')">CC SUB</button>
+      <a id="imdbLink" href="#" target="_blank" class="cbtn">IMDB ↗</a>
+      <button class="cbtn" onclick="closeImdb()">✕</button>
+    </div>
+  </div>
+</div>
+
+<footer>StreamVault </footer>
+
+<!-- ════════════════════════════
+     JAVASCRIPT
+════════════════════════════ -->
+<script>
+/* ─── Konfigurasi ─── */
+const API = "";   // kosong = same origin (Vercel / localhost)
+
+/* ─── State Global ─── */
+let allVideos    = [];
+let cinemaUrl    = "";
+let spaOn        = false;
+let hlsInstance  = null;
+let hideTimer    = null;
+let imdbHideTimer = null;
+
+/* Subtitle state per player */
+const SUB_STATE = {
+  Cinema: { imdbId: null, title: "", activeLang: "en", activeFileId: null },
+  Imdb:   { imdbId: null, title: "", activeLang: "en", activeFileId: null },
+};
+
+/* Bahasa tersedia */
+const LANGS = [
+  { code: "en",    label: "ENG" },
+  { code: "id",    label: "IND" },
+  { code: "ja",    label: "JPN" },
+  { code: "ko",    label: "KOR" },
+  { code: "zh-CN", label: "ZHO" },
+  { code: "ar",    label: "ARA" },
+  { code: "fr",    label: "FRA" },
+  { code: "es",    label: "ESP" },
+];
+
+/* ─── API Helper ─── */
+async function apiFetch(url, opt = {}) {
+  return fetch(url, opt);
+}
+
+/* ─── SPA ─── */
+function toggleSpa() {
+  spaOn = !spaOn;
+  document.getElementById("spaToggle").classList.toggle("on", spaOn);
+  document.getElementById("spaLabel").textContent = spaOn ? "Mode SPA (on)" : "Mode SPA (off)";
+}
+
+/* ─── Hints ─── */
+function fillHint(url) {
+  document.getElementById("urlInput").value = url;
+  handleSubmit();
+}
+
+/* ─── UI Helpers ─── */
+function resetUI() {
+  document.getElementById("list-mode").style.display = "none";
+  document.getElementById("cinema-mode").style.display = "none";
+  document.getElementById("imdb-mode").style.display = "none";
+  document.getElementById("errorBox").style.display = "none";
+  document.getElementById("videoList").innerHTML = "";
+  allVideos = [];
+}
+
+function setStatus(show, text = "") {
+  const el = document.getElementById("status");
+  el.style.display = show ? "flex" : "none";
+  document.getElementById("statusText").textContent = text;
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorBox");
+  el.textContent = "⚠ " + msg;
+  el.style.display = "block";
+}
+
+function setBtnLoading(loading) {
+  const btn = document.getElementById("btnGo");
+  btn.disabled = loading;
+  btn.textContent = loading ? "..." : "SCAN";
+}
+
+function esc(s) {
+  return (s || "").replace(/[&<>"]/g, m =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[m]
+  );
+}
+
+/* ─── Auto-hide bars ─── */
+function setupHideBar(screenId, barId, timerRef, delay = 3500) {
+  document.getElementById(screenId).addEventListener("mousemove", () => {
+    document.getElementById(barId).classList.remove("faded");
+    clearTimeout(timerRef.t);
+    timerRef.t = setTimeout(() => {
+      document.getElementById(barId).classList.add("faded");
+    }, delay);
+  });
+}
+const cinemaTmr = {}, imdbTmr = {};
+setupHideBar("cinema-mode", "cinemaBar", cinemaTmr, 3500);
+setupHideBar("imdb-mode",   "imdbBar",   imdbTmr,   4000);
+
+/* ════════════════════════════════════════════
+   SUBTITLE SYSTEM
+════════════════════════════════════════════ */
+
+/** Buka/tutup panel subtitle */
+function toggleSubPanel(playerKey) {
+  const panelId = "subPanel" + playerKey;
+  const panel   = document.getElementById(panelId);
+  const isOpen  = panel.classList.contains("visible");
+
+  if (!isOpen) {
+    panel.classList.add("visible");
+    buildLangRow(playerKey);
+    // Langsung fetch bahasa aktif jika belum ada list
+    const list = document.getElementById("subList" + playerKey);
+    if (list.querySelector(".sub-empty, .sub-searching")) {
+      fetchSubtitles(playerKey, SUB_STATE[playerKey].activeLang);
+    }
+  } else {
+    panel.classList.remove("visible");
+  }
+}
+
+/** Render tombol pilih bahasa */
+function buildLangRow(playerKey) {
+  const row   = document.getElementById("subLang" + playerKey);
+  const state = SUB_STATE[playerKey];
+  row.innerHTML = LANGS.map(l => `
+    <button class="sub-lang-btn ${l.code === state.activeLang ? "active" : ""}"
+            onclick="selectLang('${playerKey}', '${l.code}', this)">
+      ${l.label}
+    </button>
+  `).join("");
+}
+
+/** Pilih bahasa */
+function selectLang(playerKey, code, el) {
+  SUB_STATE[playerKey].activeLang = code;
+  document.querySelectorAll(`#subLang${playerKey} .sub-lang-btn`)
+    .forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  fetchSubtitles(playerKey, code);
+}
+
+/** Fetch daftar subtitle dari server */
+async function fetchSubtitles(playerKey, lang) {
+  const list  = document.getElementById("subList" + playerKey);
+  const state = SUB_STATE[playerKey];
+
+  list.innerHTML = `
+    <div class="sub-searching">
+      <div class="spinner"></div> Mencari subtitle ${lang.toUpperCase()}...
+    </div>`;
+
+  try {
+    let paramStr = "";
+    if (state.imdbId) {
+      paramStr = `imdb_id=${encodeURIComponent(state.imdbId)}&lang=${lang}`;
+    } else if (state.title) {
+      paramStr = `query=${encodeURIComponent(state.title)}&lang=${lang}`;
+    } else {
+      list.innerHTML = `<div class="sub-empty">Tidak ada ID film tersedia</div>`;
+      return;
+    }
+
+    const r = await apiFetch(`${API}/api/subtitle/search?${paramStr}`);
+    const d = await r.json();
+
+    if (d.status === "error") {
+      list.innerHTML = `<div class="sub-empty">⚠ ${esc(d.error || "API error")}</div>`;
+      return;
+    }
+
+    const items = (d.data || []).slice(0, 12);
+    if (items.length === 0) {
+      list.innerHTML = `<div class="sub-empty">Tidak ada subtitle ${lang.toUpperCase()} ditemukan</div>`;
+      return;
+    }
+
+    list.innerHTML = items.map((s, i) => {
+      const name    = esc(s.release || s.file_name || `Subtitle ${i + 1}`);
+      const dlCount = s.downloads > 999
+        ? Math.round(s.downloads / 1000) + "k"
+        : (s.downloads || "");
+      const isActive = s.file_id === state.activeFileId;
+      return `
+        <div class="sub-item ${isActive ? "active" : ""}"
+             id="sub-${playerKey}-${i}"
+             onclick="loadSubtitle('${playerKey}', '${s.file_id}', ${i})">
+          <div class="sub-item-left">
+            <div class="sub-item-name" title="${name}">${name}</div>
+            <div class="sub-item-meta">
+              ${s.hearing_impaired
+                ? '<span class="sub-badge sub-badge-hi">♿ HI</span>'
+                : ""}
+              ${dlCount
+                ? `<span class="sub-badge sub-badge-dl">⬇ ${dlCount}</span>`
+                : ""}
+              ${s.fps
+                ? `<span class="sub-badge sub-badge-dl">${s.fps} fps</span>`
+                : ""}
+            </div>
+          </div>
+          <div class="sub-item-load">⟳</div>
+        </div>`;
+    }).join("");
+
+  } catch (e) {
+    list.innerHTML = `<div class="sub-empty">Gagal mengambil subtitle</div>`;
+  }
+}
+
+/** Download & inject subtitle */
+async function loadSubtitle(playerKey, fileId, idx) {
+  const videoId = playerKey === "Cinema" ? "cinemaVideo" : "imdbVideo";
+  const state   = SUB_STATE[playerKey];
+
+  // Tandai loading
+  document.querySelectorAll(`#subList${playerKey} .sub-item`)
+    .forEach(el => el.classList.remove("active", "loading"));
+  const itemEl = document.getElementById(`sub-${playerKey}-${idx}`);
+  if (itemEl) itemEl.classList.add("loading");
+
+  try {
+    const r = await apiFetch(`${API}/api/subtitle/download?file_id=${fileId}`);
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+
+    const srt = await r.text();
+    if (!srt || srt.trim().length < 10) throw new Error("File subtitle kosong");
+
+    // Convert SRT → WebVTT
+    const vtt     = srtToVtt(srt);
+    const blob    = new Blob([vtt], { type: "text/vtt" });
+    const blobUrl = URL.createObjectURL(blob);
+
+    applyVttToVideo(videoId, blobUrl, state.activeLang);
+
+    // Update state
+    state.activeFileId = fileId;
+    if (itemEl) {
+      itemEl.classList.remove("loading");
+      itemEl.classList.add("active");
+    }
+
+    // Update status bar
+    const releaseName = itemEl
+      ? itemEl.querySelector(".sub-item-name").textContent.trim()
+      : `Subtitle`;
+    updateSubStatus(playerKey, true, releaseName);
+
+    // Update tombol bar
+    const btn = document.getElementById("btnSub" + playerKey);
+    if (btn) { btn.textContent = "CC ✓"; btn.classList.add("active"); }
+
+  } catch (e) {
+    if (itemEl) itemEl.classList.remove("loading");
+    updateSubStatus(playerKey, false, "Gagal: " + e.message);
+  }
+}
+
+/** Inject VTT track ke elemen video */
+function applyVttToVideo(videoId, vttUrl, lang) {
+  const video = document.getElementById(videoId);
+  // Hapus semua track lama
+  Array.from(video.querySelectorAll("track")).forEach(t => t.remove());
+  // Tambah baru
+  const track = document.createElement("track");
+  track.kind    = "subtitles";
+  track.src     = vttUrl;
+  track.srclang = lang;
+  track.label   = lang.toUpperCase();
+  track.default = true;
+  video.appendChild(track);
+  // Aktifkan
+  setTimeout(() => {
+    if (video.textTracks.length > 0) {
+      video.textTracks[0].mode = "showing";
+    }
+  }, 100);
+}
+
+/** Matikan subtitle */
+function disableSubtitle(videoId, panelId, btnId) {
+  const video = document.getElementById(videoId);
+  Array.from(video.querySelectorAll("track")).forEach(t => t.remove());
+  if (video.textTracks.length > 0) {
+    video.textTracks[0].mode = "disabled";
+  }
+
+  // Reset state
+  const playerKey = panelId.replace("subPanel", "");
+  SUB_STATE[playerKey].activeFileId = null;
+  document.querySelectorAll(`#subList${playerKey} .sub-item`)
+    .forEach(el => el.classList.remove("active"));
+
+  updateSubStatus(playerKey, false, "Tidak ada subtitle aktif");
+
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.textContent = "CC SUB"; btn.classList.remove("active"); }
+}
+
+/** Update status bar subtitle */
+function updateSubStatus(playerKey, active, text) {
+  const dot    = document.getElementById("subDot" + playerKey);
+  const status = document.getElementById("subStatus" + playerKey);
+  if (dot)    dot.classList.toggle("active", active);
+  if (status) status.textContent = text;
+}
+
+/**
+ * Konversi SRT ke WebVTT
+ * Perbedaan utama: koma pada timestamp SRT → titik pada VTT
+ */
+function srtToVtt(srt) {
+  return "WEBVTT\n\n" + srt
+    .replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    .replace(/^\uFEFF/, "")                              // BOM
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2")  // koma → titik
+    .replace(/<[^>]+>/g, "")                             // hapus tag HTML di teks
+    .trim();
+}
+
+/* ════════════════════════════════════════════
+   MAIN HANDLER
+════════════════════════════════════════════ */
+async function handleSubmit() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) return;
+  resetUI();
+
+  try {
+    const host  = new URL(url).hostname.toLowerCase();
+    const isImdb = host.includes("imdb") || /^tt\d+/.test(url);
+
+    if (isImdb)           return modeImdb(url);
+    if (host.includes("vidgf")) return modeVidgf(url);
+    return modeScan(url);
+  } catch {
+    showError("URL tidak valid");
+  }
+}
+
+document.getElementById("urlInput")
+  .addEventListener("keydown", e => e.key === "Enter" && handleSubmit());
+
+/* ════════════════════════════════════════════
+   IMDB MODE
+════════════════════════════════════════════ */
+function extractImdbId(u) {
+  const m = u.match(/tt(\d+)/);
+  if (m) return `tt${m[1]}`;
+  return u.startsWith("tt") ? u : null;
+}
+
+async function modeImdb(url) {
+  const id = extractImdbId(url);
+  if (!id) return showError("IMDB ID tidak valid. Contoh: tt1375666");
+
+  document.getElementById("imdb-mode").style.display = "block";
+  imdbShowLoading("Mengambil info film...");
+  setBtnLoading(true);
+
+  // Set subtitle state
+  SUB_STATE.Imdb.imdbId = id;
+
+  try {
+    const r = await fetch(`${API}/api/imdb?id=${id}&action=stream`);
+    const d = await r.json();
+
+    if (d.status !== "success") throw new Error(d.error || "Gagal mengambil data");
+
+    // Isi info bar
+    updateImdbUI(d, id);
+    SUB_STATE.Imdb.title = d.title || id;
+
+    if (d.stream_url) {
+      imdbShowStreamLoading();
+      playHls(d.stream_url, d.embed_url, id);
+    } else {
+      imdbShowIframe(d.embed_url || `https://streamimdb.ru/embed/movie/${id}`);
+    }
+  } catch (e) {
+    showError("Gagal memuat film: " + e.message);
+    imdbShowIframe(`https://streamimdb.ru/embed/movie/${id}`);
+  } finally {
+    setBtnLoading(false);
+    clearTimeout(imdbTmr.t);
+    imdbTmr.t = setTimeout(() => {
+      document.getElementById("imdbBar").classList.add("faded");
+    }, 4000);
+  }
+}
+
+function updateImdbUI(d, id) {
+  document.getElementById("imdbTitle").textContent   = d.title || id;
+  document.getElementById("imdbYear").textContent    = d.year || "";
+  document.getElementById("imdbRating").textContent  = d.rating ? `⭐ ${d.rating}/10` : "";
+  document.getElementById("imdbGenre").textContent   = d.genre || "";
+  document.getElementById("imdbRuntime").textContent = d.runtime || "";
+  document.getElementById("imdbLink").href           = d.imdb_url || "#";
+
+  const p = document.getElementById("imdbPoster");
+  if (d.poster && d.poster !== "N/A") {
+    p.src = d.poster; p.style.display = "block";
+  } else {
+    p.style.display = "none";
+  }
+}
+
+function imdbShowLoading(text) {
+  document.getElementById("imdbVideo").style.display = "none";
+  document.getElementById("imdbFrame").style.display = "none";
+  document.getElementById("imdbStreamLoading").classList.add("hidden");
+  document.getElementById("imdbLoadText").textContent = text;
+  document.getElementById("imdbLoading").classList.remove("hidden");
+}
+
+function imdbShowStreamLoading() {
+  document.getElementById("imdbLoading").classList.add("hidden");
+  document.getElementById("imdbVideo").style.display = "none";
+  document.getElementById("imdbFrame").style.display = "none";
+  document.getElementById("imdbStreamLoading").classList.remove("hidden");
+}
+
+function imdbShowVideo() {
+  document.getElementById("imdbLoading").classList.add("hidden");
+  document.getElementById("imdbStreamLoading").classList.add("hidden");
+  document.getElementById("imdbFrame").style.display = "none";
+  document.getElementById("imdbVideo").style.display = "block";
+}
+
+function imdbShowIframe(src) {
+  document.getElementById("imdbLoading").classList.add("hidden");
+  document.getElementById("imdbStreamLoading").classList.add("hidden");
+  document.getElementById("imdbVideo").style.display = "none";
+  const f = document.getElementById("imdbFrame");
+  f.src = src; f.style.display = "block";
+}
+
+function playHls(proxiedUrl, embedUrl, imdbId) {
+  const v = document.getElementById("imdbVideo");
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+  if (Hls.isSupported()) {
+    hlsInstance = new Hls({ maxBufferLength: 30 });
+    hlsInstance.loadSource(proxiedUrl);
+    hlsInstance.attachMedia(v);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      imdbShowVideo();
+      v.play().catch(() => {});
+    });
+    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        imdbShowIframe(embedUrl || `https://streamimdb.ru/embed/movie/${imdbId}`);
+      }
+    });
+  } else if (v.canPlayType("application/vnd.apple.mpegurl")) {
+    v.src = proxiedUrl;
+    v.addEventListener("loadedmetadata", () => {
+      imdbShowVideo();
+      v.play().catch(() => {});
+    }, { once: true });
+  } else {
+    imdbShowIframe(embedUrl || `https://streamimdb.ru/embed/movie/${imdbId}`);
+  }
+}
+
+function closeImdb() {
+  document.getElementById("imdb-mode").style.display = "none";
+  const v = document.getElementById("imdbVideo");
+  v.pause(); v.src = ""; v.style.display = "none";
+  Array.from(v.querySelectorAll("track")).forEach(t => t.remove());
+  const f = document.getElementById("imdbFrame");
+  f.src = ""; f.style.display = "none";
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+  document.getElementById("imdbStreamLoading").classList.add("hidden");
+  document.getElementById("imdbLoading").classList.remove("hidden");
+  document.getElementById("imdbLoadText").textContent = "Mengambil info film...";
+  document.getElementById("subPanelImdb").classList.remove("visible");
+
+  // Reset subtitle state
+  SUB_STATE.Imdb.activeFileId = null;
+  document.getElementById("btnSubImdb").textContent = "CC SUB";
+  document.getElementById("btnSubImdb").classList.remove("active");
+  updateSubStatus("Imdb", false, "Tidak ada subtitle aktif");
+
+  clearTimeout(imdbTmr.t);
+}
+
+/* ════════════════════════════════════════════
+   VIDGF MODE
+════════════════════════════════════════════ */
+async function modeVidgf(url) {
+  const id = url.split("/").pop().split("?")[0];
+
+  document.getElementById("cinema-mode").style.display = "block";
+  cinemaShowLoading("Mengekstrak link video...");
+
+  // Set subtitle title dari URL
+  SUB_STATE.Cinema.imdbId = null;
+  SUB_STATE.Cinema.title  = id;
+
+  try {
+    const res = await apiFetch(`${API}/api/get-video?id=${id}`);
+    const d   = await res.json();
+    if (!d.link) throw new Error("Link tidak ditemukan dari server");
+
+    cinemaUrl = d.link;
+    document.getElementById("cinemaTitle").textContent = `vidgf · ${id}`;
+    SUB_STATE.Cinema.title = id;
+
+    const video = document.getElementById("cinemaVideo");
+
+    if (d.link.includes(".m3u8") && Hls.isSupported()) {
+      if (hlsInstance) hlsInstance.destroy();
+      hlsInstance = new Hls();
+      hlsInstance.loadSource(d.link);
+      hlsInstance.attachMedia(video);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        cinemaShowVideo();
+        video.play().catch(() => {});
+      });
+      hlsInstance.on(Hls.Events.ERROR, (e, data) => {
+        if (data.fatal) cinemaShowError("HLS gagal: " + (data.type || "unknown"));
+      });
+    } else {
+      video.src = d.link;
+      video.addEventListener("loadedmetadata", () => {
+        cinemaShowVideo(); video.play().catch(() => {});
+      }, { once: true });
+      video.addEventListener("canplay", () => cinemaShowVideo(), { once: true });
+    }
+  } catch (e) {
+    cinemaShowError(e.message || "Tidak bisa mengambil link video.");
+  }
+}
+
+function cinemaShowLoading(text) {
+  const v = document.getElementById("cinemaVideo");
+  v.style.display = "none";
+  document.getElementById("cinemaError").classList.add("hidden");
+  document.getElementById("cinemaLoadText").textContent = text;
+  document.getElementById("cinemaLoading").classList.remove("hidden");
+}
+
+function cinemaShowVideo() {
+  document.getElementById("cinemaLoading").classList.add("hidden");
+  document.getElementById("cinemaError").classList.add("hidden");
+  document.getElementById("cinemaVideo").style.display = "block";
+}
+
+function cinemaShowError(msg) {
+  document.getElementById("cinemaVideo").style.display = "none";
+  document.getElementById("cinemaLoading").classList.add("hidden");
+  document.getElementById("cinemaErrText").textContent = msg;
+  document.getElementById("cinemaError").classList.remove("hidden");
+}
+
+function closeCinema() {
+  document.getElementById("cinema-mode").style.display = "none";
+  const v = document.getElementById("cinemaVideo");
+  v.pause(); v.src = ""; v.style.display = "none";
+  Array.from(v.querySelectorAll("track")).forEach(t => t.remove());
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+  document.getElementById("cinemaError").classList.add("hidden");
+  document.getElementById("cinemaLoading").classList.remove("hidden");
+  document.getElementById("cinemaLoadText").textContent = "Mengekstrak link video...";
+  document.getElementById("subPanelCinema").classList.remove("visible");
+
+  // Reset subtitle state
+  SUB_STATE.Cinema.activeFileId = null;
+  document.getElementById("btnSubCinema").textContent = "CC SUB";
+  document.getElementById("btnSubCinema").classList.remove("active");
+  updateSubStatus("Cinema", false, "Tidak ada subtitle aktif");
+
+  clearTimeout(cinemaTmr.t);
+}
+
+function copyUrl() {
+  if (cinemaUrl) navigator.clipboard.writeText(cinemaUrl).catch(() => {});
+}
+
+function dlCinema() {
+  if (!cinemaUrl) return alert("Link video belum dimuat!");
+  const a = document.createElement("a");
+  a.href = cinemaUrl; a.download = "video.mp4"; a.target = "_blank";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ════════════════════════════════════════════
+   SCAN MODE
+════════════════════════════════════════════ */
+async function modeScan(url) {
+  setStatus(true, "Scan halaman...");
+  setBtnLoading(true);
+
+  try {
+    const r = await apiFetch(`${API}/api/scan`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ url, spa: spaOn }),
+    });
+    const d = await r.json();
+    allVideos = d.videos || [];
+
+    document.getElementById("list-mode").style.display = "block";
+
+    if (allVideos.length === 0) {
+      document.getElementById("emptyState").style.display = "block";
+      document.getElementById("listCount").textContent = "0 video";
+    } else {
+      document.getElementById("emptyState").style.display = "none";
+      document.getElementById("listCount").textContent = `${allVideos.length} video ditemukan`;
+      renderVideoList(allVideos);
+    }
+  } catch (e) {
+    showError(e.message);
+  }
+
+  setStatus(false);
+  setBtnLoading(false);
+}
+
+function renderVideoList(videos) {
+  const list = document.getElementById("videoList");
+  list.innerHTML = "";
+  videos.forEach((v, i) => {
+    const item = document.createElement("div");
+    item.className = "video-item";
+    item.style.animationDelay = (i * 40) + "ms";
+    item.innerHTML = `
+      <div class="item-thumb">
+        ${v.thumbnail
+          ? `<img src="${esc(v.thumbnail)}" alt="" onerror="this.style.display='none'">`
+          : `<div class="thumb-icon">▶</div>`}
+        ${v.duration ? `<div class="item-dur">${esc(v.duration)}</div>` : ""}
+      </div>
+      <div class="item-info">
+        <div class="item-title">${esc(v.title || "Video " + (i + 1))}</div>
+        <div class="item-meta">
+          ${v.source  ? `<span class="tag tag-s">${esc(v.source)}</span>`  : ""}
+          ${v.format  ? `<span class="tag tag-p">${esc(v.format)}</span>`  : ""}
+          ${v.quality ? `<span class="tag tag-n">${esc(v.quality)}</span>` : ""}
+        </div>
+        <div class="item-url">${esc(v.url)}</div>
+        <div class="item-actions">
+          <button class="btn-dl" onclick="dlItem(${i})">↓ DOWNLOAD</button>
+        </div>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+function dlItem(i) {
+  const v = allVideos[i];
+  if (!v?.url) return;
+  const a = document.createElement("a");
+  a.href = v.url; a.download = (v.title || "video") + ".mp4"; a.target = "_blank";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+</script>
+</body>
+</html>

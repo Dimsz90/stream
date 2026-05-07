@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="referrer" content="no-referrer">
+<title>Watch - StreamVault Dracin</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0a0a0a;color:#fff;overflow-x:hidden}
+.player-wrap{position:relative;width:100%;height:100vh;max-height:100svh;background:#000}
+video{width:100%;height:100%;object-fit:contain;display:block}
+/* Top bar */
+.top-bar{position:absolute;top:0;left:0;right:0;padding:14px 16px;display:flex;align-items:center;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.85),transparent);z-index:20;opacity:1;transition:opacity .3s}
+.top-bar.hidden{opacity:0;pointer-events:none}
+.back-btn{background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;font-family:inherit;text-decoration:none}
+.ep-label{font-size:13px;color:rgba(255,255,255,.7);margin-left:auto}
+/* Custom controls */
+.controls{position:absolute;bottom:0;left:0;right:0;padding:0 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.9));z-index:20;opacity:1;transition:opacity .3s}
+.controls.hidden{opacity:0;pointer-events:none}
+.progress-wrap{width:100%;height:20px;display:flex;align-items:center;cursor:pointer;position:relative}
+.progress-bg{width:100%;height:3px;background:rgba(255,255,255,.2);border-radius:2px;position:relative;overflow:visible}
+.progress-buf{position:absolute;top:0;left:0;height:100%;background:rgba(255,255,255,.25);border-radius:2px}
+.progress-fill{position:absolute;top:0;left:0;height:100%;background:#e50914;border-radius:2px}
+.progress-thumb{position:absolute;top:50%;width:14px;height:14px;background:#e50914;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 6px rgba(229,9,20,.5);opacity:0;transition:opacity .15s}
+.progress-wrap:hover .progress-thumb{opacity:1}
+.progress-wrap:hover .progress-bg{height:5px}
+.ctrl-row{display:flex;align-items:center;gap:12px;margin-top:8px}
+.ctrl-btn{background:none;border:none;color:#fff;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s}
+.ctrl-btn:hover{background:rgba(255,255,255,.1)}
+.ctrl-btn:disabled{opacity:.3;cursor:default}
+.ctrl-btn svg{width:22px;height:22px}
+.time-display{font-size:12px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums;min-width:90px}
+.spacer{flex:1}
+.vol-wrap{display:flex;align-items:center;gap:6px}
+.vol-slider{width:70px;height:3px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.3);border-radius:2px;outline:none;cursor:pointer}
+.vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#fff;border-radius:50%;cursor:pointer}
+/* Center play overlay */
+.center-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:15;width:64px;height:64px;background:rgba(229,9,20,.85);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s}
+.center-play.show{opacity:1;pointer-events:auto}
+.center-play svg{width:32px;height:32px;fill:#fff;margin-left:3px}
+/* Nav buttons on sides */
+.side-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:18;width:48px;height:48px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;transition:all .2s;opacity:0}
+.player-wrap:hover .side-nav{opacity:1}
+.side-nav:hover{background:rgba(229,9,20,.8);border-color:rgba(229,9,20,.8)}
+.side-nav:disabled{opacity:0!important;cursor:default}
+.side-nav.left{left:12px}
+.side-nav.right{right:12px}
+.side-nav svg{width:24px;height:24px}
+/* Loading spinner */
+.spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:16;pointer-events:none;display:none}
+.spinner.show{display:block}
+.spinner::after{content:'';display:block;width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#e50914;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Next ep toast */
+.next-toast{position:absolute;bottom:90px;right:16px;background:rgba(229,9,20,.9);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;z-index:25;display:none;animation:slideIn .3s ease}
+.next-toast.show{display:flex;align-items:center;gap:8px}
+@keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+/* Episode list below */
+.info-box{padding:20px 16px;max-width:900px;margin:0 auto}
+.drama-title{font-size:22px;font-weight:700;margin-bottom:6px}
+.drama-meta{color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.ep-btn{background:#1a1a1a;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px 0;color:#fff;font-weight:600;font-size:13px;cursor:pointer;text-align:center;transition:all .15s}
+.ep-btn:hover{background:#333}
+.ep-btn.active{background:#e50914;border-color:#e50914}
+.ep-btn.locked{opacity:.35;cursor:not-allowed}
+@media(max-width:600px){.vol-wrap{display:none}.side-nav{width:40px;height:40px}}
+</style>
+</head>
+<body>
+<div class="player-wrap" id="playerWrap">
+  <video id="vid" playsinline></video>
+  <div class="spinner" id="spinner"></div>
+  <div class="center-play" id="centerPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+
+  <button class="side-nav left" id="prevSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="side-nav right" id="nextSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+
+  <div class="top-bar" id="topBar">
+    <a href="/" class="back-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Kembali</a>
+    <span class="ep-label" id="epLabel"></span>
+  </div>
+
+  <div class="next-toast" id="nextToast">Episode selanjutnya <span id="nextCountdown">5</span>s ▸</div>
+
+  <div class="controls" id="controls">
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bg">
+        <div class="progress-buf" id="bufBar"></div>
+        <div class="progress-fill" id="progBar"></div>
+        <div class="progress-thumb" id="progThumb"></div>
+      </div>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="playBtn" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ctrl-btn" id="prevBtn" title="Prev" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8zM5 19V5"/></svg></button>
+      <button class="ctrl-btn" id="nextBtn" title="Next" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8zM19 5v14"/></svg></button>
+      <span class="time-display" id="timeDisp">0:00 / 0:00</span>
+      <div class="spacer"></div>
+      <div class="vol-wrap">
+        <button class="ctrl-btn" id="muteBtn" title="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg></button>
+        <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.05" value="1">
+      </div>
+      <button class="ctrl-btn" id="fsBtn" title="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<div class="info-box">
+  <h1 class="drama-title" id="titleEl">Memuat...</h1>
+  <div class="drama-meta" id="metaEl"></div>
+  <div class="ep-grid" id="epGrid"></div>
+</div>
+
+<script>
+const P=new URLSearchParams(location.search);
+const bookId=P.get('id');
+const platform=P.get('platform')||'dramabox';
+const startEp=parseInt(P.get('ep'))||0;
+const coverUrl=P.get('cover')||'';
+
+let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null;
+const vid=document.getElementById('vid'),spinner=document.getElementById('spinner'),centerPlay=document.getElementById('centerPlay');
+const progBar=document.getElementById('progBar'),bufBar=document.getElementById('bufBar'),progThumb=document.getElementById('progThumb');
+const timeDisp=document.getElementById('timeDisp'),playBtn=document.getElementById('playBtn'),playIcon=document.getElementById('playIcon');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
+const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
+const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
+
+// Format time
+function fmt(s){if(!s||!isFinite(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec}
+
+// Show/hide controls
+function showUI(){topBar.classList.remove('hidden');controls.classList.remove('hidden');clearTimeout(hideTimer);hideTimer=setTimeout(hideUI,3500)}
+function hideUI(){if(vid.paused)return;topBar.classList.add('hidden');controls.classList.add('hidden')}
+document.getElementById('playerWrap').addEventListener('mousemove',showUI);
+document.getElementById('playerWrap').addEventListener('click',e=>{if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play'))return;togglePlay()});
+document.addEventListener('touchstart',showUI,{passive:true});
+
+// Play/pause
+function togglePlay(){if(vid.paused){vid.play().catch(()=>{});centerPlay.classList.remove('show')}else{vid.pause();centerPlay.classList.add('show')}}
+playBtn.onclick=togglePlay;
+centerPlay.onclick=()=>{vid.play().catch(()=>{});centerPlay.classList.remove('show')};
+vid.onplay=()=>{playIcon.innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';centerPlay.classList.remove('show');showUI()};
+vid.onpause=()=>{playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';centerPlay.classList.add('show')};
+
+// Progress
+vid.ontimeupdate=()=>{if(!vid.duration)return;const p=vid.currentTime/vid.duration*100;progBar.style.width=p+'%';progThumb.style.left=p+'%';timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);checkAutoNext()};
+vid.onprogress=()=>{if(vid.buffered.length>0){const b=vid.buffered.end(vid.buffered.length-1)/vid.duration*100;bufBar.style.width=b+'%'}};
+
+// Seek
+const pw=document.getElementById('progressWrap');
+function seekTo(e){const r=pw.getBoundingClientRect(),p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));vid.currentTime=p*vid.duration}
+let seeking=false;
+pw.onmousedown=e=>{seeking=true;seekTo(e)};
+document.onmousemove=e=>{if(seeking)seekTo(e)};
+document.onmouseup=()=>{seeking=false};
+pw.ontouchstart=e=>{const t=e.touches[0];seekTo(t)};
+pw.ontouchmove=e=>{const t=e.touches[0];seekTo(t)};
+
+// Volume
+const volSlider=document.getElementById('volSlider');
+volSlider.oninput=()=>{vid.volume=volSlider.value;vid.muted=false};
+document.getElementById('muteBtn').onclick=()=>{vid.muted=!vid.muted;volSlider.value=vid.muted?0:vid.volume};
+
+// Fullscreen
+document.getElementById('fsBtn').onclick=()=>{const w=document.getElementById('playerWrap');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen().catch(()=>{})};
+
+// Loading state
+vid.onwaiting=()=>spinner.classList.add('show');
+vid.oncanplay=()=>spinner.classList.remove('show');
+vid.onplaying=()=>spinner.classList.remove('show');
+
+// Keyboard
+document.onkeydown=e=>{if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
+if(e.key==='ArrowRight')vid.currentTime=Math.min(vid.duration,vid.currentTime+10);
+if(e.key==='ArrowLeft')vid.currentTime=Math.max(0,vid.currentTime-10);
+if(e.key==='ArrowUp'){e.preventDefault();vid.volume=Math.min(1,vid.volume+.1);volSlider.value=vid.volume}
+if(e.key==='ArrowDown'){e.preventDefault();vid.volume=Math.max(0,vid.volume-.1);volSlider.value=vid.volume}
+if(e.key==='f')document.getElementById('fsBtn').click();
+if(e.key==='n'&&!nextBtn.disabled)goNext();
+if(e.key==='p'&&!prevBtn.disabled)goPrev()};
+
+// Nav buttons
+function updateNav(){const hasPrev=curIdx>0,hasNext=curIdx<episodes.length-1;
+prevBtn.disabled=prevSide.disabled=!hasPrev;nextBtn.disabled=nextSide.disabled=!hasNext;
+document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
+const a=document.getElementById('ep-'+curIdx);if(a)a.classList.add('active');
+const ep=episodes[curIdx];const num=ep?.episode||ep?.chapterIndex+1||(curIdx+1);
+document.getElementById('epLabel').textContent='Episode '+num}
+
+function goNext(){if(curIdx<episodes.length-1)playEp(curIdx+1)}
+function goPrev(){if(curIdx>0)playEp(curIdx-1)}
+prevBtn.onclick=goPrev;nextBtn.onclick=goNext;prevSide.onclick=goPrev;nextSide.onclick=goNext;
+
+// Auto next episode
+function checkAutoNext(){if(!vid.duration||vid.duration<5)return;
+const remaining=vid.duration-vid.currentTime;
+if(remaining<=6&&curIdx<episodes.length-1){nextToast.classList.add('show');nextCountdown.textContent=Math.ceil(remaining);
+if(!nextTimer){preloadNext();nextTimer=setTimeout(()=>{nextToast.classList.remove('show');goNext()},remaining*1000)}}
+else{nextToast.classList.remove('show');if(nextTimer){clearTimeout(nextTimer);nextTimer=null}}}
+vid.onended=()=>{if(curIdx<episodes.length-1)goNext();else centerPlay.classList.add('show')};
+nextToast.onclick=()=>{clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');goNext()};
+
+// Preload next episode URL
+async function preloadNext(){if(preloadedUrl||curIdx>=episodes.length-1)return;
+try{const url=await getVideoUrl(episodes[curIdx+1]);preloadedUrl=url}catch(e){}}
+
+// Get video URL for an episode — normalized by API (field: ep.url)
+async function getVideoUrl(ep){
+    // API sudah menormalisasi: field 'url' selalu berisi video URL
+    // apapun platform (DramaBox pakai 'url', ReelShort pakai 'videoUrl' → dinormalisasi jadi 'url')
+    return ep.url || ep.videoUrl || ep._raw?.url || ep._raw?.videoUrl || '';
+}
+
+// Destroy HLS
+function destroyHLS(){if(hls){hls.destroy();hls=null}}
+
+// Play episode
+async function playEp(idx){
+curIdx=idx;updateNav();destroyHLS();
+clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
+spinner.classList.add('show');centerPlay.classList.remove('show');
+try{
+let url=preloadedUrl&&idx===curIdx?preloadedUrl:await getVideoUrl(episodes[idx]);
+preloadedUrl=null;
+if(url.includes('.m3u8')){
+  loadHlsChain(url);
+}
+else if(url){vid.src=url;vid.play().catch(()=>{})}
+setTimeout(()=>preloadNext(),2000);
+saveCW(idx);
+}catch(e){console.error(e);spinner.classList.remove('show')}}
+
+// HLS with multi-fallback chain: direct -> Render proxy (if needed)
+function loadHlsChain(rawUrl, index = 0) {
+  // Untuk Dracin, biasanya link langsung bisa diputar. 
+  // Jika perlu proxy, tambahkan logic di sini.
+  if(hls) hls.destroy();
+
+  if(Hls.isSupported()){
+    hls = new Hls({maxBufferLength:30,maxMaxBufferLength:60,startLevel:-1,capLevelToPlayerSize:true});
+    hls.loadSource(rawUrl);
+    hls.attachMedia(vid);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{vid.play().catch(()=>{});spinner.classList.remove('show')});
+    hls.on(Hls.Events.ERROR,(_,d)=>{
+      if(d.fatal) {
+        spinner.classList.remove('show');
+        console.error("[HLS] Fatal Error", d);
+      }
+    });
+  } else {
+    vid.src = rawUrl;
+    vid.play().catch(()=>{});
+  }
+}
+
+// Continue watching save
+function saveCW(idx){try{const ep=episodes[idx];const num=ep?.episode||ep?.chapterIndex+1||(idx+1);
+const all=JSON.parse(localStorage.getItem('cw_progress')||'[]');
+const id='dracin_'+platform+'_'+bookId;const existing=all.findIndex(x=>x.id===id);
+const entry={id,mediaType:'dracin',platform,bookId,title:document.getElementById('titleEl').textContent,poster:coverUrl,epIdx:idx,epNum:num,epTitle:'Ep '+num,pct:0};
+if(existing>=0)all[existing]=entry;else all.unshift(entry);
+if(all.length>20)all.length=20;localStorage.setItem('cw_progress',JSON.stringify(all))}catch(e){}}
+
+// Render episode grid
+function renderEps(){const grid=document.getElementById('epGrid');grid.innerHTML='';
+episodes.forEach((ep,i)=>{const btn=document.createElement('button');btn.className='ep-btn';btn.id='ep-'+i;
+// Gunakan field 'episode' yang sudah dinormalisasi oleh API
+const epNum = ep.episode || ep.chapterIndex+1 || (i+1);
+btn.textContent = epNum;
+// API normalisasi: isPay selalu ada (0 = gratis, 1 = berbayar)
+const locked = ep.isPay === 1;
+if(locked)btn.classList.add('locked');
+btn.onclick=()=>{if(!locked)playEp(i)};grid.appendChild(btn)})}
+// Fetch all episodes from OUR API
+async function init(){
+    if(!bookId) return;
+    try{
+        const r=await fetch('/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform));
+        const j=await r.json();
+        if(j.status === 'success'){
+            const d=j.data;
+            // API sudah menormalisasi: d.episodes, d.bookName, d.cover
+            episodes=d.episodes||[];
+            document.getElementById('titleEl').textContent=d.bookName||'Drama';
+            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+(platform==='reelshort'?'ReelShort':'DramaBox');
+            // Update tab title
+            document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
+            renderEps();
+            if(episodes.length>0)playEp(startEp<episodes.length?startEp:0);
+        } else {
+            document.getElementById('titleEl').textContent = "Error: " + (j.message || "Unknown");
+        }
+    }catch(e){console.error(e);document.getElementById('titleEl').textContent="Gagal memuat data"}
+}
+
+if(bookId)init();
+showUI();
+</script>
+</body>
+</html>

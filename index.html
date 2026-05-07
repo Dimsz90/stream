@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="StreamVault — Browse & stream film dari IMDB.">
+<meta name="theme-color" content="#ff3c5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<title>StreamVault – Browse Film</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080808;--surface:#111;--surface2:#181818;
+  --border:#1e1e1e;--border2:#2a2a2a;--border3:#383838;
+  --text:#efefef;--text2:#888;--text3:#444;
+  --accent:#ff3c5f;--accent2:#ff6b85;--accent-dim:rgba(255,60,95,.12);
+  --green:#3dffa0;
+  --mono:'Space Mono',monospace;
+  --display:'Bebas Neue',sans-serif;
+  --body:'DM Sans',sans-serif;
+  --plyr-color-main:#ff3c5f;
+  --plyr-font-family:'DM Sans',sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex;flex-direction:column}
+
+/* ── NAV ── */
+nav{
+  background:rgba(8,8,8,.97);
+  border-bottom:1px solid var(--border);
+  padding:0 1.2rem;height:52px;
+  display:flex;align-items:center;gap:12px;
+  flex-shrink:0;z-index:10;
+}
+.logo{font-family:var(--display);font-size:22px;letter-spacing:2px;flex-shrink:0}
+.logo span{color:var(--accent)}
+.nav-tabs{display:flex;gap:0;flex-shrink:0}
+.ntab{
+  padding:0 14px;height:52px;
+  display:flex;align-items:center;
+  font-size:11px;font-family:var(--mono);color:var(--text3);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;
+  white-space:nowrap;
+}
+.ntab:hover{color:var(--text2)}
+.ntab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0}
+#btnInstallPwa{
+  display:none;background:transparent;
+  border:1px solid var(--accent);color:var(--accent);
+  font-family:var(--display);letter-spacing:1px;font-size:13px;
+  padding:5px 10px;border-radius:5px;cursor:pointer;transition:all .2s;
+}
+#btnInstallPwa:hover{background:var(--accent-dim)}
+.nav-extractor-btn{
+  text-decoration:none;font-family:var(--mono);font-size:10px;
+  font-weight:bold;color:#fff;background:var(--accent);
+  border:1px solid var(--accent2);padding:6px 12px;border-radius:5px;
+  display:inline-flex;align-items:center;gap:5px;
+  transition:background .2s;white-space:nowrap;
+}
+.nav-extractor-btn:hover{background:var(--accent2)}
+
+/* ── SEARCH ── */
+.search-area{padding:.8rem 1.2rem .6rem;flex-shrink:0;background:var(--bg)}
+.search-row{
+  display:flex;border:1px solid var(--border2);
+  border-radius:9px;overflow:hidden;background:var(--surface);
+  transition:border-color .2s;
+}
+.search-row:focus-within{border-color:var(--accent)}
+#searchInput{
+  flex:1;background:transparent;border:none;outline:none;
+  padding:12px 16px;font-size:13px;
+  font-family:var(--mono);color:var(--text);min-width:0;
+}
+#searchInput::placeholder{color:var(--text3)}
+.btn-search{
+  background:var(--accent);color:#fff;border:none;
+  padding:12px 20px;font-family:var(--display);
+  font-size:16px;letter-spacing:1px;cursor:pointer;
+  flex-shrink:0;transition:background .15s;
+}
+.btn-search:hover{background:var(--accent2)}
+.btn-search:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── STATUS ── */
+.status-bar{
+  display:none;align-items:center;gap:8px;
+  padding:.3rem 1.2rem;font-size:11px;
+  font-family:var(--mono);color:var(--text2);flex-shrink:0;
+}
+.spinner{
+  width:11px;height:11px;
+  border:2px solid var(--border2);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════════════════════
+   GENRE FILTER — FIXED REDESIGN
+   Scrollable horizontal chips, always visible
+═══════════════════════════════════════ */
+.filter-wrap{
+  flex-shrink:0;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  position:relative;
+}
+
+/* Fade edges untuk indikasi scroll */
+.filter-wrap::before,
+.filter-wrap::after{
+  content:'';
+  position:absolute;top:0;bottom:0;width:32px;
+  z-index:2;pointer-events:none;
+}
+.filter-wrap::before{
+  left:0;
+  background:linear-gradient(to right,var(--bg),transparent);
+}
+.filter-wrap::after{
+  right:0;
+  background:linear-gradient(to left,var(--bg),transparent);
+}
+
+.filter-row{
+  display:flex;gap:6px;
+  padding:.5rem 1.2rem;
+  overflow-x:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  /* Snap ke chip */
+  scroll-snap-type:x proximity;
+}
+.filter-row::-webkit-scrollbar{display:none}
+
+.chip{
+  flex-shrink:0;
+  scroll-snap-align:start;
+  border:1px solid var(--border2);
+  background:var(--surface);
+  color:var(--text3);
+  border-radius:20px;
+  padding:5px 14px;
+  font-size:10px;font-family:var(--mono);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all .2s;
+  user-select:none;
+  /* Lebih tinggi agar mudah di-tap di mobile */
+  min-height:30px;
+  display:flex;align-items:center;
+}
+.chip:hover{border-color:var(--text3);color:var(--text2);background:var(--surface2)}
+.chip.active{
+  border-color:var(--accent);
+  color:var(--accent);
+  background:var(--accent-dim);
+  font-weight:600;
+}
+/* Chip aktif selalu terlihat (scroll into view otomatis via JS) */
+
+/* ── GRID ── */
+.grid-wrap{flex:1;overflow-y:auto;padding:1rem 1.2rem 1.5rem}
+.grid-wrap::-webkit-scrollbar{width:4px}
+.grid-wrap::-webkit-scrollbar-track{background:transparent}
+.grid-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.movie-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+
+/* ── RECOMMENDATION ROWS ── */
+.reco-section{margin-bottom:1.6rem}
+.reco-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.6rem;
+}
+.reco-title{
+  font-family:var(--display);font-size:20px;letter-spacing:1px;
+  color:var(--text);display:flex;align-items:center;gap:8px;
+}
+.reco-icon{font-size:16px}
+.reco-badge{
+  font-size:9px;font-family:var(--mono);color:var(--accent);
+  background:rgba(255,60,95,.1);border:1px solid rgba(255,60,95,.2);
+  padding:2px 8px;border-radius:12px;
+}
+.reco-count{
+  font-size:9px;font-family:var(--mono);color:var(--text3);
+  margin-left:6px;
+}
+.reco-row{
+  display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+  scroll-behavior:smooth;
+}
+.reco-row::-webkit-scrollbar{height:3px}
+.reco-row::-webkit-scrollbar-track{background:transparent}
+.reco-row::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.reco-card{
+  flex-shrink:0;width:130px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;overflow:hidden;cursor:pointer;
+  transition:all .25s;animation:fu .3s ease both;
+}
+.reco-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 6px 20px rgba(255,60,95,.12)}
+.reco-card .card-poster{width:100%;aspect-ratio:2/3;position:relative;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center}
+.reco-card .card-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.reco-card .card-info{padding:6px 8px}
+.reco-card .card-title{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.reco-card .card-year{font-size:9px;font-family:var(--mono);color:var(--text3)}
+.reco-skeleton{flex-shrink:0;width:130px;border-radius:9px;background:var(--surface);border:1px solid var(--border);overflow:hidden}
+.reco-skeleton .skel-poster{width:100%;aspect-ratio:2/3;background:linear-gradient(110deg,var(--surface2) 8%,var(--border) 18%,var(--surface2) 33%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.reco-skeleton .skel-info{padding:8px}
+.reco-skeleton .skel-line{height:10px;border-radius:4px;background:var(--surface2);margin-bottom:4px}
+.reco-skeleton .skel-line.short{width:60%}
+@keyframes shimmer{to{background-position:-200% 0}}
+#recoArea{padding:0}
+#searchResultArea{display:none}
+
+/* ── MOVIE CARD ── */
+.movie-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;overflow:hidden;cursor:pointer;
+  transition:all .2s;animation:fu .25s ease both;
+}
+.movie-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.card-poster{
+  width:100%;aspect-ratio:2/3;background:var(--surface2);
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+}
+.card-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.no-img-icon{font-size:32px;opacity:.1}
+.card-rating{
+  position:absolute;top:5px;right:5px;
+  background:rgba(0,0,0,.85);font-family:var(--mono);
+  font-size:9px;color:#fcd34d;padding:2px 5px;border-radius:3px;
+}
+.card-type-badge{
+  position:absolute;top:5px;left:5px;
+  font-family:var(--mono);font-size:8px;color:#fff;
+  padding:2px 6px;border-radius:3px;text-transform:uppercase;
+}
+.type-movie{background:var(--accent)}
+.type-series{background:#7c3aed}
+.type-episode{background:#059669}
+.card-info{padding:7px 8px}
+.card-title{font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.card-year{font-size:9px;font-family:var(--mono);color:var(--text3)}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:3.5rem 1rem;color:var(--text3);grid-column:1/-1}
+.empty h3{font-family:var(--display);font-size:26px;color:var(--text2);margin-bottom:6px}
+.empty p{font-size:11px;font-family:var(--mono);line-height:1.8}
+
+/* ── LOAD MORE ── */
+.load-more-btn{
+  display:none;width:100%;
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text2);border-radius:8px;
+  padding:12px;font-family:var(--mono);font-size:11px;
+  cursor:pointer;transition:all .15s;margin-top:16px;
+}
+.load-more-btn:hover{border-color:var(--accent);color:var(--accent)}
+.load-more-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── DETAIL PANEL ── */
+#detailPanel{position:fixed;inset:0;z-index:100;display:none}
+.detail-bg{position:absolute;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
+.detail-sheet{
+  position:absolute;bottom:0;left:0;right:0;
+  background:var(--surface);border-radius:16px 16px 0 0;
+  padding:1.2rem;max-height:88vh;overflow-y:auto;
+  animation:slideup .28s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.detail-sheet::-webkit-scrollbar{width:3px}
+.detail-sheet::-webkit-scrollbar-track{background:transparent}
+.detail-sheet::-webkit-scrollbar-thumb{background:var(--border2)}
+.sheet-handle{width:34px;height:3px;background:var(--border2);border-radius:2px;margin:0 auto 1rem}
+.sheet-close{
+  position:absolute;top:1.1rem;right:1.1rem;
+  background:var(--surface2);border:1px solid var(--border2);
+  color:var(--text2);border-radius:6px;padding:4px 10px;
+  font-size:10px;font-family:var(--mono);cursor:pointer;
+}
+.sheet-inner{display:flex;gap:1rem}
+.sheet-poster{width:90px;min-width:90px;aspect-ratio:2/3;border-radius:8px;background:var(--surface2);overflow:hidden;flex-shrink:0}
+.sheet-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.sheet-body{flex:1;min-width:0}
+.sheet-title{font-family:var(--display);font-size:23px;letter-spacing:.5px;line-height:1.1;margin-bottom:.5rem}
+.sheet-badges{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:.7rem}
+.badge{font-size:9px;padding:2px 7px;border-radius:20px;font-family:var(--mono)}
+.b-year{background:#1e1800;color:#fcd34d;border:1px solid #3a3000}
+.b-rating{background:#0e1e10;color:#6ee7a0;border:1px solid #1a3a20}
+.b-genre{background:#1a1030;color:#a78bfa;border:1px solid #2a1a50}
+.b-type{background:#1a0e1e;color:#f0abfc;border:1px solid #3a1a50}
+.sheet-desc{
+  font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:.9rem;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+.providers-wrap,.photos-wrap{margin-bottom:.8rem}
+.sub-label{font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:.4rem}
+.prov-list{display:flex;flex-wrap:wrap;gap:5px}
+.prov-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;font-size:10px;font-family:var(--mono);color:var(--text2)}
+.photos-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.photos-row::-webkit-scrollbar{display:none}
+.photo-thumb{width:95px;min-width:95px;height:58px;border-radius:5px;background:var(--surface2);overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.btn-stream{
+  width:100%;background:var(--accent);color:#fff;border:none;
+  border-radius:8px;padding:13px;font-family:var(--display);
+  font-size:18px;letter-spacing:1px;cursor:pointer;
+  transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-stream:hover{background:var(--accent2)}
+.btn-stream:disabled{opacity:.5;cursor:not-allowed}
+.btn-imdb{
+  width:100%;background:transparent;border:1px solid var(--border2);
+  color:var(--text2);border-radius:8px;padding:9px;
+  font-family:var(--mono);font-size:11px;cursor:pointer;
+  margin-top:8px;transition:all .15s;
+}
+.btn-imdb:hover{border-color:var(--text2);color:var(--text)}
+
+/* Season / episode picker */
+#seasonModal{position:fixed;inset:0;z-index:160;display:none}
+.season-bg{position:absolute;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px)}
+.season-sheet{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(760px,calc(100vw - 24px));max-height:86vh;
+  background:var(--surface);border:1px solid var(--border2);border-radius:12px;
+  overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.45);
+}
+.season-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.season-title{font-family:var(--display);font-size:24px;letter-spacing:.7px;line-height:1.05}
+.season-subtitle{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px}
+.season-close{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:10px;border-radius:6px;padding:6px 10px;cursor:pointer}
+.season-body{display:grid;grid-template-columns:170px 1fr;min-height:320px;max-height:calc(86vh - 72px)}
+.season-list{border-right:1px solid var(--border);overflow:auto;padding:10px}
+.season-item{width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--text2);font-family:var(--mono);font-size:11px;border-radius:7px;padding:10px;cursor:pointer;margin-bottom:6px}
+.season-item:hover{background:var(--surface2);color:var(--text)}
+.season-item.active{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.episode-panel{padding:12px;overflow:auto}
+.episode-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:8px}
+.episode-item{height:42px;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:12px;cursor:pointer}
+.episode-item:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.episode-empty{font-family:var(--mono);font-size:11px;color:var(--text3);padding:24px;text-align:center}
+.episode-nav{display:none;align-items:center;gap:6px;margin-right:4px}
+.episode-label{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.72);min-width:48px;text-align:center}
+
+@media(max-width:640px){
+  .season-sheet{top:auto;bottom:0;left:0;right:0;transform:none;width:100%;max-height:88vh;border-radius:14px 14px 0 0}
+  .season-body{grid-template-columns:1fr;min-height:0}
+  .season-list{display:flex;gap:6px;overflow-x:auto;border-right:none;border-bottom:1px solid var(--border)}
+  .season-item{width:auto;min-width:94px;margin-bottom:0;text-align:center;white-space:nowrap}
+}
+
+/* ═══════════════════════════════════════
+   PLAYER FULLSCREEN
+═══════════════════════════════════════ */
+#playerMode{position:fixed;inset:0;z-index:200;background:#000;display:none}
+
+.player-bar{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;z-index:210;
+  background:linear-gradient(to bottom,rgba(0,0,0,.9),transparent);
+  transition:opacity .4s;
+}
+.player-bar.faded{opacity:0;pointer-events:none}
+.player-title{
+  font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:50vw;
+}
+.player-btns{display:flex;gap:6px;align-items:center}
+.pbtn{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
+  color:#fff;border-radius:5px;padding:5px 11px;font-size:10px;
+  font-family:var(--mono);cursor:pointer;transition:background .15s;
+  white-space:nowrap;
+}
+.pbtn:hover{background:rgba(255,255,255,.2)}
+.pbtn.active{border-color:var(--accent);color:var(--accent)}
+
+/* Rotate lock button — ikon khusus */
+#btnRotateLock{
+  display:flex;align-items:center;gap:5px;
+}
+#btnRotateLock .lock-icon{
+  font-size:13px;line-height:1;
+}
+
+#videoContainer{
+  width:100vw;height:100vh;
+  position:absolute;top:0;left:0;z-index:201;background:#000;display:none;
+}
+#mainVideo{width:100%;height:100%;object-fit:contain}
+.plyr,.plyr--video{width:100%!important;height:100%!important}
+#mainVideo::cue{
+  background:rgba(0,0,0,.78);color:#fff;
+  font-family:var(--body);font-size:1.05em;
+  line-height:1.5;border-radius:4px;
+}
+#playerFrame{
+  width:100vw;height:100vh;border:none;background:#000;
+  position:absolute;top:0;left:0;z-index:201;display:none;
+}
+
+.povl{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;
+  background:#000;z-index:205;
+}
+.povl.hidden{display:none!important}
+.big-spin{
+  width:40px;height:40px;border:3px solid #222;
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+.povl p{font-family:var(--mono);font-size:11px;color:var(--text3)}
+.povl h3{font-family:var(--display);font-size:30px;color:var(--accent);letter-spacing:2px}
+
+/* ── SUBTITLE PANEL — BOTTOM SHEET ── */
+
+/* Backdrop gelap, tap untuk tutup */
+.sub-backdrop{
+  position:absolute;inset:0;background:rgba(0,0,0,.55);
+  z-index:214;display:none;
+}
+.sub-backdrop.visible{display:block}
+
+/* Sheet */
+.sub-panel{
+  position:absolute;bottom:0;left:0;right:0;
+  background:#0f0f12;
+  border-top:1px solid rgba(255,255,255,.08);
+  border-radius:18px 18px 0 0;
+  z-index:215;
+  display:flex;flex-direction:column;
+  max-height:72vh;
+  transform:translateY(100%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+  /* tetap ada di DOM tapi off-screen saat tidak visible */
+  pointer-events:none;
+}
+.sub-panel.visible{
+  transform:translateY(0);
+  pointer-events:auto;
+}
+
+/* Handle bar */
+.sub-drag-handle{
+  width:36px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,.15);
+  margin:10px auto 0;flex-shrink:0;
+}
+
+/* Header */
+.sub-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px 8px;flex-shrink:0;
+}
+.sub-hdr-title{
+  font-family:var(--mono);font-size:11px;
+  color:rgba(255,255,255,.4);letter-spacing:1.5px;
+}
+.sub-off-btn{
+  font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.35);
+  cursor:pointer;padding:5px 14px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:6px;transition:all .15s;
+  min-height:34px;display:flex;align-items:center;
+}
+.sub-off-btn:hover,.sub-off-btn:active{color:var(--accent);border-color:var(--accent)}
+
+/* Lang chips — horizontal scroll */
+.sub-lang-row{
+  display:flex;gap:6px;
+  overflow-x:auto;padding:0 16px 10px;
+  scrollbar-width:none;flex-shrink:0;
+  -webkit-overflow-scrolling:touch;
+}
+.sub-lang-row::-webkit-scrollbar{display:none}
+.sub-lang-btn{
+  flex-shrink:0;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.55);border-radius:6px;
+  padding:7px 16px;font-size:12px;font-family:var(--mono);
+  cursor:pointer;transition:all .15s;
+  min-height:36px;white-space:nowrap;
+}
+.sub-lang-btn:hover,.sub-lang-btn:active{border-color:rgba(255,255,255,.3);color:#fff}
+.sub-lang-btn.active{
+  border-color:var(--accent);color:var(--accent);
+  background:rgba(255,60,95,.15);font-weight:700;
+}
+
+/* List subtitle */
+.sub-list{
+  flex:1;overflow-y:auto;
+  padding:2px 10px 6px;
+  -webkit-overflow-scrolling:touch;
+}
+.sub-list::-webkit-scrollbar{width:3px}
+.sub-list::-webkit-scrollbar-track{background:transparent}
+.sub-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+.sub-item{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:12px 10px;border-radius:9px;cursor:pointer;transition:background .15s;
+  border:1px solid transparent;
+}
+.sub-item:hover,.sub-item:active{background:rgba(255,255,255,.05)}
+.sub-item.active{
+  background:rgba(255,60,95,.1);
+  border-color:rgba(255,60,95,.2);
+}
+.sub-item-left{flex:1;min-width:0}
+.sub-item-name{
+  font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.65);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;
+}
+.sub-item.active .sub-item-name{color:var(--accent)}
+.sub-item-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sub-badge{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px}
+.sub-badge-hi{background:rgba(61,255,160,.12);color:var(--green)}
+.sub-badge-dl{background:rgba(255,255,255,.06);color:rgba(255,255,255,.3)}
+.sub-item-load{
+  font-size:12px;font-family:var(--mono);color:var(--accent);
+  flex-shrink:0;align-self:center;display:none;
+}
+.sub-item.loading .sub-item-load{display:block}
+.sub-item.loading .sub-item-name{opacity:.5}
+.sub-empty{
+  font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.2);
+  padding:28px 10px;text-align:center;line-height:1.9;
+}
+.sub-searching{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.3);
+  padding:18px 12px;
+}
+
+/* Status footer */
+.sub-status-bar{
+  padding:10px 16px 16px;
+  border-top:1px solid rgba(255,255,255,.05);
+  font-size:10px;font-family:var(--mono);color:rgba(255,255,255,.2);
+  display:flex;align-items:center;gap:6px;
+  flex-shrink:0;
+}
+.sub-status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.sub-status-dot.active{background:var(--green)}
+
+/* ── FLOATING SUBTITLE OVERLAY ── */
+#subOverlay{
+  position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+  z-index:215;pointer-events:none;
+  max-width:80vw;text-align:center;
+  font-family:var(--body);font-size:clamp(16px,2.5vw,22px);
+  color:#fff;line-height:1.5;
+  text-shadow:1px 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.7);
+  display:none;
+}
+#subOverlay span{
+  background:rgba(0,0,0,.7);padding:2px 10px;border-radius:4px;
+  display:inline;box-decoration-break:clone;-webkit-box-decoration-break:clone;
+}
+
+
+/* ════════════════════════════════════════
+   DRACIN — Short Drama Section
+════════════════════════════════════════ */
+#dracin-section{
+  flex:1;overflow-y:auto;padding:0 0 2rem;
+  display:none;flex-direction:column;gap:0;
+  /* Pastikan mengisi sisa tinggi layar seperti gridWrap */
+  min-height:0;
+}
+#dracin-section::-webkit-scrollbar{width:4px}
+#dracin-section::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* Platform tabs */
+.dr-plat-bar{
+  display:flex;gap:8px;padding:.7rem 1.2rem .5rem;
+  border-bottom:1px solid var(--border);
+  background:var(--bg);flex-shrink:0;
+}
+.dr-ptab{
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text2);border-radius:20px;
+  padding:6px 16px;font-size:11px;font-family:var(--mono);
+  cursor:pointer;transition:all .2s;flex-shrink:0;
+}
+.dr-ptab:hover{border-color:var(--text3);color:var(--text)}
+.dr-ptab.active{
+  background:var(--accent-dim);border-color:var(--accent);
+  color:var(--accent);font-weight:700;
+}
+
+/* Search */
+.dr-search-row{
+  display:flex;margin:.7rem 1.2rem .4rem;
+  border:1px solid var(--border2);border-radius:9px;
+  overflow:hidden;background:var(--surface);
+  transition:border-color .2s;flex-shrink:0;
+}
+.dr-search-row:focus-within{border-color:var(--accent)}
+.dr-search-input{
+  flex:1;background:transparent;border:none;outline:none;
+  padding:10px 14px;font-size:12px;font-family:var(--mono);
+  color:var(--text);min-width:0;
+}
+.dr-search-input::placeholder{color:var(--text3)}
+.dr-search-btn{
+  background:var(--accent);color:#fff;border:none;
+  padding:10px 16px;font-family:var(--display);
+  font-size:14px;letter-spacing:1px;cursor:pointer;
+  flex-shrink:0;transition:background .15s;
+}
+.dr-search-btn:hover{background:var(--accent2)}
+
+/* Status bar */
+.dr-status{
+  display:flex;align-items:center;gap:8px;
+  padding:.2rem 1.2rem .4rem;font-size:11px;
+  font-family:var(--mono);color:var(--text2);flex-shrink:0;
+}
+
+/* Section heading */
+.dr-section-head{
+  display:flex;align-items:center;gap:8px;
+  margin:1rem 0 .5rem;
+}
+.dr-section-title{
+  font-family:var(--display);font-size:18px;
+  letter-spacing:1px;color:var(--text);
+}
+.dr-section-badge{
+  font-size:9px;font-family:var(--mono);color:var(--accent);
+  background:var(--accent-dim);border:1px solid rgba(255,60,95,.2);
+  padding:2px 8px;border-radius:12px;
+}
+
+/* Horizontal scroll row (Trending) */
+.dr-hscroll{
+  display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+  scroll-behavior:smooth;
+}
+.dr-hscroll::-webkit-scrollbar{height:3px}
+.dr-hscroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* Drama card — slim portrait */
+.dr-card{
+  flex-shrink:0;width:110px;
+  text-decoration:none;color:var(--text);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;overflow:hidden;cursor:pointer;
+  transition:all .25s;display:block;
+  animation:fu .3s ease both;
+}
+.dr-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 6px 20px rgba(255,60,95,.12)}
+.dr-card-poster{
+  width:100%;aspect-ratio:2/3;position:relative;
+  overflow:hidden;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+}
+.dr-card-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.dr-card-poster-overlay{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:20px 6px 6px;
+  background:linear-gradient(transparent,rgba(0,0,0,.85));
+}
+.dr-card-eps{
+  font-size:9px;font-family:var(--mono);color:rgba(255,255,255,.7);
+}
+.dr-card-rank{
+  position:absolute;top:5px;left:5px;
+  width:22px;height:22px;border-radius:4px;
+  background:var(--accent);color:#fff;
+  font-size:10px;font-family:var(--display);font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.dr-card-info{padding:6px 7px}
+.dr-card-name{
+  font-size:10px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  margin-bottom:2px;
+}
+.dr-card-meta{font-size:9px;font-family:var(--mono);color:var(--text3)}
+
+/* Browse Grid */
+.dr-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+  gap:10px;
+}
+
+/* Skeleton loader */
+.dr-skel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;overflow:hidden;
+}
+.dr-skel-poster{
+  width:100%;aspect-ratio:2/3;
+  background:linear-gradient(110deg,var(--surface2) 8%,var(--border) 18%,var(--surface2) 33%);
+  background-size:200% 100%;animation:shimmer 1.5s infinite;
+}
+.dr-skel-info{padding:7px 8px}
+.dr-skel-line{height:9px;border-radius:3px;background:var(--surface2);margin-bottom:4px}
+.dr-skel-line.s{width:55%}
+
+/* Load more */
+.dr-load-more{
+  display:block;width:100%;margin-top:16px;
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text2);border-radius:8px;padding:12px;
+  font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;
+}
+.dr-load-more:hover{border-color:var(--accent);color:var(--accent)}
+.dr-load-more:disabled{opacity:.4;cursor:not-allowed}
+
+/* Empty state */
+.dr-empty{
+  text-align:center;padding:3rem 1rem;color:var(--text3);
+  grid-column:1/-1;
+}
+.dr-empty h3{font-family:var(--display);font-size:24px;color:var(--text2);margin-bottom:6px}
+.dr-empty p{font-size:11px;font-family:var(--mono)}
+
+@media(max-width:480px){
+  .dr-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+  .dr-card{width:90px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="logo">MASDI<span>FOX</span></div>
+  <div class="nav-tabs">
+    <div class="ntab active" id="ntFilm"   onclick="switchMainTab('film')">🎬 FILM</div>
+    <div class="ntab"        id="ntDracin" onclick="switchMainTab('dracin')">📱 DRACIN</div>
+  </div>
+  <div class="nav-right">
+    <button id="btnInstallPwa">+ INSTALL</button>
+    <a href="/extractor.html" class="nav-extractor-btn">🔗 EXTRACTOR</a>
+  </div>
+  
+</nav>
+
+<!-- ── SEARCH ── -->
+<div class="search-area">
+  <div class="search-row">
+    <input id="searchInput" type="text"
+      placeholder="Cari film, serial, aktor..."
+      autocomplete="off" spellcheck="false">
+    <button class="btn-search" id="btnSearch" onclick="doSearch()">CARI</button>
+  </div>
+</div>
+
+<!-- ── STATUS ── -->
+<div class="status-bar" id="statusBar">
+  <div class="spinner"></div>
+  <span id="statusTxt">Mencari...</span>
+</div>
+
+<!-- ── GENRE FILTER — REDESIGNED ── -->
+<div class="filter-wrap">
+  <div class="filter-row" id="filterRow">
+    <div class="chip active" data-genre="all"       onclick="setGenre(this)">✦ Semua</div>
+    <div class="chip"        data-genre="28"        onclick="setGenre(this)">💥 Action</div>
+    <div class="chip"        data-genre="18"        onclick="setGenre(this)">🎭 Drama</div>
+    <div class="chip"        data-genre="35"        onclick="setGenre(this)">😂 Comedy</div>
+    <div class="chip"        data-genre="53"        onclick="setGenre(this)">🔪 Thriller</div>
+    <div class="chip"        data-genre="27"        onclick="setGenre(this)">👻 Horror</div>
+    <div class="chip"        data-genre="878"       onclick="setGenre(this)">🚀 Sci-Fi</div>
+    <div class="chip"        data-genre="10749"     onclick="setGenre(this)">💕 Romance</div>
+    <div class="chip"        data-genre="16"        onclick="setGenre(this)">⚡ Animation</div>
+    <div class="chip"        data-genre="80"        onclick="setGenre(this)">🕵️ Crime</div>
+    <div class="chip"        data-genre="12"        onclick="setGenre(this)">🗺️ Adventure</div>
+    <div class="chip"        data-genre="14"        onclick="setGenre(this)">🧙 Fantasy</div>
+    <div class="chip"        data-genre="10751"     onclick="setGenre(this)">👨‍👩‍👧 Family</div>
+    <div class="chip"        data-genre="36"        onclick="setGenre(this)">📜 History</div>
+    <div class="chip"        data-genre="10402"     onclick="setGenre(this)">🎵 Music</div>
+    <div class="chip"        data-genre="9648"      onclick="setGenre(this)">🔍 Mystery</div>
+    <div class="chip"        data-genre="37"        onclick="setGenre(this)">🤠 Western</div>
+    <div class="chip"        data-genre="10752"     onclick="setGenre(this)">⚔️ War</div>
+  </div>
+</div>
+
+<!-- ── DRACIN SECTION (di luar gridWrap agar tidak tertutup display:none) ── -->
+<section id="dracin-section" style="display:none">
+
+  <!-- Platform Tabs -->
+  <div class="dr-plat-bar">
+    <button class="dr-ptab active" data-platform="dramabox" onclick="dracinSwitchPlatform(this)">📱 DramaBox</button>
+    <button class="dr-ptab"        data-platform="reelshort" onclick="dracinSwitchPlatform(this)">🎬 ReelShort</button>
+  </div>
+
+  <!-- Search -->
+  <div class="dr-search-row">
+    <input id="dracinSearchInput" class="dr-search-input"
+           type="text" placeholder="Cari judul drama..."
+           onkeydown="if(event.key==='Enter')dracinSearch()">
+    <button class="dr-search-btn" onclick="dracinSearch()">CARI</button>
+  </div>
+  <div class="dr-status" id="dracinStatus" style="display:none">
+    <div class="spinner"></div><span id="dracinStatusTxt">Memuat...</span>
+  </div>
+
+  <!-- Trending / Rank -->
+  <div id="dracinRankWrap" style="padding:0 1.2rem">
+    <div class="dr-section-head">
+      <span class="dr-section-title">🔥 TRENDING</span>
+      <span class="dr-section-badge" id="dracinRankBadge"></span>
+    </div>
+    <div class="dr-hscroll" id="dracinRankRow">
+      <!-- di-render JS -->
+    </div>
+  </div>
+
+  <!-- Browse All / Search Results -->
+  <div style="padding:0 1.2rem">
+    <div class="dr-section-head">
+      <span class="dr-section-title" id="dracinBrowseTitle">📚 SEMUA DRAMA</span>
+    </div>
+    <div id="dracin-grid" class="dr-grid">
+      <!-- di-render JS -->
+    </div>
+    <button class="dr-load-more" id="dracinLoadMore"
+            style="display:none" onclick="dracinLoadMore()">
+      ↓ MUAT LEBIH BANYAK
+    </button>
+  </div>
+
+</section>
+
+<!-- ── GRID ── -->
+<div class="grid-wrap" id="gridWrap">
+  <!-- Recommendation area -->
+  <div id="recoArea">
+    <div class="reco-section" id="recoTrending"></div>
+    <div class="reco-section" id="recoNowPlay"></div>
+    <div class="reco-section" id="recoAction"></div>
+    <div class="reco-section" id="recoComedy"></div>
+    <div class="reco-section" id="recoDrama"></div>
+    <div class="reco-section" id="recoAnime"></div>
+    <div class="reco-section" id="recoHorror"></div>
+    <div class="reco-section" id="recoTV"></div>
+  </div>
+
+  <!-- Search results -->
+  <div id="searchResultArea">
+    <div class="movie-grid" id="movieGrid"></div>
+    <button class="load-more-btn" id="btnLoadMore" onclick="loadMoreSearch()">
+      ↓ MUAT LEBIH BANYAK
+    </button>
+  </div>
+
+  <!-- Genre browse results -->
+  <div id="genreBrowseArea" style="display:none">
+    <div class="movie-grid" id="genreGrid"></div>
+    <button class="load-more-btn" id="btnLoadMoreGenre" onclick="loadMoreGenre()">
+      ↓ MUAT LEBIH BANYAK
+    </button>
+  </div>
+
+</div>
+
+<!-- ── DETAIL PANEL ── -->
+<div id="detailPanel">
+  <div class="detail-bg" onclick="closeDetail()"></div>
+  <div class="detail-sheet">
+    <div class="sheet-handle"></div>
+    <button class="sheet-close" onclick="closeDetail()">✕ TUTUP</button>
+    <div class="sheet-inner">
+      <div class="sheet-poster"><img id="dpPoster" src="" alt=""></div>
+      <div class="sheet-body">
+        <div class="sheet-title" id="dpTitle">—</div>
+        <div class="sheet-badges" id="dpBadges"></div>
+        <div class="sheet-desc" id="dpDesc">—</div>
+        <div class="providers-wrap" id="providersWrap" style="display:none">
+          <div class="sub-label">Tersedia di:</div>
+          <div class="prov-list" id="provList"></div>
+        </div>
+        <div class="photos-wrap" id="photosWrap" style="display:none">
+          <div class="sub-label">Foto / Still:</div>
+          <div class="photos-row" id="photosList"></div>
+        </div>
+        <button class="btn-stream" id="btnStream" onclick="startStream()">▶&nbsp; TONTON SEKARANG</button>
+        <button class="btn-imdb" onclick="openImdb()">Buka di IMDB ↗</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PLAYER ── -->
+<!-- Season / Episode Picker -->
+<div id="seasonModal">
+  <div class="season-bg" onclick="closeSeasonModal()"></div>
+  <div class="season-sheet">
+    <div class="season-head">
+      <div>
+        <div class="season-title" id="seasonModalTitle">Pilih Episode</div>
+        <div class="season-subtitle" id="seasonModalMeta">Memuat season...</div>
+      </div>
+      <button class="season-close" onclick="closeSeasonModal()">TUTUP</button>
+    </div>
+    <div class="season-body">
+      <div class="season-list" id="seasonList"></div>
+      <div class="episode-panel" id="episodePanel">
+        <div class="episode-empty">Pilih season untuk melihat episode.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="playerMode">
+  <div class="povl" id="pLoading">
+    <div class="big-spin"></div>
+    <p id="pLoadTxt">Mengambil stream URL...</p>
+  </div>
+  <div class="povl hidden" id="pError">
+    <h3>GAGAL</h3>
+    <p id="pErrTxt">Stream tidak tersedia.</p>
+    <button class="pbtn" style="margin-top:8px" onclick="closePlayer()">← KEMBALI</button>
+  </div>
+
+  <div id="videoContainer">
+    <video id="mainVideo" controls autoplay playsinline crossorigin="anonymous"></video>
+  </div>
+  <iframe id="playerFrame" allowfullscreen
+    allow="autoplay; fullscreen; picture-in-picture"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
+  </iframe>
+
+  <div id="subOverlay"></div>
+
+  <!-- Backdrop subtitle (tap untuk tutup) -->
+  <div class="sub-backdrop" id="subBackdrop" onclick="toggleSubPanel()"></div>
+
+  <!-- Subtitle panel — bottom sheet -->
+  <div class="sub-panel" id="subPanelBrowse">
+    <div class="sub-drag-handle"></div>
+    <div class="sub-hdr">
+      <div class="sub-hdr-title">// SUBTITLE</div>
+      <div class="sub-off-btn" onclick="disableSubtitle()">MATIKAN</div>
+    </div>
+    <div class="sub-lang-row" id="subLangRow"></div>
+    <div class="sub-list" id="subList">
+      <div class="sub-empty">Pilih bahasa terlebih dahulu</div>
+    </div>
+    <div class="sub-status-bar">
+      <div class="sub-status-dot" id="subDot"></div>
+      <span id="subStatus">Tidak ada subtitle aktif</span>
+    </div>
+  </div>
+
+  <div class="player-bar" id="playerBar">
+    <div class="player-title" id="playerTitle">Memuat...</div>
+    <div class="player-btns">
+      <div class="episode-nav" id="episodeNav">
+        <button class="pbtn" onclick="changeEpisode(-1)">PREV</button>
+        <span class="episode-label" id="episodeLabel">S1E1</span>
+        <button class="pbtn" onclick="changeEpisode(1)">NEXT</button>
+      </div>
+      <button class="pbtn" id="btnSubBrowse" onclick="toggleSubPanel()">CC SUB</button>
+      <!-- Rotate Lock Button -->
+      <button class="pbtn" id="btnRotateLock" onclick="toggleRotateLock()" title="Kunci orientasi layar">
+        <span class="lock-icon">🔄</span>
+        <span id="rotateLockLabel">ROTATE</span>
+      </button>
+      <button class="pbtn" onclick="closePlayer()">✕ TUTUP</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════ */
+const IMDB_API   = "https://imdb.iamidiotareyoutoo.com";
+const STREAM_API_REMOTE = "https://vid-downloader-production-c8b5.up.railway.app";
+const STREAM_API = (location.protocol.startsWith("http") && (
+  location.hostname === "localhost" ||
+  location.hostname === "127.0.0.1" ||
+  location.hostname.includes("railway.app") ||
+  location.hostname.includes("render.com")
+)) ? location.origin : STREAM_API_REMOTE;
+const TMDB_KEY   = "b354b15ec55ecfd9b1d511617d1e0688";
+const TMDB_BASE  = "https://api.themoviedb.org/3";
+const TMDB_IMG   = "https://image.tmdb.org/t/p/w300";
+
+/* Items per page & max pages */
+const PAGE_SIZE = 20;      // TMDb default per page
+const MAX_GENRE_PAGES = 5; // 5 pages × 20 = 100 film per genre
+
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+let allResults     = [];
+let searchPage     = 1;
+let searchQuery    = "";
+let currentType    = "all";
+let currentGenre   = "all";  /* TMDb genre ID string */
+let genrePageNum   = 1;
+let genreLoading   = false;
+let genreItems     = [];
+let selectedItem   = null;
+let hlsInst        = null;
+let plyrInst       = null;
+let barTimer       = null;
+
+/* ── Rotate Lock State ── */
+let rotateLocked   = false;   // apakah sedang dikunci
+let lockOrientation = null;   // orientasi yang dikunci: 'landscape' | 'portrait'
+let orientationLockSupported = !!screen.orientation?.lock;
+
+/* Subtitle */
+const SUB = {
+  imdbId: null,
+  tmdbId: null,
+  title: "",
+  mediaType: "movie",
+  season: null,
+  episode: null,
+  activeLang: "en",
+  activeFileId: null,
+};
+const LANGS = [
+  {code:"en",label:"ENG"},{code:"id",label:"IND"},{code:"ja",label:"JPN"},
+  {code:"ko",label:"KOR"},{code:"zh-CN",label:"ZHO"},{code:"ar",label:"ARA"},
+  {code:"fr",label:"FRA"},{code:"es",label:"ESP"},
+];
+let _subCues = [], _subTimer = null;
+let seasonModalItem = null;
+let currentPlayback = {mediaType:"movie", tmdbId:null, season:1, episode:1, totalEpisodes:null, title:""};
+
+/* ═══════════════════════════════════════
+   NAV TABS
+═══════════════════════════════════════ */
+function setNTab(type) {
+  currentType = type;
+  document.querySelectorAll(".ntab").forEach(t => t.classList.remove("active"));
+  const map = {all:"ntAll",movie:"ntMovie",tvseries:"ntSeries"};
+  document.getElementById(map[type]||"ntAll").classList.add("active");
+
+  /* Jika sedang browse genre, refresh grid */
+  if (currentGenre !== "all") {
+    genreItems = [];
+    genrePageNum = 1;
+    document.getElementById("genreGrid").innerHTML = "";
+    loadGenrePage();
+  } else {
+    applyFilter();
+  }
+}
+
+/* ═══════════════════════════════════════
+   GENRE FILTER — FIXED
+   Setiap chip memanggil TMDb /discover dengan genre ID
+   dan menampilkan sampai 99+ film lewat pagination
+═══════════════════════════════════════ */
+function setGenre(el) {
+  const genre = el.dataset.genre;
+
+  /* Update chip aktif */
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  el.classList.add("active");
+
+  /* Scroll chip ke posisi terlihat */
+  el.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+
+  currentGenre = genre;
+
+  if (genre === "all") {
+    /* Tampilkan reco area */
+    document.getElementById("recoArea").style.display = "";
+    document.getElementById("searchResultArea").style.display = "none";
+    document.getElementById("genreBrowseArea").style.display = "none";
+    return;
+  }
+
+  /* Sembunyikan reco & search, tampilkan genre browse */
+  document.getElementById("recoArea").style.display = "none";
+  document.getElementById("searchResultArea").style.display = "none";
+  document.getElementById("genreBrowseArea").style.display = "block";
+
+  /* Reset & load */
+  genreItems   = [];
+  genrePageNum = 1;
+  document.getElementById("genreGrid").innerHTML = "";
+  document.getElementById("btnLoadMoreGenre").style.display = "none";
+
+  loadGenrePage();
+}
+
+async function loadGenrePage() {
+  if (genreLoading) return;
+  genreLoading = true;
+
+  setStatus(true, `Memuat genre... halaman ${genrePageNum}`);
+  const grid = document.getElementById("genreGrid");
+
+  try {
+    /* Tentukan endpoint berdasarkan tipe */
+    const mediaType = currentType === "tvseries" ? "tv" : "movie";
+    const genreParam = currentGenre !== "all" ? `&with_genres=${currentGenre}` : "";
+    const url = `${TMDB_BASE}/discover/${mediaType}?api_key=${TMDB_KEY}&language=id-ID&sort_by=popularity.desc&page=${genrePageNum}${genreParam}`;
+
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw = await r.json();
+    const results = (raw.results || []).filter(i => i.poster_path);
+
+    results.forEach((item, i) => {
+      const m = tmdbToLocal(item);
+      genreItems.push(m);
+
+      const card = makeMovieCard(m, genreItems.length - 1, i);
+      grid.appendChild(card);
+    });
+
+    const totalPages = raw.total_pages || 1;
+    const hasMore = genrePageNum < totalPages && genrePageNum < MAX_GENRE_PAGES;
+    const btnMore = document.getElementById("btnLoadMoreGenre");
+    btnMore.style.display = hasMore ? "block" : "none";
+    if (hasMore) {
+      btnMore.textContent = `↓ MUAT LEBIH BANYAK (${genreItems.length} / ${Math.min(raw.total_results, MAX_GENRE_PAGES * PAGE_SIZE)}+)`;
+    }
+
+  } catch(e) {
+    grid.innerHTML += `<div class="empty" style="grid-column:1/-1">
+      <h3>GAGAL</h3><p>${esc(e.message)}</p>
+    </div>`;
+  }
+
+  setStatus(false);
+  genreLoading = false;
+}
+
+async function loadMoreGenre() {
+  genrePageNum++;
+  const btn = document.getElementById("btnLoadMoreGenre");
+  btn.disabled = true;
+  btn.textContent = "Memuat...";
+  await loadGenrePage();
+  btn.disabled = false;
+}
+
+/* ═══════════════════════════════════════
+   SEARCH
+═══════════════════════════════════════ */
+function setStatus(show, txt) {
+  const el = document.getElementById("statusBar");
+  el.style.display = show ? "flex" : "none";
+  if (txt) document.getElementById("statusTxt").textContent = txt;
+}
+
+async function doSearch() {
+  const q = document.getElementById("searchInput").value.trim();
+  if (!q) {
+    /* Reset ke reco */
+    document.getElementById("recoArea").style.display = "";
+    document.getElementById("searchResultArea").style.display = "none";
+    document.getElementById("genreBrowseArea").style.display = "none";
+    /* Reset genre chips */
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+    document.querySelector(".chip[data-genre='all']").classList.add("active");
+    currentGenre = "all";
+    return;
+  }
+
+  searchQuery = q;
+  searchPage  = 1;
+
+  document.getElementById("recoArea").style.display = "none";
+  document.getElementById("genreBrowseArea").style.display = "none";
+  document.getElementById("searchResultArea").style.display = "block";
+  document.getElementById("btnSearch").disabled = true;
+  setStatus(true, `Mencari "${q}"...`);
+  document.getElementById("movieGrid").innerHTML = "";
+  document.getElementById("btnLoadMore").style.display = "none";
+  allResults = [];
+
+  try {
+    const r = await fetch(`${IMDB_API}/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw = await r.json();
+
+    if (Array.isArray(raw)) allResults = raw;
+    else if (raw.description && Array.isArray(raw.description)) allResults = raw.description;
+    else if (typeof raw === "object") {
+      allResults = Object.values(raw).filter(v => v && typeof v === "object" && v["#IMDB_ID"]);
+    }
+
+    applyFilter();
+  } catch(e) {
+    document.getElementById("movieGrid").innerHTML = `
+      <div class="empty"><h3>GAGAL</h3><p>${esc(e.message)}</p></div>`;
+  }
+
+  setStatus(false);
+  document.getElementById("btnSearch").disabled = false;
+}
+
+document.getElementById("searchInput")
+  .addEventListener("keydown", e => e.key === "Enter" && doSearch());
+
+async function loadMoreSearch() {
+  searchPage++;
+  const btn = document.getElementById("btnLoadMore");
+  btn.disabled = true;
+  btn.textContent = "Memuat...";
+
+  try {
+    const r = await fetch(`${IMDB_API}/search?q=${encodeURIComponent(searchQuery)}&page=${searchPage}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw = await r.json();
+
+    let newItems = [];
+    if (Array.isArray(raw)) newItems = raw;
+    else if (raw.description && Array.isArray(raw.description)) newItems = raw.description;
+    else if (typeof raw === "object") {
+      newItems = Object.values(raw).filter(v => v && typeof v === "object" && v["#IMDB_ID"]);
+    }
+
+    allResults = [...allResults, ...newItems];
+    if (newItems.length > 0) {
+      const grid = document.getElementById("movieGrid");
+      const offset = allResults.length - newItems.length;
+      newItems.forEach((m, i) => {
+        grid.appendChild(makeMovieCard(m, offset + i, i));
+      });
+    }
+    btn.style.display = newItems.length >= 10 ? "block" : "none";
+  } catch {}
+
+  btn.disabled = false;
+  btn.textContent = "↓ MUAT LEBIH BANYAK";
+}
+
+/* ═══════════════════════════════════════
+   FILTER & RENDER (untuk search results)
+═══════════════════════════════════════ */
+function applyFilter() {
+  let data = [...allResults];
+  if (currentType !== "all") {
+    data = data.filter(m => (m["#TYPE"]||"").toLowerCase() === currentType);
+  }
+  renderGrid(data);
+}
+
+function renderGrid(items) {
+  const grid = document.getElementById("movieGrid");
+  grid.innerHTML = "";
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty"><h3>TIDAK ADA HASIL</h3><p>Coba kata kunci lain.</p></div>`;
+    document.getElementById("btnLoadMore").style.display = "none";
+    return;
+  }
+  items.forEach((m, i) => grid.appendChild(makeMovieCard(m, i, i)));
+  document.getElementById("btnLoadMore").style.display = items.length >= 10 ? "block" : "none";
+  if (items.length >= 10) {
+    document.getElementById("btnLoadMore").textContent = `↓ MUAT LEBIH BANYAK (${items.length} hasil)`;
+  }
+}
+
+/* ─── Factory: buat elemen card ─── */
+function makeMovieCard(m, dataIdx, animIdx) {
+  const title  = m["#TITLE"]       || "Untitled";
+  const year   = m["#YEAR"]        || "";
+  const rating = m["#IMDB_RATING"] || "";
+  const type   = (m["#TYPE"]||"movie").toLowerCase();
+  const img    = m["#IMG_POSTER"]  || "";
+  const typeLabel = type==="tvseries"?"SERIAL":type==="tvepisode"?"EPISODE":"FILM";
+  const typeClass = type==="tvseries"?"type-series":type==="tvepisode"?"type-episode":"type-movie";
+
+  const card = document.createElement("div");
+  card.className = "movie-card";
+  card.style.animationDelay = Math.min(animIdx * 30, 500) + "ms";
+  card.onclick = () => openDetail(m);
+  card.innerHTML = `
+    <div class="card-poster">
+      ${img
+        ? `<img src="${esc(img)}" alt="${esc(title)}" loading="lazy"
+             onerror="this.parentNode.innerHTML='<div class=no-img-icon>🎬</div>'">`
+        : `<div class="no-img-icon">🎬</div>`}
+      ${rating ? `<div class="card-rating">★ ${esc(rating)}</div>` : ""}
+      <div class="card-type-badge ${typeClass}">${typeLabel}</div>
+    </div>
+    <div class="card-info">
+      <div class="card-title" title="${esc(title)}">${esc(title)}</div>
+      <div class="card-year">${esc(String(year))}</div>
+    </div>`;
+  return card;
+}
+
+/* ═══════════════════════════════════════
+   RECOMMENDATION (TMDb)
+═══════════════════════════════════════ */
+const RECO_CATEGORIES = [
+  {id:"recoTrending",icon:"🔥",title:"TRENDING HARI INI",badge:"POPULER",endpoint:"/trending/all/day"},
+  {id:"recoNowPlay", icon:"🎬",title:"SEDANG TAYANG",   badge:"BIOSKOP",endpoint:"/movie/now_playing"},
+  {id:"recoAction",  icon:"💥",title:"ACTION",          badge:"TOP",    endpoint:"/discover/movie?with_genres=28&sort_by=popularity.desc"},
+  {id:"recoComedy",  icon:"😂",title:"KOMEDI",          badge:"FUN",    endpoint:"/discover/movie?with_genres=35&sort_by=popularity.desc"},
+  {id:"recoDrama",   icon:"🎭",title:"DRAMA",           badge:"PILIHAN",endpoint:"/discover/movie?with_genres=18&sort_by=vote_average.desc&vote_count.gte=500"},
+  {id:"recoAnime",   icon:"⚡",title:"ANIME",           badge:"OTAKU",  endpoint:"/discover/movie?with_genres=16&sort_by=popularity.desc"},
+  {id:"recoHorror",  icon:"👻",title:"HORROR",          badge:"SERAM",  endpoint:"/discover/movie?with_genres=27&sort_by=popularity.desc"},
+  {id:"recoTV",      icon:"📺",title:"SERIAL TV POPULER",badge:"BINGE", endpoint:"/tv/popular"},
+];
+
+function tmdbToLocal(item) {
+  const isTV = item.media_type==="tv"||(item.name&&!item.title);
+  return {
+    "#TITLE":       item.title||item.name||"Untitled",
+    "#YEAR":        (item.release_date||item.first_air_date||"").substring(0,4),
+    "#IMDB_ID":     null,
+    "#IMG_POSTER":  item.poster_path ? TMDB_IMG+item.poster_path : "",
+    "#IMDB_RATING": item.vote_average ? item.vote_average.toFixed(1) : "",
+    "#TYPE":        isTV?"tvseries":"movie",
+    "#DESCRIPTION": item.overview||"",
+    "#AKA":         item.original_title||item.original_name||"",
+    "#GENRE":       "",
+    "_tmdb_id":     item.id,
+    "_tmdb_type":   isTV?"tv":"movie",
+  };
+}
+
+function renderRecoSkeleton(cid, title, icon, badge) {
+  const el = document.getElementById(cid);
+  const skels = Array(8).fill(0).map(() => `
+    <div class="reco-skeleton">
+      <div class="skel-poster"></div>
+      <div class="skel-info">
+        <div class="skel-line"></div>
+        <div class="skel-line short"></div>
+      </div>
+    </div>`).join("");
+  el.innerHTML = `
+    <div class="reco-header">
+      <div class="reco-title"><span class="reco-icon">${icon}</span> ${title}</div>
+      <div class="reco-badge">${badge}</div>
+    </div>
+    <div class="reco-row">${skels}</div>`;
+}
+
+function renderRecoCards(cid, title, icon, badge, items) {
+  const el = document.getElementById(cid);
+  const cards = items.slice(0,20).map((m, i) => {
+    const t   = m["#TITLE"]||"Untitled";
+    const yr  = m["#YEAR"]||"";
+    const img = m["#IMG_POSTER"]||"";
+    const rat = m["#IMDB_RATING"]||"";
+    const type = (m["#TYPE"]||"movie").toLowerCase();
+    const typeLabel = type==="tvseries"?"SERIAL":"FILM";
+    const typeClass = type==="tvseries"?"type-series":"type-movie";
+    const dataAttr = esc(JSON.stringify(m));
+    return `
+      <div class="reco-card" style="animation-delay:${Math.min(i*40,600)}ms"
+           onclick='openDetail(JSON.parse(this.dataset.m))' data-m="${dataAttr}">
+        <div class="card-poster">
+          ${img
+            ? `<img src="${esc(img)}" alt="${esc(t)}" loading="lazy"
+                 onerror="this.parentNode.innerHTML='<div class=no-img-icon>🎬</div>'">`
+            : `<div class="no-img-icon">🎬</div>`}
+          ${rat ? `<div class="card-rating">★ ${esc(rat)}</div>` : ""}
+          <div class="card-type-badge ${typeClass}">${typeLabel}</div>
+        </div>
+        <div class="card-info">
+          <div class="card-title" title="${esc(t)}">${esc(t)}</div>
+          <div class="card-year">${esc(String(yr))}</div>
+        </div>
+      </div>`;
+  }).join("");
+  el.innerHTML = `
+    <div class="reco-header">
+      <div class="reco-title"><span class="reco-icon">${icon}</span> ${title}</div>
+      <div class="reco-badge">${badge}</div>
+    </div>
+    <div class="reco-row">${cards}</div>`;
+}
+
+async function fetchRecoCategory(cat) {
+  try {
+    const sep = cat.endpoint.includes("?") ? "&" : "?";
+    const url = `${TMDB_BASE}${cat.endpoint}${sep}api_key=${TMDB_KEY}&language=id-ID&page=1`;
+    const r = await fetch(url);
+    if (!r.ok) return;
+    const raw = await r.json();
+    const results = (raw.results||[]).filter(i => i.poster_path);
+    if (results.length) {
+      renderRecoCards(cat.id, cat.title, cat.icon, cat.badge, results.map(tmdbToLocal));
+    }
+  } catch {}
+}
+
+async function loadRecommendations() {
+  if (!TMDB_KEY) return;
+  RECO_CATEGORIES.forEach(cat => renderRecoSkeleton(cat.id, cat.title, cat.icon, cat.badge));
+  await Promise.allSettled(RECO_CATEGORIES.map(cat => fetchRecoCategory(cat)));
+}
+loadRecommendations();
+
+/* ═══════════════════════════════════════
+   DETAIL PANEL
+═══════════════════════════════════════ */
+function isTVItem(m) {
+  return (m?.["#TYPE"] || "").toLowerCase() === "tvseries" || m?._tmdb_type === "tv";
+}
+
+async function ensureTmdbMeta(m) {
+  if (!m) return null;
+  if (m._tmdb_id) return m;
+  const imdbId = m["#IMDB_ID"];
+  if (!imdbId || !TMDB_KEY) return m;
+
+  try {
+    const r = await fetch(`${TMDB_BASE}/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_KEY}&language=id-ID&external_source=imdb_id`);
+    if (!r.ok) return m;
+    const data = await r.json();
+    const wantTV = isTVItem(m);
+    const found = wantTV ? (data.tv_results || [])[0] : (data.movie_results || [])[0];
+    if (!found) return m;
+    m._tmdb_id = found.id;
+    m._tmdb_type = wantTV ? "tv" : "movie";
+    if (found.poster_path && !m["#IMG_POSTER"]) m["#IMG_POSTER"] = TMDB_IMG + found.poster_path;
+    if (found.overview && !m["#DESCRIPTION"]) m["#DESCRIPTION"] = found.overview;
+  } catch {}
+  return m;
+}
+
+async function openDetail(m) {
+  selectedItem = m;
+
+  /* Resolve IMDB ID dari TMDb jika belum ada */
+  if (!m["#IMDB_ID"] && m._tmdb_id && TMDB_KEY) {
+    try {
+      const type = m._tmdb_type||"movie";
+      const [extR, detR] = await Promise.all([
+        fetch(`${TMDB_BASE}/${type}/${m._tmdb_id}/external_ids?api_key=${TMDB_KEY}`),
+        fetch(`${TMDB_BASE}/${type}/${m._tmdb_id}?api_key=${TMDB_KEY}&language=id-ID`),
+      ]);
+      const ext = await extR.json();
+      const det = await detR.json();
+      if (ext.imdb_id) m["#IMDB_ID"] = ext.imdb_id;
+      if (det.genres)  m["#GENRE"] = det.genres.map(g=>g.name).join(", ");
+      if (det.overview) m["#DESCRIPTION"] = det.overview;
+    } catch {}
+    selectedItem = m;
+  }
+
+  const id     = m["#IMDB_ID"]     || "";
+  const title  = m["#TITLE"]       || "Untitled";
+  const year   = m["#YEAR"]        || "";
+  const rating = m["#IMDB_RATING"] || "";
+  const type   = (m["#TYPE"]||"movie").toLowerCase();
+  const img    = m["#IMG_POSTER"]  || "";
+  const desc   = m["#DESCRIPTION"] || m["#AKA"] || "Deskripsi tidak tersedia.";
+  const genre  = m["#GENRE"]       || "";
+
+  document.getElementById("dpTitle").textContent = title;
+  document.getElementById("dpDesc").textContent  = desc;
+  document.getElementById("dpPoster").src = img||"";
+  document.getElementById("btnStream").textContent =
+    type === "tvseries" ? "PILIH EPISODE" : "TONTON SEKARANG";
+
+  const badges = document.getElementById("dpBadges");
+  badges.innerHTML = "";
+  if (year)   badges.innerHTML += `<span class="badge b-year">${esc(String(year))}</span>`;
+  if (rating) badges.innerHTML += `<span class="badge b-rating">★ ${esc(rating)}</span>`;
+  badges.innerHTML += `<span class="badge b-type">${
+    type==="tvseries"?"Serial TV":type==="tvepisode"?"Episode":"Film"
+  }</span>`;
+  genre.split(",").slice(0,3).forEach(g => {
+    if (g.trim()) badges.innerHTML += `<span class="badge b-genre">${esc(g.trim())}</span>`;
+  });
+
+  document.getElementById("providersWrap").style.display = "none";
+  document.getElementById("photosWrap").style.display    = "none";
+  document.getElementById("provList").innerHTML          = "";
+  document.getElementById("photosList").innerHTML        = "";
+  document.getElementById("detailPanel").style.display  = "block";
+
+  if (id) { fetchProviders(id); fetchPhotos(id); }
+}
+
+function closeDetail() {
+  document.getElementById("detailPanel").style.display = "none";
+}
+
+function openImdb() {
+  const id = selectedItem?.["#IMDB_ID"];
+  if (id) window.open(`https://www.imdb.com/title/${id}/`, "_blank");
+}
+
+async function fetchProviders(imdbId) {
+  try {
+    const r = await fetch(`${IMDB_API}/justwatch?q=${imdbId}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const providers = new Set();
+    const collect = obj => {
+      if (!obj||typeof obj!=="object") return;
+      ["stream","buy","rent","free","flatrate"].forEach(key => {
+        if (Array.isArray(obj[key])) obj[key].forEach(p => { if(p.name) providers.add(p.name); });
+      });
+    };
+    if (data.result) collect(data.result);
+    else Object.values(data).forEach(v => { if(v&&typeof v==="object") collect(v); });
+    if (providers.size > 0) {
+      document.getElementById("provList").innerHTML =
+        [...providers].slice(0,10).map(p => `<span class="prov-chip">${esc(p)}</span>`).join("");
+      document.getElementById("providersWrap").style.display = "block";
+    }
+  } catch {}
+}
+
+async function fetchPhotos(imdbId) {
+  try {
+    const r = await fetch(`${IMDB_API}/photo/${imdbId}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    let urls = [];
+    if (Array.isArray(data)) {
+      urls = data.map(p => typeof p==="string"?p:p.url||p.src||"").filter(Boolean);
+    } else if (typeof data==="object") {
+      const flatten = obj => {
+        Object.values(obj).forEach(v => {
+          if (typeof v==="string"&&v.startsWith("http")) urls.push(v);
+          else if (Array.isArray(v)) v.forEach(x => {
+            if (typeof x==="string"&&x.startsWith("http")) urls.push(x);
+            else if (x&&x.url) urls.push(x.url);
+          });
+          else if (v&&typeof v==="object") flatten(v);
+        });
+      };
+      flatten(data);
+    }
+    urls = [...new Set(urls)].slice(0,10);
+    if (urls.length > 0) {
+      document.getElementById("photosList").innerHTML = urls.map(u =>
+        `<div class="photo-thumb">
+           <img src="${esc(u)}" loading="lazy" onerror="this.parentNode.style.display='none'">
+         </div>`).join("");
+      document.getElementById("photosWrap").style.display = "block";
+    }
+  } catch {}
+}
+
+/* ═══════════════════════════════════════
+   STREAM
+═══════════════════════════════════════ */
+async function openSeasonModal(item) {
+  seasonModalItem = await ensureTmdbMeta(item || selectedItem);
+  selectedItem = seasonModalItem;
+  closeDetail();
+
+  const modal = document.getElementById("seasonModal");
+  const seasonList = document.getElementById("seasonList");
+  const episodePanel = document.getElementById("episodePanel");
+  const title = seasonModalItem?.["#TITLE"] || "Serial";
+
+  document.getElementById("seasonModalTitle").textContent = title;
+  document.getElementById("seasonModalMeta").textContent = "Memuat season...";
+  seasonList.innerHTML = "";
+  episodePanel.innerHTML = `<div class="episode-empty">Memuat episode...</div>`;
+  modal.style.display = "block";
+
+  const tmdbId = seasonModalItem?._tmdb_id;
+  if (!tmdbId) {
+    document.getElementById("seasonModalMeta").textContent = "TMDB ID tidak tersedia.";
+    episodePanel.innerHTML = `<div class="episode-empty">Serial ini belum punya TMDB ID, jadi episode belum bisa dipilih.</div>`;
+    return;
+  }
+
+  try {
+    const r = await fetch(`${TMDB_BASE}/tv/${tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const seasons = (data.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
+    document.getElementById("seasonModalMeta").textContent = `${seasons.length || 0} season`;
+
+    if (!seasons.length) {
+      episodePanel.innerHTML = `<div class="episode-empty">Daftar season tidak tersedia.</div>`;
+      return;
+    }
+
+    seasonList.innerHTML = seasons.map(s => `
+      <button class="season-item" data-season="${s.season_number}" data-count="${s.episode_count}"
+        onclick="selectSeason(${s.season_number},${s.episode_count},this)">
+        Season ${s.season_number}
+      </button>
+    `).join("");
+
+    const first = seasonList.querySelector(".season-item");
+    if (first) first.click();
+  } catch(e) {
+    document.getElementById("seasonModalMeta").textContent = "Gagal memuat season.";
+    episodePanel.innerHTML = `<div class="episode-empty">Gagal mengambil season: ${esc(e.message)}</div>`;
+  }
+}
+
+function closeSeasonModal() {
+  document.getElementById("seasonModal").style.display = "none";
+}
+
+async function selectSeason(seasonNum, episodeCount, el) {
+  document.querySelectorAll(".season-item").forEach(x => x.classList.remove("active"));
+  if (el) el.classList.add("active");
+
+  const episodePanel = document.getElementById("episodePanel");
+  episodePanel.innerHTML = `<div class="episode-empty">Memuat Season ${seasonNum}...</div>`;
+  const tmdbId = seasonModalItem?._tmdb_id;
+
+  try {
+    const r = await fetch(`${TMDB_BASE}/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    renderEpisodeGrid(seasonNum, data.episodes || [], episodeCount);
+  } catch {
+    const fallback = Array.from({length: episodeCount || 1}, (_, i) => ({episode_number:i + 1}));
+    renderEpisodeGrid(seasonNum, fallback, episodeCount);
+  }
+}
+
+function renderEpisodeGrid(seasonNum, episodes, episodeCount) {
+  const list = (episodes && episodes.length)
+    ? episodes
+    : Array.from({length: episodeCount || 1}, (_, i) => ({episode_number:i + 1}));
+
+  document.getElementById("episodePanel").innerHTML = `
+    <div class="episode-grid">
+      ${list.map(ep => {
+        const n = ep.episode_number || ep.episode || 1;
+        return `<button class="episode-item" title="${esc(ep.name || `Episode ${n}`)}" onclick="playEpisode(${seasonNum},${n})">${n}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function playEpisode(season, episode) {
+  closeSeasonModal();
+  startTvEpisodeStream(season, episode);
+}
+
+async function startStream() {
+  if (!selectedItem) return;
+  if (isTVItem(selectedItem)) {
+    openSeasonModal(selectedItem);
+    return;
+  }
+
+  const id    = selectedItem["#IMDB_ID"] || "";
+  const title = selectedItem["#TITLE"]   || "Film";
+  if (!id) { alert("IMDB ID tidak tersedia untuk film ini."); return; }
+
+  SUB.imdbId       = id;
+  SUB.tmdbId       = selectedItem._tmdb_id || null;
+  SUB.title        = title;
+  SUB.mediaType    = "movie";
+  SUB.season       = null;
+  SUB.episode      = null;
+  SUB.activeFileId = null;
+  SUB.activeLang   = "en";
+  resetSubtitlePanel();
+  currentPlayback = {mediaType:"movie", tmdbId:selectedItem._tmdb_id || null, season:1, episode:1, totalEpisodes:null, title};
+  document.getElementById("episodeNav").style.display = "none";
+
+  closeDetail();
+  document.getElementById("playerMode").style.display = "block";
+  showPLoading(`Mengambil stream untuk "${title}"...`);
+  document.getElementById("playerTitle").textContent =
+    `${title}${selectedItem["#YEAR"] ? " ("+selectedItem["#YEAR"]+")" : ""}`;
+
+  try {
+    const res  = await fetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
+    const data = await res.json();
+    if (data.stream_url) {
+      playHls(data.stream_url);
+    } else {
+      showPError("Stream tidak tersedia untuk film ini.");
+    }
+  } catch(e) {
+    showPError("Gagal mengambil stream: " + e.message);
+  }
+}
+
+async function startTvEpisodeStream(season, episode) {
+  if (!selectedItem) return;
+  selectedItem = await ensureTmdbMeta(selectedItem);
+  const tmdbId = selectedItem._tmdb_id;
+  const title = selectedItem["#TITLE"] || "Serial";
+  if (!tmdbId) { alert("TMDB ID tidak tersedia untuk serial ini."); return; }
+
+  currentPlayback = {mediaType:"tv", tmdbId, season, episode, totalEpisodes:null, title};
+  SUB.imdbId       = selectedItem["#IMDB_ID"] || null;
+  SUB.tmdbId       = tmdbId;
+  SUB.title        = title;
+  SUB.mediaType    = "tv";
+  SUB.season       = season;
+  SUB.episode      = episode;
+  SUB.activeFileId = null;
+  SUB.activeLang   = "en";
+  resetSubtitlePanel();
+
+  document.getElementById("playerMode").style.display = "block";
+  document.getElementById("episodeNav").style.display = "flex";
+  updateEpisodeLabel();
+  showPLoading(`Mengambil stream ${title} S${season}E${episode}...`);
+  document.getElementById("playerTitle").textContent = `${title} - S${season}E${episode}`;
+
+  try {
+    const q = new URLSearchParams({id: tmdbId, type: "tv", s: season, e: episode});
+    const res = await fetch(`${STREAM_API}/api/tmdb-stream?${q}`);
+    const data = await res.json();
+    if (data.totalEpisodes) currentPlayback.totalEpisodes = data.totalEpisodes;
+    if (data.imdbId) SUB.imdbId = data.imdbId;
+    if (data.episodeTitle) {
+      document.getElementById("playerTitle").textContent = `${title} - ${data.episodeTitle} (S${season}E${episode})`;
+    }
+    if (data.stream_url || data.streamUrl || data.link) {
+      playHls(data.stream_url || data.streamUrl || data.link);
+    } else {
+      showPError(data.message || "Stream episode tidak tersedia.");
+    }
+  } catch(e) {
+    showPError("Gagal mengambil episode: " + e.message);
+  }
+}
+
+function updateEpisodeLabel() {
+  document.getElementById("episodeLabel").textContent = `S${currentPlayback.season}E${currentPlayback.episode}`;
+}
+
+function changeEpisode(delta) {
+  if (currentPlayback.mediaType !== "tv") return;
+  const next = currentPlayback.episode + delta;
+  if (next < 1) return;
+  if (currentPlayback.totalEpisodes && next > currentPlayback.totalEpisodes) return;
+  startTvEpisodeStream(currentPlayback.season, next);
+}
+
+/* ═══════════════════════════════════════
+   PLAYER — HLS + PLYR
+═══════════════════════════════════════ */
+function updateQuality(q) {
+  if (!hlsInst) return;
+  hlsInst.levels.forEach((level, i) => { if (level.height===q) hlsInst.currentLevel=i; });
+}
+
+function playHls(streamUrl) {
+  const v  = document.getElementById("mainVideo");
+  const vc = document.getElementById("videoContainer");
+
+  if (hlsInst)  { hlsInst.destroy();  hlsInst  = null; }
+  if (plyrInst) { plyrInst.destroy(); plyrInst = null; }
+  v.onended = () => {
+    if (currentPlayback.mediaType === "tv") changeEpisode(1);
+  };
+
+  const isM3u8 = streamUrl.toLowerCase().includes(".m3u8")||streamUrl.includes("mpegurl");
+  const plyrOpts = {
+    controls: ["play-large","play","progress","current-time","mute","volume","captions","settings","pip","airplay","fullscreen"],
+    settings: ["captions","quality","speed"],
+    captions: {active:true, update:true},
+  };
+
+  if (isM3u8 && Hls.isSupported()) {
+    hlsInst = new Hls({maxBufferLength:30,manifestLoadingTimeOut:10000,levelLoadingTimeOut:10000});
+    hlsInst.loadSource(streamUrl);
+    hlsInst.attachMedia(v);
+    hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
+      hidePOverlays();
+      vc.style.display = "block";
+      const qs = hlsInst.levels.map(l=>l.height).filter((h,i,a)=>h&&a.indexOf(h)===i).sort((a,b)=>b-a);
+      if (qs.length>1) plyrOpts.quality = {default:qs[0],options:qs,forced:true,onChange:updateQuality};
+      plyrInst = new Plyr(v, plyrOpts);
+
+      /* ── FULLSCREEN → AUTO LANDSCAPE ──
+         Plyr enterfullscreen event */
+      plyrInst.on("enterfullscreen", onEnterFullscreen);
+      plyrInst.on("exitfullscreen",  onExitFullscreen);
+
+      v.play().catch(()=>{});
+    });
+    hlsInst.on(Hls.Events.ERROR, (e, d) => {
+      if (d.fatal) { if(hlsInst){hlsInst.destroy();hlsInst=null;} showPError("Stream gagal dimuat."); }
+    });
+  } else {
+    v.src = streamUrl;
+    plyrInst = new Plyr(v, plyrOpts);
+    plyrInst.on("enterfullscreen", onEnterFullscreen);
+    plyrInst.on("exitfullscreen",  onExitFullscreen);
+    v.addEventListener("loadedmetadata", () => { hidePOverlays(); vc.style.display="block"; v.play().catch(()=>{}); }, {once:true});
+    v.addEventListener("error", () => showPError("Gagal memutar stream."), {once:true});
+  }
+
+  /* Native fullscreen change (fallback untuk browser yang tidak pakai Plyr fullscreen) */
+  document.addEventListener("fullscreenchange", onNativeFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", onNativeFullscreenChange);
+}
+
+/* ═══════════════════════════════════════
+   FULLSCREEN → AUTO ROTATE LANDSCAPE
+═══════════════════════════════════════ */
+async function onEnterFullscreen() {
+  /* Jangan override kalau sudah dikunci portrait */
+  if (rotateLocked && lockOrientation === "portrait") return;
+  await requestLandscape();
+}
+
+async function onExitFullscreen() {
+  /* Jika tidak dikunci, release rotation lock */
+  if (!rotateLocked) {
+    releaseOrientationLock();
+  }
+}
+
+function onNativeFullscreenChange() {
+  const isFs = !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement
+  );
+  if (isFs) {
+    if (!rotateLocked || lockOrientation !== "portrait") requestLandscape();
+  } else {
+    if (!rotateLocked) releaseOrientationLock();
+  }
+}
+
+async function requestLandscape() {
+  try {
+    if (screen.orientation?.lock) {
+      await screen.orientation.lock("landscape");
+    }
+  } catch(e) {
+    /* Beberapa browser membutuhkan user gesture atau tidak mendukung */
+    console.warn("Orientation lock tidak didukung:", e.message);
+  }
+}
+
+function releaseOrientationLock() {
+  try {
+    if (screen.orientation?.unlock) {
+      screen.orientation.unlock();
+    }
+  } catch {}
+}
+
+/* ═══════════════════════════════════════
+   ROTATE LOCK BUTTON
+═══════════════════════════════════════ */
+function toggleRotateLock() {
+  const btn   = document.getElementById("btnRotateLock");
+  const label = document.getElementById("rotateLockLabel");
+  const icon  = btn.querySelector(".lock-icon");
+
+  if (!rotateLocked) {
+    /* Kunci orientasi saat ini */
+    const currentOri = window.screen?.orientation?.type || "";
+    const isLandscape = currentOri.startsWith("landscape") ||
+                        (window.innerWidth > window.innerHeight);
+
+    lockOrientation = isLandscape ? "landscape" : "portrait";
+
+    try {
+      if (screen.orientation?.lock) {
+        screen.orientation.lock(lockOrientation).then(() => {
+          rotateLocked = true;
+          btn.classList.add("active");
+          icon.textContent = "🔒";
+          label.textContent = lockOrientation === "landscape" ? "LANDSCAPE" : "PORTRAIT";
+        }).catch(e => {
+          /* Tidak didukung di desktop — tampilkan pesan */
+          showRotateLockFallback(isLandscape);
+        });
+      } else {
+        showRotateLockFallback(isLandscape);
+      }
+    } catch {
+      showRotateLockFallback(isLandscape);
+    }
+  } else {
+    /* Lepas lock */
+    rotateLocked    = false;
+    lockOrientation = null;
+    releaseOrientationLock();
+    btn.classList.remove("active");
+    icon.textContent  = "🔄";
+    label.textContent = "ROTATE";
+  }
+}
+
+/** Fallback visual jika Screen Orientation API tidak ada */
+function showRotateLockFallback(isLandscape) {
+  /* Di desktop, simulasikan dengan mengubah label saja */
+  rotateLocked    = true;
+  lockOrientation = isLandscape ? "landscape" : "portrait";
+  const btn   = document.getElementById("btnRotateLock");
+  const label = document.getElementById("rotateLockLabel");
+  const icon  = btn.querySelector(".lock-icon");
+  btn.classList.add("active");
+  icon.textContent  = "🔒";
+  label.textContent = lockOrientation === "landscape" ? "LANDSCAPE" : "PORTRAIT";
+}
+
+/* ── Deteksi orientasi berubah → enforce lock ── */
+window.addEventListener("orientationchange", () => {
+  if (!rotateLocked || !lockOrientation) return;
+  /* Re-apply lock jika berubah */
+  setTimeout(async () => {
+    try {
+      if (screen.orientation?.lock) {
+        await screen.orientation.lock(lockOrientation);
+      }
+    } catch {}
+  }, 100);
+});
+
+/* ═══════════════════════════════════════
+   PLAYER HELPERS
+═══════════════════════════════════════ */
+function showPError(msg) {
+  hidePOverlays();
+  document.getElementById("videoContainer").style.display = "none";
+  document.getElementById("pErrTxt").textContent = msg;
+  document.getElementById("pError").classList.remove("hidden");
+}
+
+function showPLoading(txt) {
+  document.getElementById("pError").classList.add("hidden");
+  document.getElementById("pLoading").classList.remove("hidden");
+  document.getElementById("pLoadTxt").textContent = txt;
+  document.getElementById("videoContainer").style.display   = "none";
+  document.getElementById("playerFrame").style.display = "none";
+}
+
+function hidePOverlays() {
+  document.getElementById("pLoading").classList.add("hidden");
+  document.getElementById("pError").classList.add("hidden");
+}
+
+function closePlayer() {
+  document.getElementById("playerMode").style.display = "none";
+  const v  = document.getElementById("mainVideo");
+  const vc = document.getElementById("videoContainer");
+  v.pause(); v.src = ""; vc.style.display = "none";
+  Array.from(v.querySelectorAll("track")).forEach(t => t.remove());
+  const f = document.getElementById("playerFrame");
+  f.src = ""; f.style.display = "none";
+  if (hlsInst)  { hlsInst.destroy();  hlsInst  = null; }
+  if (plyrInst) { plyrInst.destroy(); plyrInst = null; }
+  document.getElementById("pLoading").classList.remove("hidden");
+  document.getElementById("pError").classList.add("hidden");
+  document.getElementById("subPanelBrowse").classList.remove("visible");
+  const bd2 = document.getElementById("subBackdrop");
+  if (bd2) bd2.classList.remove("visible");
+  clearTimeout(barTimer);
+  stopSubOverlay(); _subCues = [];
+
+  /* Reset subtitle UI */
+  SUB.activeFileId = null;
+  const btn = document.getElementById("btnSubBrowse");
+  btn.textContent = "CC SUB"; btn.classList.remove("active");
+  document.getElementById("subDot").classList.remove("active");
+  document.getElementById("subStatus").textContent = "Tidak ada subtitle aktif";
+  document.getElementById("episodeNav").style.display = "none";
+  currentPlayback = {mediaType:"movie", tmdbId:null, season:1, episode:1, totalEpisodes:null, title:""};
+
+  /* Reset rotate lock */
+  rotateLocked    = false;
+  lockOrientation = null;
+  releaseOrientationLock();
+  const rotBtn = document.getElementById("btnRotateLock");
+  rotBtn.classList.remove("active");
+  rotBtn.querySelector(".lock-icon").textContent = "🔄";
+  document.getElementById("rotateLockLabel").textContent = "ROTATE";
+
+  /* Lepas event listener native fullscreen */
+  document.removeEventListener("fullscreenchange", onNativeFullscreenChange);
+  document.removeEventListener("webkitfullscreenchange", onNativeFullscreenChange);
+}
+
+/* Auto-hide player bar */
+document.getElementById("playerMode").addEventListener("mousemove", () => {
+  document.getElementById("playerBar").classList.remove("faded");
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() =>
+    document.getElementById("playerBar").classList.add("faded"), 3500);
+});
+
+/* ═══════════════════════════════════════
+   SUBTITLE SYSTEM
+═══════════════════════════════════════ */
+function resetSubtitlePanel() {
+  SUB.activeFileId = null;
+  stopSubOverlay();
+  _subCues = [];
+  document.getElementById("subPanelBrowse").classList.remove("visible");
+  const bd = document.getElementById("subBackdrop");
+  if (bd) bd.classList.remove("visible");
+  document.getElementById("subList").innerHTML = `<div class="sub-empty">Pilih bahasa terlebih dahulu</div>`;
+  document.getElementById("subDot").classList.remove("active");
+  document.getElementById("subStatus").textContent = "Tidak ada subtitle aktif";
+  const btn = document.getElementById("btnSubBrowse");
+  if (btn) { btn.textContent = "CC SUB"; btn.classList.remove("active"); }
+}
+
+function toggleSubPanel() {
+  const panel    = document.getElementById("subPanelBrowse");
+  const backdrop = document.getElementById("subBackdrop");
+  const open = panel.classList.contains("visible");
+  if (!open) {
+    panel.classList.add("visible");
+    backdrop.classList.add("visible");
+    buildLangRow();
+    if (document.getElementById("subList").querySelector(".sub-empty,.sub-searching")) {
+      fetchSubtitles(SUB.activeLang);
+    }
+  } else {
+    panel.classList.remove("visible");
+    backdrop.classList.remove("visible");
+  }
+}
+
+function buildLangRow() {
+  document.getElementById("subLangRow").innerHTML = LANGS.map(l => `
+    <button class="sub-lang-btn ${l.code===SUB.activeLang?"active":""}"
+            onclick="selectLang('${l.code}',this)">${l.label}</button>
+  `).join("");
+}
+
+function selectLang(code, el) {
+  SUB.activeLang = code;
+  document.querySelectorAll("#subLangRow .sub-lang-btn").forEach(b=>b.classList.remove("active"));
+  el.classList.add("active");
+  fetchSubtitles(code);
+}
+
+async function fetchSubtitles(lang) {
+  const list = document.getElementById("subList");
+  list.innerHTML = `<div class="sub-searching"><div class="spinner"></div> Mencari ${lang.toUpperCase()}...</div>`;
+  try {
+    let q = "";
+    if (SUB.mediaType === "tv" && SUB.tmdbId) {
+      q = `tmdb_id=${encodeURIComponent(SUB.tmdbId)}&type=tv&season=${encodeURIComponent(SUB.season)}&episode=${encodeURIComponent(SUB.episode)}&lang=${lang}`;
+    }
+    else if (SUB.imdbId) q = `imdb_id=${encodeURIComponent(SUB.imdbId)}&type=${encodeURIComponent(SUB.mediaType || "movie")}&lang=${lang}`;
+    else if (SUB.title) q = `query=${encodeURIComponent(SUB.title)}&lang=${lang}`;
+    else { list.innerHTML = `<div class="sub-empty">Tidak ada ID film</div>`; return; }
+
+    const r = await fetch(`${STREAM_API}/api/subtitle/search?${q}`);
+    const d = await r.json();
+    if (d.status==="error") { list.innerHTML=`<div class="sub-empty">⚠ ${esc(d.error||"API error")}</div>`; return; }
+
+    const items = (d.data||[]).slice(0,12);
+    if (!items.length) { list.innerHTML=`<div class="sub-empty">Tidak ada subtitle ${lang.toUpperCase()}</div>`; return; }
+
+    list.innerHTML = items.map((s,i) => {
+      const name = esc(s.release||s.file_name||`Subtitle ${i+1}`);
+      const dlc  = s.downloads>999 ? Math.round(s.downloads/1000)+"k" : (s.downloads||"");
+      return `
+        <div class="sub-item ${s.file_id===SUB.activeFileId?"active":""}" id="sub-b-${i}"
+             onclick="loadSubtitle('${s.file_id}',${i})">
+          <div class="sub-item-left">
+            <div class="sub-item-name" title="${name}">${name}</div>
+            <div class="sub-item-meta">
+              ${s.hearing_impaired?'<span class="sub-badge sub-badge-hi">♿ HI</span>':""}
+              ${dlc?`<span class="sub-badge sub-badge-dl">⬇ ${dlc}</span>`:""}
+              ${s.fps?`<span class="sub-badge sub-badge-dl">${s.fps}fps</span>`:""}
+            </div>
+          </div>
+          <div class="sub-item-load">⟳</div>
+        </div>`;
+    }).join("");
+  } catch { list.innerHTML=`<div class="sub-empty">Gagal mengambil subtitle</div>`; }
+}
+
+async function loadSubtitle(fileId, idx) {
+  document.querySelectorAll("#subList .sub-item").forEach(el=>el.classList.remove("active","loading"));
+  const itemEl = document.getElementById(`sub-b-${idx}`);
+  if (itemEl) itemEl.classList.add("loading");
+
+  try {
+    const r = await fetch(`${STREAM_API}/api/subtitle/download?file_id=${fileId}`);
+    if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.error||`HTTP ${r.status}`); }
+    const srt = await r.text();
+    if (!srt||srt.trim().length<10) throw new Error("File subtitle kosong");
+
+    _subCues = parseSrt(srt);
+    const vtt  = srtToVtt(srt);
+    const blob = new Blob([vtt],{type:"text/vtt"});
+    const url  = URL.createObjectURL(blob);
+    applyVttToVideo(url, SUB.activeLang);
+
+    SUB.activeFileId = fileId;
+    if (itemEl) { itemEl.classList.remove("loading"); itemEl.classList.add("active"); }
+
+    const releaseName = itemEl?.querySelector(".sub-item-name")?.textContent?.trim() || "Subtitle";
+    updateSubStatus(true, releaseName);
+    const btn = document.getElementById("btnSubBrowse");
+    btn.textContent = "CC ✓"; btn.classList.add("active");
+  } catch(e) {
+    if (itemEl) itemEl.classList.remove("loading");
+    updateSubStatus(false, "Gagal: "+e.message);
+  }
+}
+
+const _isIframeMode = () => document.getElementById("playerFrame").style.display==="block";
+
+function applyVttToVideo(vttUrl, lang) {
+  if (_isIframeMode()) { startSubOverlay(); return; }
+  const video = document.getElementById("mainVideo");
+  Array.from(video.querySelectorAll("track")).forEach(t=>t.remove());
+  const track = document.createElement("track");
+  track.kind="subtitles"; track.src=vttUrl;
+  track.srclang=lang; track.label=lang.toUpperCase(); track.default=true;
+  video.appendChild(track);
+
+  /* Sync ke Plyr */
+  if (plyrInst) {
+    setTimeout(() => {
+      try {
+        plyrInst.currentTrack = 0;
+        if (!plyrInst.captions.active) plyrInst.toggleCaptions(true);
+      } catch {
+        fallbackActivateTrack(video, lang);
+      }
+    }, 300);
+  } else {
+    setTimeout(() => fallbackActivateTrack(video, lang), 200);
+  }
+}
+
+function fallbackActivateTrack(video, lang) {
+  Array.from(video.textTracks).forEach(t => { t.mode="hidden"; });
+  const target = Array.from(video.textTracks).find(t=>t.language===lang||t.label===lang.toUpperCase());
+  if (target) target.mode="showing";
+  else if (video.textTracks[0]) video.textTracks[0].mode="showing";
+}
+
+function parseSrt(srt) {
+  return srt.replace(/\r\n/g,"\n").replace(/\r/g,"\n").trim().split(/\n\n+/).map(block => {
+    const lines = block.split("\n");
+    const tl = lines.find(l=>l.includes("-->"));
+    if (!tl) return null;
+    const [s,e] = tl.split("-->").map(x => {
+      const p = x.trim().replace(",",".").split(":");
+      return (+p[0])*3600+(+p[1])*60+parseFloat(p[2]);
+    });
+    const text = lines.slice(lines.indexOf(tl)+1).join("\n").replace(/<[^>]+>/g,"").trim();
+    return text ? {start:s,end:e,text} : null;
+  }).filter(Boolean);
+}
+
+function startSubOverlay() {
+  stopSubOverlay();
+  const overlay = document.getElementById("subOverlay");
+  if (!overlay||_subCues.length===0) return;
+  overlay.style.display = "block";
+  const t0 = Date.now()/1000;
+  _subTimer = setInterval(() => {
+    const now = Date.now()/1000 - t0;
+    const cue = _subCues.find(c=>now>=c.start&&now<c.end);
+    overlay.innerHTML = cue ? `<span>${cue.text.replace(/\n/g,"<br>")}</span>` : "";
+  }, 200);
+}
+
+function stopSubOverlay() {
+  if (_subTimer) { clearInterval(_subTimer); _subTimer=null; }
+  const o = document.getElementById("subOverlay");
+  if (o) { o.innerHTML=""; o.style.display="none"; }
+}
+
+function disableSubtitle() {
+  const video = document.getElementById("mainVideo");
+  Array.from(video.querySelectorAll("track")).forEach(t=>t.remove());
+  Array.from(video.textTracks).forEach(t=>{t.mode="disabled";});
+  if (plyrInst) {
+    try { plyrInst.currentTrack=-1; if(plyrInst.captions.active)plyrInst.toggleCaptions(false); } catch {}
+  }
+  stopSubOverlay(); _subCues=[];
+  SUB.activeFileId=null;
+  document.querySelectorAll("#subList .sub-item").forEach(el=>el.classList.remove("active"));
+  updateSubStatus(false,"Tidak ada subtitle aktif");
+  const btn=document.getElementById("btnSubBrowse");
+  btn.textContent="CC SUB"; btn.classList.remove("active");
+}
+
+function updateSubStatus(active,text) {
+  document.getElementById("subDot").classList.toggle("active",active);
+  document.getElementById("subStatus").textContent=text;
+}
+
+function srtToVtt(srt) {
+  return "WEBVTT\n\n"+srt
+    .replace(/\r\n/g,"\n").replace(/\r/g,"\n")
+    .replace(/^\uFEFF/,"")
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g,"$1.$2")
+    .replace(/<[^>]+>/g,"")
+    .trim();
+}
+
+/* ─── Util ─── */
+function esc(s) {
+  return String(s||"").replace(/[&<>"']/g,m=>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[m]
+  );
+}
+</script>
+<script>
+/* ════════════════════════════════════════
+   DRACIN TAB HANDLER (FINAL FIX)
+════════════════════════════════════════ */
+let _mainTab = 'film';
+
+function switchMainTab(tab) {
+  _mainTab = tab;
+
+  document.querySelectorAll('.ntab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tab === 'film' ? 'ntFilm' : 'ntDracin').classList.add('active');
+
+  const isFilm = tab === 'film';
+
+  // Toggle visibility — dracin-section sekarang SEJAJAR dengan gridWrap (bukan di dalamnya)
+  document.getElementById('gridWrap').style.display     = isFilm ? '' : 'none';
+  document.getElementById('dracin-section').style.display = isFilm ? 'none' : 'flex';
+
+  // Sembunyikan elemen khusus film saat tab dracin aktif
+  const searchArea = document.querySelector('.search-area');
+  const filterWrap = document.querySelector('.filter-wrap');
+  if (searchArea) searchArea.style.display = isFilm ? '' : 'none';
+  if (filterWrap) filterWrap.style.display = isFilm ? '' : 'none';
+
+  if (tab === 'dracin' && !DR.initialized) {
+    DR.initialized = true;
+    console.log('%c[Dracin] Inisialisasi...', 'color:#ff3c5f');
+    setTimeout(() => {
+      dracinLoadRank();
+      dracinLoadBrowse(true);
+    }, 50);
+  }
+}
+
+/* DRACIN STATE */
+const DR = {
+  platform: 'dramabox',
+  browseMode: 'home',
+  searchQuery: '',
+  page: 1,
+  hasMore: false,
+  loading: false,
+  initialized: false,
+};
+
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
+}
+
+function dracinStatus(show, txt) {
+  const el = document.getElementById('dracinStatus');
+  el.style.display = show ? 'flex' : 'none';
+  if (txt) document.getElementById('dracinStatusTxt').textContent = txt;
+}
+
+function dracinMakeCard(book, rank = 0, forScroll = false) {
+  const a = document.createElement('a');
+  a.className = 'dr-card';
+  if (forScroll) a.style.width = '110px';
+
+  const href = `/dracin-player.html?id=${encodeURIComponent(book.bookId)}&platform=${encodeURIComponent(DR.platform)}&cover=${encodeURIComponent(book.cover||'')}`;
+  a.href = href;
+
+  let views = '';
+  if (book.playCount) {
+    const num = typeof book.playCount === 'string' 
+      ? parseFloat(book.playCount.replace(/[^0-9.]/g, '')) || 0 
+      : book.playCount;
+    views = num > 1000000 ? (num/1000000).toFixed(1)+'M' : num > 1000 ? Math.round(num/1000)+'K' : num;
+  }
+  const eps = book.chapterCount ? `${book.chapterCount} Ep` : '';
+
+  a.innerHTML = `
+    <div class="dr-card-poster">
+      <img src="${esc(book.cover||'')}" loading="lazy" alt="${esc(book.bookName)}"
+           onerror="this.style.display='none'; this.parentNode.style.background='#222'; this.parentNode.innerHTML='📱';">
+      ${rank > 0 ? `<div class="dr-card-rank">${rank}</div>` : ''}
+      <div class="dr-card-poster-overlay">
+        <div class="dr-card-eps">${eps}</div>
+      </div>
+    </div>
+    <div class="dr-card-info">
+      <div class="dr-card-name">${esc(book.bookName || 'Untitled')}</div>
+      <div class="dr-card-meta">${views}</div>
+    </div>
+  `;
+  return a;
+}
+
+function dracinSkeletons(container, n = 8, isRow = false) {
+  container.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('div');
+    s.className = 'dr-skel';
+    if (isRow) s.style.cssText = 'flex-shrink:0;width:110px';
+    s.innerHTML = `<div class="dr-skel-poster"></div><div class="dr-skel-info"><div class="dr-skel-line"></div><div class="dr-skel-line s"></div></div>`;
+    container.appendChild(s);
+  }
+}
+
+/* Platform Switch */
+function dracinSwitchPlatform(btn) {
+  document.querySelectorAll('.dr-ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  DR.platform = btn.dataset.platform;
+  DR.browseMode = 'home';
+  DR.page = 1;
+  document.getElementById('dracinSearchInput').value = '';
+  document.getElementById('dracinBrowseTitle').textContent = '📚 SEMUA DRAMA';
+  dracinLoadRank();
+  dracinLoadBrowse(true);
+}
+
+/* Search */
+function dracinSearch() {
+  const q = document.getElementById('dracinSearchInput').value.trim();
+  if (!q) {
+    DR.browseMode = 'home';
+    DR.searchQuery = '';
+    document.getElementById('dracinBrowseTitle').textContent = '📚 SEMUA DRAMA';
+  } else {
+    DR.browseMode = 'search';
+    DR.searchQuery = q;
+    document.getElementById('dracinBrowseTitle').textContent = `🔎 HASIL: "${esc(q)}"`;
+  }
+  DR.page = 1;
+  dracinLoadBrowse(true);
+}
+
+function dracinLoadMore() {
+  if (DR.loading || !DR.hasMore) return;
+  DR.page++;
+  dracinLoadBrowse(false);
+}
+
+/* Rank */
+async function dracinLoadRank() {
+  const row = document.getElementById('dracinRankRow');
+  const badge = document.getElementById('dracinRankBadge');
+  dracinSkeletons(row, 8, true);
+  badge.textContent = '';
+
+  try {
+    const res = await fetch(`/api/dracin/rank?platform=${DR.platform}&lang=in`);
+    const j = await res.json();
+    const payload = (j?.status === "success") ? j.data : j;
+    const books = payload?.books || [];
+
+    row.innerHTML = '';
+    badge.textContent = `${books.length} drama`;
+
+    books.slice(0, 15).forEach((book, i) => {
+      row.appendChild(dracinMakeCard(book, i + 1, true));
+    });
+  } catch (e) {
+    console.error(e);
+    row.innerHTML = `<div style="padding:30px;color:#888;text-align:center">Gagal memuat trending</div>`;
+  }
+}
+
+/* Browse / Home */
+async function dracinLoadBrowse(reset = true) {
+  if (DR.loading) return;
+  DR.loading = true;
+
+  const grid = document.getElementById('dracin-grid');
+  const loadBtn = document.getElementById('dracinLoadMore');
+
+  if (reset) {
+    dracinSkeletons(grid, 12);
+    loadBtn.style.display = 'none';
+  }
+
+  dracinStatus(true, DR.browseMode === 'search' ? `Mencari...` : 'Memuat...');
+
+  try {
+    const url = DR.browseMode === 'search' 
+      ? `/api/dracin/search?platform=${DR.platform}&keyword=${encodeURIComponent(DR.searchQuery)}&page=${DR.page}&lang=in`
+      : `/api/dracin/home?platform=${DR.platform}&page=${DR.page}&size=24&lang=in`;
+
+    const res = await fetch(url);
+    const j = await res.json();
+    const payload = (j?.status === "success") ? j.data : j;
+
+    if (reset) grid.innerHTML = '';
+
+    const books = payload?.books || [];
+    DR.hasMore = books.length >= 20 || payload?.hasMore === true;
+
+    if (books.length === 0 && reset) {
+      grid.innerHTML = `<div class="dr-empty"><h3>TIDAK ADA DATA</h3><p>Coba ganti platform atau kata kunci</p></div>`;
+    } else {
+      books.forEach(book => grid.appendChild(dracinMakeCard(book)));
+    }
+
+    loadBtn.style.display = DR.hasMore ? 'block' : 'none';
+    dracinStatus(false);
+  } catch (e) {
+    console.error(e);
+    dracinStatus(false);
+    if (reset) grid.innerHTML = `<div class="dr-empty"><h3>GAGAL</h3><p>${esc(e.message)}</p></div>`;
+  }
+
+  DR.loading = false;
+}
+</script>
+<script>
+/* ── PWA ── */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+}
+let deferredPrompt;
+const btnInstall = document.getElementById("btnInstallPwa");
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); deferredPrompt=e; btnInstall.style.display="block";
+});
+btnInstall.addEventListener("click", async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const {outcome} = await deferredPrompt.userChoice;
+  if (outcome==="accepted") btnInstall.style.display="none";
+  deferredPrompt=null;
+});
+window.addEventListener("appinstalled", () => { btnInstall.style.display="none"; });
+</script>
+</body>
+</html>

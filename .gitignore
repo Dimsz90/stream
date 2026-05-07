@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual env
+venv/
+env/
+.venv/
+.env/
+
+# Environment variables (JANGAN pernah commit ini)
+.env
+.env.local
+.env.production
+
+# Downloads folder (hasil download video)
+downloads/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel
+.vercel/
+
+# Temp files
+*.tmp
+*.log
+
+dev.py
+
+test.py
