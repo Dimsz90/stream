@@ -1415,6 +1415,7 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 ═══════════════════════════════════════ */
 const IMDB_API   = "https://imdb.iamidiotareyoutoo.com";
 const STREAM_API_REMOTE = "https://vid-downloader-production-c8b5.up.railway.app";
+const STREAM_PROXY_FALLBACK = STREAM_API_REMOTE;
 const STREAM_API = (location.protocol.startsWith("http") && (
   location.hostname === "localhost" ||
   location.hostname === "127.0.0.1" ||
@@ -2236,6 +2237,13 @@ function normalizeStreamUrl(url) {
   return url;
 }
 
+function getFallbackProxyUrl(streamUrl) {
+  const rawUrl = getDirectStreamFallback(streamUrl) || streamUrl;
+  if (!STREAM_PROXY_FALLBACK || !rawUrl || !/^https?:\/\//i.test(rawUrl)) return "";
+  if (rawUrl.includes(`${STREAM_PROXY_FALLBACK}/api/proxy?url=`)) return "";
+  return `${STREAM_PROXY_FALLBACK}/api/proxy?url=${encodeURIComponent(rawUrl)}`;
+}
+
 async function tryAlternateStream(opts) {
   if (!opts.alternateStreamEndpoint || opts.alternateTried) return false;
   try {
@@ -2295,6 +2303,12 @@ function playHls(streamUrl, opts = {}) {
         if (directUrl && directUrl !== streamUrl) {
           showPLoading("Proxy diblokir, mencoba stream langsung...");
           playHls(directUrl, {...opts, skipDirectFallback:true});
+          return;
+        }
+        const fallbackProxyUrl = opts.skipProxyFallback ? "" : getFallbackProxyUrl(streamUrl);
+        if (fallbackProxyUrl) {
+          showPLoading("Proxy utama diblokir, mencoba proxy cadangan...");
+          playHls(fallbackProxyUrl, {...opts, skipProxyFallback:true, skipDirectFallback:false});
           return;
         }
         if (opts.alternateStreamEndpoint && !opts.alternateTried) {
