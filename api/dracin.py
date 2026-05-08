@@ -11,8 +11,9 @@ Struktur response DramaBox v4:
   - /api/drama/:id → data.data.list[] (episode list), data.data.performers[], dll
   - /api/drama/:id/episodes → data.episodes[], data.bookName, data.cover, dll
 """
-import os, sys, json, requests, time
+import os, sys, json, requests, time, threading
 import hmac, hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -28,19 +29,22 @@ except ImportError:
             self._store = {}
             self._default_ttl = default_ttl
             self._max_size = max_size
+            self._lock = threading.Lock()
 
         def get(self, key):
-            entry = self._store.get(key)
-            if entry and time.time() < entry[1]:
-                return entry[0]
-            return None
+            with self._lock:
+                entry = self._store.get(key)
+                if entry and time.time() < entry[1]:
+                    return entry[0]
+                return None
 
         def set(self, key, value, ttl=None):
-            if len(self._store) >= self._max_size:
-                # Hapus entry paling lama
-                oldest = min(self._store, key=lambda k: self._store[k][1])
-                del self._store[oldest]
-            self._store[key] = (value, time.time() + (ttl or self._default_ttl))
+            with self._lock:
+                if len(self._store) >= self._max_size:
+                    # Hapus entry paling lama
+                    oldest = min(self._store, key=lambda k: self._store[k][1])
+                    del self._store[oldest]
+                self._store[key] = (value, time.time() + (ttl or self._default_ttl))
 
 # ── Fallback Headers ─────────────────────────────────────────────────────────
 try:
@@ -760,7 +764,15 @@ def _norm_book(cfg: dict, raw: dict) -> dict:
     return {
         "bookId":        raw.get(cfg["book_id"],       ""),
         "bookName":      raw.get(cfg["book_name"],     "Untitled"),
-        "cover":         _normalize_cover_url(raw.get(cfg["cover"], raw.get("coverWap", raw.get("coverImage", "")))),
+        "cover":         _normalize_cover_url(
+            raw.get(cfg["cover"])
+            or raw.get("cover")
+            or raw.get("coverWap")
+            or raw.get("coverImage")
+            or raw.get("coverUrl")
+            or raw.get("thumbnail")
+            or ""
+        ),
         "introduction":  raw.get(cfg.get("introduction", "introduction"), ""),
         "chapterCount":  raw.get(cfg.get("chapter_count", "chapterCount"), raw.get("episodeCount", 0)),
         "playCount":     raw.get(cfg.get("play_count",    "playCount"),    raw.get("viewCount", 0)),
@@ -852,6 +864,24 @@ def _aggregate_cache_get(kind: str, params: dict):
     return cache_key, _cache.get(cache_key)
 
 
+def _run_parallel(tasks: dict, max_workers: int = 6) -> dict:
+    """Run independent API calls concurrently and keep partial results on failure."""
+    if not tasks:
+        return {}
+    results = {}
+    workers = max(1, min(max_workers, len(tasks)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(fn): key for key, fn in tasks.items()}
+        for future in as_completed(futures):
+            key = futures[future]
+            try:
+                results[key] = future.result()
+            except Exception as e:
+                print(f"[PARALLEL] {key} failed: {e}")
+                results[key] = None
+    return results
+
+
 # ── API Public Functions ─────────────────────────────────────────────────────
 
 def get_platforms() -> list:
@@ -886,11 +916,15 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
         if cached is not None:
             return cached
 
-        groups = []
-        for source in AGGREGATE_PLATFORMS:
-            data = get_home(source, page=page, size=size, lang=lang)
-            if data:
-                groups.append(_stamp_books(data.get("books", []), source))
+        data_by_source = _run_parallel({
+            source: (lambda source=source: get_home(source, page=page, size=size, lang=lang))
+            for source in AGGREGATE_PLATFORMS
+        })
+        groups = [
+            _stamp_books(data_by_source[source].get("books", []), source)
+            for source in AGGREGATE_PLATFORMS
+            if data_by_source.get(source)
+        ]
         books = _interleave_books(*groups)
         result = {
             "platform":   platform,
@@ -962,19 +996,26 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             page = 1
             size = 20
 
-        foryou_raw = _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"])
-        more_raw = _reelshort_fetch(
-            "/api/v1/more",
-            {"lang": lang, "page": page, "page_size": size},
-            ttl=cfg["ttl_home"],
-        )
-        all_raw = _reelshort_fetch(
-            "/api/all",
-            {"lang": lang, "page": page, "page_size": size},
-            ttl=cfg["ttl_rank"],
-        )
-        top_raw = _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
-        rank_raw = _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        raw = _run_parallel({
+            "foryou": lambda: _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "more": lambda: _reelshort_fetch(
+                "/api/v1/more",
+                {"lang": lang, "page": page, "page_size": size},
+                ttl=cfg["ttl_home"],
+            ),
+            "all": lambda: _reelshort_fetch(
+                "/api/all",
+                {"lang": lang, "page": page, "page_size": size},
+                ttl=cfg["ttl_rank"],
+            ),
+            "top": lambda: _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "rank": lambda: _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"]),
+        })
+        foryou_raw = raw.get("foryou")
+        more_raw = raw.get("more")
+        all_raw = raw.get("all")
+        top_raw = raw.get("top")
+        rank_raw = raw.get("rank")
 
         items = _shortwave_merge_books(
             _reelshort_extract_rank_books(rank_raw or {}),
@@ -1008,14 +1049,20 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             page = 1
             size = 20
 
-        more_raw = _shortwave_fetch(
-            "/api/more",
-            {"lang": lang, "page": page, "page_size": size},
-            ttl=cfg["ttl_home"],
-        )
-        all_raw = _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
-        top_raw = _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
-        rank_raw = _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        raw = _run_parallel({
+            "more": lambda: _shortwave_fetch(
+                "/api/more",
+                {"lang": lang, "page": page, "page_size": size},
+                ttl=cfg["ttl_home"],
+            ),
+            "all": lambda: _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "top": lambda: _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "rank": lambda: _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"]),
+        })
+        more_raw = raw.get("more")
+        all_raw = raw.get("all")
+        top_raw = raw.get("top")
+        rank_raw = raw.get("rank")
         rank_items = _shortwave_extract_rank_books(rank_raw or {})
         if not rank_items:
             rank_raw = _shortwave_fetch("/api/ranking", {"lang": lang}, ttl=cfg["ttl_rank"])
@@ -1098,11 +1145,15 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
         if cached is not None:
             return cached
 
-        groups = []
-        for source in AGGREGATE_PLATFORMS:
-            data = get_rank(source, rank_type=rank_type, lang=lang, size=size)
-            if data:
-                groups.append(_stamp_books(data.get("books", []), source))
+        data_by_source = _run_parallel({
+            source: (lambda source=source: get_rank(source, rank_type=rank_type, lang=lang, size=size))
+            for source in AGGREGATE_PLATFORMS
+        })
+        groups = [
+            _stamp_books(data_by_source[source].get("books", []), source)
+            for source in AGGREGATE_PLATFORMS
+            if data_by_source.get(source)
+        ]
         books = _interleave_books(*groups)[:size]
         result = {
             "platform":  platform,
@@ -1151,10 +1202,16 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
         }
 
     if cfg.get("_engine") == "reelshort":
-        rank_raw = _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
-        top_raw = _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
-        foryou_raw = _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"])
-        all_raw = _reelshort_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
+        raw = _run_parallel({
+            "rank": lambda: _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "top": lambda: _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "foryou": lambda: _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "all": lambda: _reelshort_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"]),
+        })
+        rank_raw = raw.get("rank")
+        top_raw = raw.get("top")
+        foryou_raw = raw.get("foryou")
+        all_raw = raw.get("all")
         items = _shortwave_merge_books(
             _reelshort_extract_rank_books(rank_raw or {}),
             _reelshort_extract_books(top_raw or {}),
@@ -1173,13 +1230,18 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
         }
 
     if cfg.get("_engine") == "shortwave":
-        rank_raw = _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        raw = _run_parallel({
+            "rank": lambda: _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "top": lambda: _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "all": lambda: _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"]),
+        })
+        rank_raw = raw.get("rank")
         rank_items = _shortwave_extract_rank_books(rank_raw or {})
         if not rank_items:
             rank_raw = _shortwave_fetch("/api/ranking", {"lang": lang}, ttl=cfg["ttl_rank"])
             rank_items = _shortwave_extract_rank_books(rank_raw or {})
-        top_raw = _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
-        all_raw = _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
+        top_raw = raw.get("top")
+        all_raw = raw.get("all")
         items = _shortwave_merge_books(
             rank_items,
             _shortwave_extract_top_list(top_raw or {}),
@@ -1235,11 +1297,15 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
         if cached is not None:
             return cached
 
-        groups = []
-        for source in AGGREGATE_PLATFORMS:
-            data = search_drama(keyword, platform=source, page=page, lang=lang)
-            if data:
-                groups.append(_stamp_books(data.get("books", []), source))
+        data_by_source = _run_parallel({
+            source: (lambda source=source: search_drama(keyword, platform=source, page=page, lang=lang))
+            for source in AGGREGATE_PLATFORMS
+        })
+        groups = [
+            _stamp_books(data_by_source[source].get("books", []), source)
+            for source in AGGREGATE_PLATFORMS
+            if data_by_source.get(source)
+        ]
         books = _interleave_books(*groups)
         result = {
             "platform": platform,
@@ -1380,8 +1446,12 @@ def get_detail(drama_id: str, platform="dramabox", lang="en") -> dict | None:
         }
 
     if cfg.get("_engine") == "reelshort":
-        book_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"])
-        chapters_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"])
+        raw = _run_parallel({
+            "book": lambda: _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"]),
+            "chapters": lambda: _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"]),
+        }, max_workers=2)
+        book_raw = raw.get("book")
+        chapters_raw = raw.get("chapters")
         bdata = book_raw.get("data") if isinstance(book_raw, dict) else {}
         chapter_data = chapters_raw.get("data") if isinstance(chapters_raw, dict) else {}
         if not isinstance(bdata, dict):
@@ -1492,11 +1562,18 @@ def get_episodes(drama_id: str, platform="dramabox", lang="in") -> dict | None:
 
     # ── Engine: melolo ────────────────────────────────────────────────────────
     if cfg.get("_engine") == "melolo":
-        # Fetch paralel: book info, series (episode list), multi-video (stream URLs)
-        book_raw   = _melolo_fetch(platform, "/api/v1/book",
-                                   {"id": drama_id, "lang": lang}, ttl=cfg["ttl_ep"])
-        multi_raw  = _melolo_fetch(platform, "/api/v1/multi-video",
-                                   {"id": drama_id, "lang": lang}, ttl=cfg["ttl_ep"])
+        raw = _run_parallel({
+            "book": lambda: _melolo_fetch(
+                platform, "/api/v1/book",
+                {"id": drama_id, "lang": lang}, ttl=cfg["ttl_ep"]
+            ),
+            "multi": lambda: _melolo_fetch(
+                platform, "/api/v1/multi-video",
+                {"id": drama_id, "lang": lang}, ttl=cfg["ttl_ep"]
+            ),
+        }, max_workers=2)
+        book_raw = raw.get("book")
+        multi_raw = raw.get("multi")
 
         # Normalize book info
         bdata     = (book_raw or {})
@@ -1581,8 +1658,12 @@ def get_episodes(drama_id: str, platform="dramabox", lang="in") -> dict | None:
         }
 
     if cfg.get("_engine") == "reelshort":
-        book_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"])
-        chapters_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"])
+        raw = _run_parallel({
+            "book": lambda: _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"]),
+            "chapters": lambda: _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"]),
+        }, max_workers=2)
+        book_raw = raw.get("book")
+        chapters_raw = raw.get("chapters")
         bdata = book_raw.get("data") if isinstance(book_raw, dict) else {}
         chapter_data = chapters_raw.get("data") if isinstance(chapters_raw, dict) else {}
         if not isinstance(bdata, dict):

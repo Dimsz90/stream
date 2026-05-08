@@ -67,6 +67,11 @@ def index():
 def favicon():
     return "", 204
 
+@app.route("/healthz")
+@app.route("/api/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
 @app.route("/<path:filename>")
 def static_files(filename):
     # 1. Cek file di root folder

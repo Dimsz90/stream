@@ -96,8 +96,10 @@ video{width:100%;height:100%;object-fit:contain;display:block}
     </div>
     <div class="ctrl-row">
       <button class="ctrl-btn" id="playBtn" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ctrl-btn" id="rewindBtn" title="Mundur 10 detik" aria-label="Mundur 10 detik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 7H5V1"/><path d="M5.64 15a8 8 0 102.2-8.2L5 9"/><text x="9" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg></button>
       <button class="ctrl-btn" id="prevBtn" title="Prev" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8zM5 19V5"/></svg></button>
       <button class="ctrl-btn" id="nextBtn" title="Next" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8zM19 5v14"/></svg></button>
+      <button class="ctrl-btn" id="forwardBtn" title="Maju 10 detik" aria-label="Maju 10 detik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 7h6V1"/><path d="M18.36 15a8 8 0 11-2.2-8.2L19 9"/><text x="8" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg></button>
       <span class="time-display" id="timeDisp">0:00 / 0:00</span>
       <div class="spacer"></div>
       <div class="vol-wrap">
@@ -136,11 +138,13 @@ const platform=P.get('platform')||'dramabox';
 const startEp=parseInt(P.get('ep'))||0;
 const coverUrl=P.get('cover')||'';
 
-let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,spinnerTimer=null;
+let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,preloadedIdx=-1,spinnerTimer=null,playSeq=0;
+const videoUrlCache=new Map(),videoUrlInflight=new Map();
 const vid=document.getElementById('vid'),spinner=document.getElementById('spinner'),centerPlay=document.getElementById('centerPlay');
 const progBar=document.getElementById('progBar'),bufBar=document.getElementById('bufBar'),progThumb=document.getElementById('progThumb');
 const timeDisp=document.getElementById('timeDisp'),playBtn=document.getElementById('playBtn'),playIcon=document.getElementById('playIcon');
 const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+const rewindBtn=document.getElementById('rewindBtn'),forwardBtn=document.getElementById('forwardBtn');
 const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
 const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
 const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
@@ -169,6 +173,14 @@ playBtn.onclick=togglePlay;
 centerPlay.onclick=()=>{playSafely();centerPlay.classList.remove('show')};
 vid.onplay=()=>{playIcon.innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';centerPlay.classList.remove('show');showUI()};
 vid.onpause=()=>{playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';centerPlay.classList.add('show')};
+
+function skipSeconds(delta){
+  if(!isFinite(vid.duration))return;
+  vid.currentTime=Math.max(0,Math.min(vid.duration,vid.currentTime+delta));
+  showUI();
+}
+rewindBtn.onclick=()=>skipSeconds(-10);
+forwardBtn.onclick=()=>skipSeconds(10);
 
 // Progress
 vid.onprogress=()=>{if(vid.buffered.length>0){const b=vid.buffered.end(vid.buffered.length-1)/vid.duration*100;bufBar.style.width=b+'%'}};
@@ -203,8 +215,8 @@ vid.onerror=()=>{hideSpinner();centerPlay.classList.add('show');console.error('[
 
 // Keyboard
 document.onkeydown=e=>{if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
-if(e.key==='ArrowRight')vid.currentTime=Math.min(vid.duration,vid.currentTime+10);
-if(e.key==='ArrowLeft')vid.currentTime=Math.max(0,vid.currentTime-10);
+if(e.key==='ArrowRight')skipSeconds(10);
+if(e.key==='ArrowLeft')skipSeconds(-10);
 if(e.key==='ArrowUp'){e.preventDefault();vid.volume=Math.min(1,vid.volume+.1);volSlider.value=vid.volume}
 if(e.key==='ArrowDown'){e.preventDefault();vid.volume=Math.max(0,vid.volume-.1);volSlider.value=vid.volume}
 if(e.key==='f')document.getElementById('fsBtn').click();
@@ -233,11 +245,28 @@ vid.onended=()=>{if(curIdx<episodes.length-1)goNext();else centerPlay.classList.
 nextToast.onclick=()=>{clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');goNext()};
 
 // Preload next episode URL
-async function preloadNext(){if(preloadedUrl||curIdx>=episodes.length-1)return;
-try{const url=await getVideoUrl(episodes[curIdx+1]);preloadedUrl=url}catch(e){}}
+async function preloadNext(){
+if(curIdx>=episodes.length-1)return;
+const idx=curIdx+1;
+if(preloadedUrl&&preloadedIdx===idx)return;
+try{const url=await getVideoUrl(episodes[idx]);preloadedUrl=url;preloadedIdx=idx}catch(e){}}
 
 // Get video URL for an episode
 // Priority: ep.url (normalized) → _raw.stream_url → /api/get-video fallback (melolo)
+async function fetchVideoLink(reqUrl, options={}){
+    const key=reqUrl+'|'+JSON.stringify(options.headers||{});
+    const cached=videoUrlCache.get(key);
+    if(cached&&cached.expires>Date.now())return cached.link;
+    if(videoUrlInflight.has(key))return videoUrlInflight.get(key);
+    const promise=fetch(reqUrl,options).then(r=>r.json()).then(j=>{
+        const link=j.link||(j.data&&j.data.url)||'';
+        if(j.status==='success'&&link)videoUrlCache.set(key,{link,expires:Date.now()+120000});
+        return link;
+    }).finally(()=>videoUrlInflight.delete(key));
+    videoUrlInflight.set(key,promise);
+    return promise;
+}
+
 async function getVideoUrl(ep){
     // 1. URL sudah di-resolve saat fetch episodes (dari multi-video stream_url)
     const direct = ep.url
@@ -260,40 +289,33 @@ async function getVideoUrl(ep){
             reqUrl = u.pathname + u.search + u.hash;
           }
         } catch (e) {}
-        const r = await fetch(reqUrl, { headers });
-        const j = await r.json();
-            const link = j.link || (j.data && j.data.url) || '';
-            if(j.status === 'success' && link){
+            const link = await fetchVideoLink(reqUrl, { headers });
+            if(link){
                 ep.url = link;
                 return link;
             }
             return '';
         }
         if(platform === 'shortwave'){
-            const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=shortwave&lang=in');
-            const j = await r.json();
-            const link = j.link || (j.data && j.data.url) || '';
-            if(j.status === 'success' && link){
+            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=shortwave&lang=in');
+            if(link){
                 ep.url = link;
                 return link;
             }
             return '';
         }
         if(platform === 'reelshort'){
-            const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=reelshort&lang=in');
-            const j = await r.json();
-            const link = j.link || (j.data && j.data.url) || '';
-            if(j.status === 'success' && link){
+            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=reelshort&lang=in');
+            if(link){
                 ep.url = link;
                 return link;
             }
             return '';
         }
-        const r = await fetch('/api/get-video?id=' + encodeURIComponent(epVid));
-        const j = await r.json();
-        if(j.status === 'success' && j.link){
-            ep.url = j.link; // cache
-            return j.link;
+        const link = await fetchVideoLink('/api/get-video?id=' + encodeURIComponent(epVid));
+        if(link){
+            ep.url = link; // cache
+            return link;
         }
     }catch(e){ console.warn('[getVideoUrl] fallback error:', e); }
     return '';
@@ -304,12 +326,22 @@ function destroyHLS(){if(hls){hls.destroy();hls=null}}
 
 // Play episode
 async function playEp(idx){
+const seq=++playSeq;
 curIdx=idx;updateNav();destroyHLS();
 clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
 showSpinner();centerPlay.classList.remove('show');
+vid.pause();
+vid.removeAttribute('src');
+vid.load();
 try{
-let url=preloadedUrl&&idx===curIdx?preloadedUrl:await getVideoUrl(episodes[idx]);
-preloadedUrl=null;
+let url='';
+if(preloadedUrl&&preloadedIdx===idx){
+  url=preloadedUrl;
+}else{
+  url=await getVideoUrl(episodes[idx]);
+}
+if(seq!==playSeq)return;
+preloadedUrl=null;preloadedIdx=-1;
 if(url.includes('.m3u8')){
   loadHlsChain(url);
 }
@@ -416,6 +448,7 @@ async function init(){
 
 if(bookId)init();
 showUI();
+
 </script>
 </body>
 </html>

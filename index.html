@@ -2569,6 +2569,11 @@ const DR = {
   hasMore: false,
   loading: false,
   initialized: false,
+  fetchCache: new Map(),
+  inflight: new Map(),
+  browseController: null,
+  browseSeq: 0,
+  rankSeq: 0,
 };
 
 function esc(s) {
@@ -2670,6 +2675,9 @@ async function dracinSwitchPlatform(btn) {
   DR.platform = plat;
   DR.browseMode = 'home';
   DR.page = 1;
+  DR.fetchCache.clear();
+  DR.inflight.clear();
+  if (DR.browseController) DR.browseController.abort();
   document.getElementById('dracinSearchInput').value = '';
   document.getElementById('dracinBrowseTitle').textContent = 'SEMUA DRAMA';
   dracinLoadRank();
@@ -2693,6 +2701,29 @@ function _dramanovaFetch(url, opts = {}) {
     }
   }
   return fetch(url, opts);
+}
+
+async function dracinFetchPayload(url, opts = {}) {
+  const token = sessionStorage.getItem('dramanova_token') || '';
+  const ttl = opts.ttl || 45000;
+  const key = `${token}|${url}`;
+  const cached = DR.fetchCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.data;
+  if (DR.inflight.has(key)) return DR.inflight.get(key);
+
+  const reqOpts = {};
+  if (opts.signal) reqOpts.signal = opts.signal;
+  const promise = _dramanovaFetch(url, reqOpts)
+    .then(res => res.json())
+    .then(j => {
+      const payload = (j?.status === "success") ? j.data : j;
+      DR.fetchCache.set(key, { data: payload, expires: Date.now() + ttl });
+      return payload;
+    })
+    .finally(() => DR.inflight.delete(key));
+
+  DR.inflight.set(key, promise);
+  return promise;
 }
 
 /* Search */
@@ -2719,15 +2750,15 @@ function dracinLoadMore() {
 
 /* Rank */
 async function dracinLoadRank() {
+  const seq = ++DR.rankSeq;
   const row = document.getElementById('dracinRankRow');
   const badge = document.getElementById('dracinRankBadge');
   dracinSkeletons(row, 8, true);
   badge.textContent = '';
 
   try {
-    const res = await _dramanovaFetch(`/api/dracin/rank?platform=${DR.platform}&lang=in`);
-    const j = await res.json();
-    const payload = (j?.status === "success") ? j.data : j;
+    const payload = await dracinFetchPayload(`/api/dracin/rank?platform=${DR.platform}&lang=in`, { ttl: 120000 });
+    if (seq !== DR.rankSeq) return;
     const books = payload?.books || [];
 
     row.innerHTML = '';
@@ -2737,6 +2768,7 @@ async function dracinLoadRank() {
       row.appendChild(dracinMakeCard(book, i + 1, true));
     });
   } catch (e) {
+    if (e.name === 'AbortError') return;
     console.error(e);
     row.innerHTML = `<div style="padding:30px;color:#888;text-align:center">Gagal memuat trending</div>`;
   }
@@ -2744,7 +2776,14 @@ async function dracinLoadRank() {
 
 /* Browse / Home */
 async function dracinLoadBrowse(reset = true) {
-  if (DR.loading) return;
+  if (DR.loading && !reset) return;
+  if (reset && DR.browseController) {
+    DR.browseController.abort();
+    DR.inflight.clear();
+  }
+  const controller = new AbortController();
+  DR.browseController = controller;
+  const seq = ++DR.browseSeq;
   DR.loading = true;
 
   const grid = document.getElementById('dracin-grid');
@@ -2762,9 +2801,11 @@ async function dracinLoadBrowse(reset = true) {
       ? `/api/dracin/search?platform=${DR.platform}&keyword=${encodeURIComponent(DR.searchQuery)}&page=${DR.page}&lang=in`
       : `/api/dracin/home?platform=${DR.platform}&page=${DR.page}&size=24&lang=in`;
 
-    const res = await _dramanovaFetch(url);
-    const j = await res.json();
-    const payload = (j?.status === "success") ? j.data : j;
+    const payload = await dracinFetchPayload(url, {
+      signal: controller.signal,
+      ttl: DR.browseMode === 'search' ? 45000 : 90000,
+    });
+    if (seq !== DR.browseSeq) return;
 
     if (reset) grid.innerHTML = '';
 
@@ -2780,12 +2821,16 @@ async function dracinLoadBrowse(reset = true) {
     loadBtn.style.display = DR.hasMore ? 'block' : 'none';
     dracinStatus(false);
   } catch (e) {
+    if (e.name === 'AbortError') return;
     console.error(e);
     dracinStatus(false);
     if (reset) grid.innerHTML = `<div class="dr-empty"><h3>GAGAL</h3><p>${esc(e.message)}</p></div>`;
+  } finally {
+    if (seq === DR.browseSeq) {
+      DR.loading = false;
+      if (DR.browseController === controller) DR.browseController = null;
+    }
   }
-
-  DR.loading = false;
 }
 </script>
 <script>
