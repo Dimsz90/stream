@@ -362,17 +362,35 @@ def proxy():
 
         if "mpegurl" in content_type.lower() or target_url.endswith(".m3u8"):
             content = resp.text
+            sample = content[:3000].lower()
+            looks_like_playlist = "#extm3u" in sample or "#ext-x-" in sample
+            looks_like_html = (
+                "<!doctype html" in sample
+                or "<html" in sample
+                or "<head" in sample
+                or "cloudflare" in sample
+                or "attention required" in sample
+                or "you have been blocked" in sample
+            )
+            if not resp.ok or looks_like_html or not looks_like_playlist:
+                return jsonify({
+                    "status": "error",
+                    "message": "Upstream playlist blocked or invalid",
+                    "upstream_status": resp.status_code,
+                    "content_type": content_type,
+                    "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
+                }), 502 if resp.status_code == 200 else resp.status_code
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
                 return f"/api/proxy?url={quote(abs_link, safe='')}"
 
-            new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
+            new_content = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, content, flags=re.MULTILINE)
             return Response(
                 new_content.encode(),
                 status=resp.status_code,
                 headers={
-                    "Content-Type":                content_type,
+                    "Content-Type":                "application/vnd.apple.mpegurl",
                     "Access-Control-Allow-Origin": "*",
                     "Cache-Control":               "no-store",
                 },
