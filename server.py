@@ -9,7 +9,7 @@ import re
 import tempfile
 import mimetypes
 import traceback
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlparse
 
 from flask import Flask, send_file, request, jsonify, Response
 import hmac, hashlib, time
@@ -337,7 +337,6 @@ def imdb_api():
 @app.route("/api/proxy")
 def proxy():
     import requests as req
-    from urllib.parse import urlparse
     try:
         from lib.config import VIDEO_SPOOF_HEADERS
     except ImportError:
@@ -347,30 +346,111 @@ def proxy():
     if not target_url:
         return "Missing url param", 400
 
-    try:
-        parsed_target = urlparse(target_url)
-        origin = f"{parsed_target.scheme}://{parsed_target.netloc}"
-        headers = {
-            **VIDEO_SPOOF_HEADERS,
-            "Referer": f"{origin}/",
-            "Origin": origin,
+    def _playlist_state(resp, body=None):
+        content_type = resp.headers.get("Content-Type", "application/octet-stream")
+        text = body if body is not None else resp.text
+        sample = text[:3000].lower()
+        looks_like_playlist = "#extm3u" in sample or "#ext-x-" in sample
+        looks_like_html = (
+            "<!doctype html" in sample
+            or "<html" in sample
+            or "<head" in sample
+            or "cloudflare" in sample
+            or "attention required" in sample
+            or "you have been blocked" in sample
+            or "cf-error" in sample
+        )
+        return content_type, text, sample, looks_like_playlist, looks_like_html
+
+    def _header_variants(url):
+        parsed = urlparse(url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        common = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
             "Accept": "application/vnd.apple.mpegurl,application/x-mpegURL,video/mp2t,video/*,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "cross-site",
         }
-        resp = req.get(target_url, headers=headers, stream=True, timeout=20)
+        configured = {**common, **VIDEO_SPOOF_HEADERS}
+        origin_ref = {**common, "Referer": f"{origin}/", "Origin": origin}
+        no_origin = {**common, "Referer": f"{origin}/"}
+        player_ref = {**common, "Referer": "https://streamdata.vaplayer.ru/", "Origin": "https://streamdata.vaplayer.ru"}
+
+        variants = []
+        for name, headers in (
+            ("dev", VIDEO_SPOOF_HEADERS),
+            ("configured", configured),
+            ("origin", origin_ref),
+            ("no_origin", no_origin),
+            ("vaplayer", player_ref),
+        ):
+            if not any(existing == headers for _, existing in variants):
+                variants.append((name, headers))
+        return variants
+
+    def _fetch_video(url, is_playlist):
+        attempts = []
+        last_resp = None
+        last_playlist_text = None
+
+        session = req.Session()
+        for name, headers in _header_variants(url):
+            resp = session.get(url, headers=headers, stream=True, timeout=15 if name == "dev" else 20)
+            last_resp = resp
+            attempts.append({"client": "requests", "headers": name, "status": resp.status_code})
+            if not is_playlist:
+                if resp.ok:
+                    return resp, attempts, None
+                continue
+
+            content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(resp)
+            last_playlist_text = content
+            if resp.ok and looks_like_playlist and not looks_like_html:
+                return resp, attempts, content
+
+        try:
+            from curl_cffi import requests as curl_req
+            for browser in ("chrome124", "chrome120", "chrome101"):
+                resp = curl_req.get(
+                    url,
+                    headers=VIDEO_SPOOF_HEADERS,
+                    impersonate=browser,
+                    stream=True,
+                    timeout=20,
+                )
+                last_resp = resp
+                attempts.append({"client": "curl_cffi", "headers": "dev", "impersonate": browser, "status": resp.status_code})
+                if not is_playlist:
+                    if resp.ok:
+                        return resp, attempts, None
+                    continue
+
+                content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(resp)
+                last_playlist_text = content
+                if resp.ok and looks_like_playlist and not looks_like_html:
+                    return resp, attempts, content
+        except Exception as err:
+            attempts.append({"client": "curl_cffi", "error": str(err)})
+
+        return last_resp, attempts, last_playlist_text
+
+    try:
+        is_playlist_url = target_url.lower().split("?", 1)[0].endswith(".m3u8")
+        resp, attempts, cached_playlist_text = _fetch_video(target_url, is_playlist_url)
+        if resp is None:
+            return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 502
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
 
-        if "mpegurl" in content_type.lower() or target_url.endswith(".m3u8"):
-            content = resp.text
-            sample = content[:3000].lower()
-            looks_like_playlist = "#extm3u" in sample or "#ext-x-" in sample
-            looks_like_html = (
-                "<!doctype html" in sample
-                or "<html" in sample
-                or "<head" in sample
-                or "cloudflare" in sample
-                or "attention required" in sample
-                or "you have been blocked" in sample
+        if "mpegurl" in content_type.lower() or is_playlist_url:
+            content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(
+                resp,
+                cached_playlist_text,
             )
             if not resp.ok or looks_like_html or not looks_like_playlist:
                 return jsonify({
@@ -379,18 +459,19 @@ def proxy():
                     "upstream_status": resp.status_code,
                     "content_type": content_type,
                     "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
-                }), 502 if resp.status_code == 200 else resp.status_code
+                    "attempts": attempts,
+                }), 502
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
-                return f"/api/proxy?url={quote(abs_link, safe='')}"
+                return f"/api/proxy?url={quote(abs_link)}"
 
             new_content = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, content, flags=re.MULTILINE)
             return Response(
                 new_content.encode(),
                 status=resp.status_code,
                 headers={
-                    "Content-Type":                "application/vnd.apple.mpegurl",
+                    "Content-Type":                content_type,
                     "Access-Control-Allow-Origin": "*",
                     "Cache-Control":               "no-store",
                 },
