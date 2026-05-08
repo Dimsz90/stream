@@ -2211,7 +2211,18 @@ function updateQuality(q) {
   hlsInst.levels.forEach((level, i) => { if (level.height===q) hlsInst.currentLevel=i; });
 }
 
-function playHls(streamUrl) {
+function getDirectStreamFallback(streamUrl) {
+  try {
+    const url = new URL(streamUrl, window.location.href);
+    if (!url.pathname.endsWith("/api/proxy")) return "";
+    return url.searchParams.get("url") || "";
+  } catch {
+    const m = String(streamUrl).match(/[?&]url=([^&]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+}
+
+function playHls(streamUrl, opts = {}) {
   const v  = document.getElementById("mainVideo");
   const vc = document.getElementById("videoContainer");
 
@@ -2249,7 +2260,16 @@ function playHls(streamUrl) {
       v.play().catch(()=>{});
     });
     hlsInst.on(Hls.Events.ERROR, (e, d) => {
-      if (d.fatal) { if(hlsInst){hlsInst.destroy();hlsInst=null;} showPError("Stream gagal dimuat."); }
+      if (d.fatal) {
+        if(hlsInst){hlsInst.destroy();hlsInst=null;}
+        const directUrl = opts.skipDirectFallback ? "" : getDirectStreamFallback(streamUrl);
+        if (directUrl && directUrl !== streamUrl) {
+          showPLoading("Proxy diblokir, mencoba stream langsung...");
+          playHls(directUrl, {skipDirectFallback:true});
+          return;
+        }
+        showPError("Stream gagal dimuat.");
+      }
     });
   } else {
     v.src = streamUrl;
