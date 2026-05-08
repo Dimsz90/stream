@@ -2596,7 +2596,17 @@ function _dramanovaFetch(url, opts = {}) {
   const token = sessionStorage.getItem('dramanova_token');
   opts = opts || {};
   opts.headers = opts.headers || {};
-  if (token) opts.headers['X-Dramanova-Token'] = token;
+  if (token) {
+    opts.headers['X-Dramanova-Token'] = token;
+    try {
+      // fallback: append token as query param for servers that strip custom headers
+      const u = new URL(url, location.origin);
+      if (!u.searchParams.get('dramanova_token')) u.searchParams.set('dramanova_token', token);
+      url = u.pathname + u.search + u.hash;
+    } catch (e) {
+      // ignore if URL parsing fails
+    }
+  }
   return fetch(url, opts);
 }
 

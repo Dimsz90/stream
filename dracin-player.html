@@ -240,7 +240,15 @@ async function getVideoUrl(ep){
       if(platform === 'dramanova'){
         const token = sessionStorage.getItem('dramanova_token');
         const headers = token ? { 'X-Dramanova-Token': token } : {};
-        const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&platform=dramanova', { headers });
+        let reqUrl = '/api/dracin/video?id=' + encodeURIComponent(epVid) + '&platform=dramanova';
+        try {
+          if (token) {
+            const u = new URL(reqUrl, location.origin);
+            if (!u.searchParams.get('dramanova_token')) u.searchParams.set('dramanova_token', token);
+            reqUrl = u.pathname + u.search + u.hash;
+          }
+        } catch (e) {}
+        const r = await fetch(reqUrl, { headers });
         const j = await r.json();
             const link = j.link || (j.data && j.data.url) || '';
             if(j.status === 'success' && link){
@@ -346,7 +354,15 @@ async function init(){
     }
     const token = sessionStorage.getItem('dramanova_token');
     const headers = token ? { 'X-Dramanova-Token': token } : {};
-    const r=await fetch('/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform), { headers });
+    let reqUrl = '/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform);
+    try {
+      if (token) {
+        const u = new URL(reqUrl, location.origin);
+        if (!u.searchParams.get('dramanova_token')) u.searchParams.set('dramanova_token', token);
+        reqUrl = u.pathname + u.search + u.hash;
+      }
+    } catch (e) {}
+    const r=await fetch(reqUrl, { headers });
     const j=await r.json();
         if(j.status === 'success'){
             const d=j.data;
