@@ -73,8 +73,8 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
     params = {"imdb": imdb_id, "type": media_type}
     if media_type == "tv" and season and episode:
         cache_key += f":s{season}:e{episode}"
-        params["season"] = season
-        params["episode"] = episode
+        params["s"] = season
+        params["e"] = episode
 
     cached = imdb_cache.get(cache_key)
     if cached:
@@ -82,14 +82,24 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
 
     api_url = "https://streamdata.vaplayer.ru/api.php"
     try:
-        r = requests.get(api_url, params=params, headers=VIDEO_SPOOF_HEADERS, timeout=5)
-        if r.status_code == 200:
-            data = r.json()
-            streams = data.get("data", {}).get("stream_urls", [])
-            if streams:
-                url = streams[0].replace("\\/", "/")
-                imdb_cache.set(cache_key, url, ttl=30)
-                return url
+        param_attempts = [params]
+        if media_type == "tv" and season and episode:
+            param_attempts.append({
+                "imdb": imdb_id,
+                "type": media_type,
+                "season": season,
+                "episode": episode,
+            })
+
+        for attempt_params in param_attempts:
+            r = requests.get(api_url, params=attempt_params, headers=VIDEO_SPOOF_HEADERS, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                streams = data.get("data", {}).get("stream_urls", [])
+                if streams:
+                    url = streams[0].replace("\\/", "/")
+                    imdb_cache.set(cache_key, url, ttl=30)
+                    return url
     except Exception:
         pass
     return None
