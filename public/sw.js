@@ -8,6 +8,19 @@ const PRECACHE = [
   "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js",
 ];
 
+// Domain CDN yang harus bypass SW sepenuhnya.
+// ByteDance/TikTok CDN (DramaBox, Melolo, ReelShort) pakai signed URL
+// dengan validasi host — server proxy maupun SW tidak bisa akses, harus
+// langsung dari browser (pastikan img pakai referrerpolicy="no-referrer").
+const BYPASS_HOSTS = [
+  "fizzopic.org",
+  "tiktokcdn.com",
+  "muscdn.com",
+  "byteimg.com",
+  "bytedance.com",
+  "sgsnssdk.com",
+];
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
@@ -30,6 +43,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // CDN bypass → jangan intercept, biarkan browser fetch langsung
+  if (BYPASS_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith("." + h))) {
+    return;
+  }
 
   // API calls → network only
   if (url.pathname.startsWith("/api/")) return;

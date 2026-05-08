@@ -115,6 +115,20 @@ video{width:100%;height:100%;object-fit:contain;display:block}
   <div class="ep-grid" id="epGrid"></div>
 </div>
 
+<!-- PIN Modal for Dramanova (player) -->
+<div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center"> 
+  <div style="width:320px;background:#0f1113;border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,.06);box-shadow:0 10px 40px rgba(0,0,0,.6);">
+    <h3 style="margin:0 0 8px;font-family:'DM Sans',sans-serif;color:#fff">Masukkan PIN</h3>
+    <p style="margin:0 0 12px;color:#b8b4aa;font-size:13px">PIN diperlukan untuk mengakses Dramanova.</p>
+    <input id="pinInput" type="password" placeholder="PIN" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:transparent;color:#fff;margin-bottom:12px;font-size:14px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="pinCancel" style="background:transparent;border:1px solid rgba(255,255,255,.08);color:#b8b4aa;padding:8px 12px;border-radius:8px;cursor:pointer">Batal</button>
+      <button id="pinSubmit" style="background:#a9b7a5;border:none;color:#061012;padding:8px 12px;border-radius:8px;cursor:pointer">Masuk</button>
+    </div>
+    <div id="pinErr" style="color:#ff9b9b;margin-top:10px;display:none;font-size:13px"></div>
+  </div>
+</div>
+
 <script>
 const P=new URLSearchParams(location.search);
 const bookId=P.get('id');
@@ -210,11 +224,39 @@ nextToast.onclick=()=>{clearTimeout(nextTimer);nextTimer=null;nextToast.classLis
 async function preloadNext(){if(preloadedUrl||curIdx>=episodes.length-1)return;
 try{const url=await getVideoUrl(episodes[curIdx+1]);preloadedUrl=url}catch(e){}}
 
-// Get video URL for an episode — normalized by API (field: ep.url)
+// Get video URL for an episode
+// Priority: ep.url (normalized) → _raw.stream_url → /api/get-video fallback (melolo)
 async function getVideoUrl(ep){
-    // API sudah menormalisasi: field 'url' selalu berisi video URL
-    // apapun platform (DramaBox pakai 'url', ReelShort pakai 'videoUrl' → dinormalisasi jadi 'url')
-    return ep.url || ep.videoUrl || ep._raw?.url || ep._raw?.videoUrl || '';
+    // 1. URL sudah di-resolve saat fetch episodes (dari multi-video stream_url)
+    const direct = ep.url
+        || (ep._raw && (ep._raw.stream_url || ep._raw.url || ep._raw.videoUrl))
+        || '';
+    if(direct) return direct;
+
+    // 2. Fallback on-demand via platform resolver.
+    const epVid = ep.vid || (ep._raw && ep._raw.vid) || '';
+    if(!epVid) return '';
+    try{
+      if(platform === 'dramanova'){
+        const token = sessionStorage.getItem('dramanova_token');
+        const headers = token ? { 'X-Dramanova-Token': token } : {};
+        const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&platform=dramanova', { headers });
+        const j = await r.json();
+            const link = j.link || (j.data && j.data.url) || '';
+            if(j.status === 'success' && link){
+                ep.url = link;
+                return link;
+            }
+            return '';
+        }
+        const r = await fetch('/api/get-video?id=' + encodeURIComponent(epVid));
+        const j = await r.json();
+        if(j.status === 'success' && j.link){
+            ep.url = j.link; // cache
+            return j.link;
+        }
+    }catch(e){ console.warn('[getVideoUrl] fallback error:', e); }
+    return '';
 }
 
 // Destroy HLS
@@ -280,15 +322,38 @@ btn.onclick=()=>{if(!locked)playEp(i)};grid.appendChild(btn)})}
 // Fetch all episodes from OUR API
 async function init(){
     if(!bookId) return;
-    try{
-        const r=await fetch('/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform));
-        const j=await r.json();
+  try{
+    if(platform === 'dramanova'){
+      const token = sessionStorage.getItem('dramanova_token');
+      if(!token){
+        const ok = await new Promise(resolve => {
+          document.getElementById('pinErr').style.display = 'none';
+          document.getElementById('pinInput').value = '';
+          document.getElementById('pinModal').style.display = 'flex';
+          document.getElementById('pinCancel').onclick = () => { document.getElementById('pinModal').style.display='none'; resolve(false); };
+          document.getElementById('pinSubmit').onclick = async () => {
+            const pin = document.getElementById('pinInput').value || '';
+            try{
+              const res = await fetch('/api/dracin/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
+              const j = await res.json();
+              if(j.status === 'success' && j.token){ sessionStorage.setItem('dramanova_token', j.token); document.getElementById('pinModal').style.display='none'; resolve(true); }
+              else { document.getElementById('pinErr').textContent = j.message || 'PIN salah'; document.getElementById('pinErr').style.display='block'; }
+            }catch(e){ document.getElementById('pinErr').textContent = 'Gagal memvalidasi PIN'; document.getElementById('pinErr').style.display='block'; }
+          };
+        });
+        if(!ok) return;
+      }
+    }
+    const token = sessionStorage.getItem('dramanova_token');
+    const headers = token ? { 'X-Dramanova-Token': token } : {};
+    const r=await fetch('/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform), { headers });
+    const j=await r.json();
         if(j.status === 'success'){
             const d=j.data;
             // API sudah menormalisasi: d.episodes, d.bookName, d.cover
             episodes=d.episodes||[];
             document.getElementById('titleEl').textContent=d.bookName||'Drama';
-            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+(platform==='reelshort'?'ReelShort':'DramaBox');
+            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+({'dramabox':'DramaBox','reelshort':'ReelShort','melolo':'Melolo','dramanova':'Dramanova'}[platform]||platform);
             // Update tab title
             document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
             renderEps();

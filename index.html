@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="description" content="StreamVault — Browse & stream film dari IMDB.">
-<meta name="theme-color" content="#ff3c5f">
+<meta name="theme-color" content="#0b0d10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.json">
@@ -18,15 +18,16 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#080808;--surface:#111;--surface2:#181818;
-  --border:#1e1e1e;--border2:#2a2a2a;--border3:#383838;
-  --text:#efefef;--text2:#888;--text3:#444;
-  --accent:#ff3c5f;--accent2:#ff6b85;--accent-dim:rgba(255,60,95,.12);
-  --green:#3dffa0;
+  --bg:#0b0d10;--surface:#12161b;--surface2:#171d24;
+  --border:#222a33;--border2:#2d3742;--border3:#3a4652;
+  --text:#edf1f5;--text2:#9aa5b1;--text3:#66717d;
+  --accent:#6fb6b0;--accent2:#93c7c2;--accent-dim:rgba(111,182,176,.14);
+  --green:#7fc8a9;
+  --shadow:0 16px 36px rgba(0,0,0,.26);
   --mono:'Space Mono',monospace;
   --display:'Bebas Neue',sans-serif;
   --body:'DM Sans',sans-serif;
-  --plyr-color-main:#ff3c5f;
+  --plyr-color-main:#6fb6b0;
   --plyr-font-family:'DM Sans',sans-serif;
 }
 html,body{height:100%;overflow:hidden}
@@ -34,24 +35,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex
 
 /* ── NAV ── */
 nav{
-  background:rgba(8,8,8,.97);
+  background:rgba(11,13,16,.92);
+  backdrop-filter:blur(14px);
   border-bottom:1px solid var(--border);
-  padding:0 1.2rem;height:52px;
+  padding:0 1.2rem;height:56px;
   display:flex;align-items:center;gap:12px;
   flex-shrink:0;z-index:10;
 }
-.logo{font-family:var(--display);font-size:22px;letter-spacing:2px;flex-shrink:0}
+.logo{font-family:var(--display);font-size:23px;letter-spacing:2px;flex-shrink:0}
 .logo span{color:var(--accent)}
-.nav-tabs{display:flex;gap:0;flex-shrink:0}
+.nav-tabs{display:flex;gap:4px;flex-shrink:0}
 .ntab{
-  padding:0 14px;height:52px;
+  padding:0 13px;height:34px;border-radius:8px;
   display:flex;align-items:center;
-  font-size:11px;font-family:var(--mono);color:var(--text3);
-  cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;
+  font-size:11px;font-family:var(--mono);color:var(--text2);
+  cursor:pointer;border:1px solid transparent;transition:all .15s;
   white-space:nowrap;
 }
-.ntab:hover{color:var(--text2)}
-.ntab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.ntab:hover{color:var(--text);background:rgba(255,255,255,.035)}
+.ntab.active{color:var(--accent);border-color:rgba(111,182,176,.24);background:var(--accent-dim)}
 .nav-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0}
 #btnInstallPwa{
   display:none;background:transparent;
@@ -62,21 +64,21 @@ nav{
 #btnInstallPwa:hover{background:var(--accent-dim)}
 .nav-extractor-btn{
   text-decoration:none;font-family:var(--mono);font-size:10px;
-  font-weight:bold;color:#fff;background:var(--accent);
-  border:1px solid var(--accent2);padding:6px 12px;border-radius:5px;
+  font-weight:bold;color:var(--text);background:var(--surface2);
+  border:1px solid var(--border2);padding:7px 12px;border-radius:8px;
   display:inline-flex;align-items:center;gap:5px;
   transition:background .2s;white-space:nowrap;
 }
-.nav-extractor-btn:hover{background:var(--accent2)}
+.nav-extractor-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
 
 /* ── SEARCH ── */
-.search-area{padding:.8rem 1.2rem .6rem;flex-shrink:0;background:var(--bg)}
+.search-area{padding:1rem 1.2rem .7rem;flex-shrink:0;background:transparent}
 .search-row{
   display:flex;border:1px solid var(--border2);
-  border-radius:9px;overflow:hidden;background:var(--surface);
-  transition:border-color .2s;
+  border-radius:10px;overflow:hidden;background:rgba(18,22,27,.88);
+  transition:border-color .2s,box-shadow .2s;
 }
-.search-row:focus-within{border-color:var(--accent)}
+.search-row:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(111,182,176,.12)}
 #searchInput{
   flex:1;background:transparent;border:none;outline:none;
   padding:12px 16px;font-size:13px;
@@ -84,7 +86,7 @@ nav{
 }
 #searchInput::placeholder{color:var(--text3)}
 .btn-search{
-  background:var(--accent);color:#fff;border:none;
+  background:var(--accent);color:#061012;border:none;
   padding:12px 20px;font-family:var(--display);
   font-size:16px;letter-spacing:1px;cursor:pointer;
   flex-shrink:0;transition:background .15s;
@@ -111,7 +113,7 @@ nav{
 ═══════════════════════════════════════ */
 .filter-wrap{
   flex-shrink:0;
-  background:var(--bg);
+  background:rgba(11,13,16,.88);
   border-bottom:1px solid var(--border);
   position:relative;
 }
@@ -125,11 +127,11 @@ nav{
 }
 .filter-wrap::before{
   left:0;
-  background:linear-gradient(to right,var(--bg),transparent);
+  background:var(--bg);
 }
 .filter-wrap::after{
   right:0;
-  background:linear-gradient(to left,var(--bg),transparent);
+  background:var(--bg);
 }
 
 .filter-row{
@@ -147,10 +149,10 @@ nav{
   flex-shrink:0;
   scroll-snap-align:start;
   border:1px solid var(--border2);
-  background:var(--surface);
-  color:var(--text3);
-  border-radius:20px;
-  padding:5px 14px;
+  background:rgba(18,22,27,.82);
+  color:var(--text2);
+  border-radius:999px;
+  padding:6px 14px;
   font-size:10px;font-family:var(--mono);
   cursor:pointer;
   white-space:nowrap;
@@ -160,7 +162,7 @@ nav{
   min-height:30px;
   display:flex;align-items:center;
 }
-.chip:hover{border-color:var(--text3);color:var(--text2);background:var(--surface2)}
+.chip:hover{border-color:var(--border3);color:var(--text);background:var(--surface2)}
 .chip.active{
   border-color:var(--accent);
   color:var(--accent);
@@ -183,13 +185,13 @@ nav{
   margin-bottom:.6rem;
 }
 .reco-title{
-  font-family:var(--display);font-size:20px;letter-spacing:1px;
+  font-family:var(--display);font-size:21px;letter-spacing:1px;
   color:var(--text);display:flex;align-items:center;gap:8px;
 }
-.reco-icon{font-size:16px}
+.reco-icon{display:none}
 .reco-badge{
   font-size:9px;font-family:var(--mono);color:var(--accent);
-  background:rgba(255,60,95,.1);border:1px solid rgba(255,60,95,.2);
+  background:var(--accent-dim);border:1px solid rgba(111,182,176,.24);
   padding:2px 8px;border-radius:12px;
 }
 .reco-count{
@@ -206,18 +208,18 @@ nav{
 .reco-row::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .reco-card{
   flex-shrink:0;width:130px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:9px;overflow:hidden;cursor:pointer;
+  background:rgba(18,22,27,.9);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;cursor:pointer;
   transition:all .25s;animation:fu .3s ease both;
 }
-.reco-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 6px 20px rgba(255,60,95,.12)}
+.reco-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow)}
 .reco-card .card-poster{width:100%;aspect-ratio:2/3;position:relative;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center}
 .reco-card .card-poster img{width:100%;height:100%;object-fit:cover;display:block}
 .reco-card .card-info{padding:6px 8px}
 .reco-card .card-title{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .reco-card .card-year{font-size:9px;font-family:var(--mono);color:var(--text3)}
 .reco-skeleton{flex-shrink:0;width:130px;border-radius:9px;background:var(--surface);border:1px solid var(--border);overflow:hidden}
-.reco-skeleton .skel-poster{width:100%;aspect-ratio:2/3;background:linear-gradient(110deg,var(--surface2) 8%,var(--border) 18%,var(--surface2) 33%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+.reco-skeleton .skel-poster{width:100%;aspect-ratio:2/3;background:var(--surface2)}
 .reco-skeleton .skel-info{padding:8px}
 .reco-skeleton .skel-line{height:10px;border-radius:4px;background:var(--surface2);margin-bottom:4px}
 .reco-skeleton .skel-line.short{width:60%}
@@ -227,11 +229,11 @@ nav{
 
 /* ── MOVIE CARD ── */
 .movie-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:9px;overflow:hidden;cursor:pointer;
+  background:rgba(18,22,27,.9);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;cursor:pointer;
   transition:all .2s;animation:fu .25s ease both;
 }
-.movie-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+.movie-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow)}
 @keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .card-poster{
   width:100%;aspect-ratio:2/3;background:var(--surface2);
@@ -239,20 +241,20 @@ nav{
   display:flex;align-items:center;justify-content:center;
 }
 .card-poster img{width:100%;height:100%;object-fit:cover;display:block}
-.no-img-icon{font-size:32px;opacity:.1}
+.no-img-icon{font-size:10px;font-family:var(--mono);letter-spacing:1px;color:var(--text3);opacity:.7}
 .card-rating{
   position:absolute;top:5px;right:5px;
-  background:rgba(0,0,0,.85);font-family:var(--mono);
-  font-size:9px;color:#fcd34d;padding:2px 5px;border-radius:3px;
+  background:rgba(0,0,0,.72);font-family:var(--mono);
+  font-size:9px;color:#d7c98f;padding:2px 5px;border-radius:4px;
 }
 .card-type-badge{
   position:absolute;top:5px;left:5px;
   font-family:var(--mono);font-size:8px;color:#fff;
   padding:2px 6px;border-radius:3px;text-transform:uppercase;
 }
-.type-movie{background:var(--accent)}
-.type-series{background:#7c3aed}
-.type-episode{background:#059669}
+.type-movie{background:#567b86}
+.type-series{background:#6f668f}
+.type-episode{background:#527866}
 .card-info{padding:7px 8px}
 .card-title{font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .card-year{font-size:9px;font-family:var(--mono);color:var(--text3)}
@@ -300,10 +302,10 @@ nav{
 .sheet-title{font-family:var(--display);font-size:23px;letter-spacing:.5px;line-height:1.1;margin-bottom:.5rem}
 .sheet-badges{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:.7rem}
 .badge{font-size:9px;padding:2px 7px;border-radius:20px;font-family:var(--mono)}
-.b-year{background:#1e1800;color:#fcd34d;border:1px solid #3a3000}
-.b-rating{background:#0e1e10;color:#6ee7a0;border:1px solid #1a3a20}
-.b-genre{background:#1a1030;color:#a78bfa;border:1px solid #2a1a50}
-.b-type{background:#1a0e1e;color:#f0abfc;border:1px solid #3a1a50}
+.b-year{background:#1a1d1f;color:#d7c98f;border:1px solid #34383d}
+.b-rating{background:#14201c;color:#8fbfa6;border:1px solid #263a34}
+.b-genre{background:#181b24;color:#a9adc0;border:1px solid #2b3040}
+.b-type{background:#171f24;color:#95c7c2;border:1px solid #2b4342}
 .sheet-desc{
   font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:.9rem;
   display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
@@ -317,7 +319,7 @@ nav{
 .photo-thumb{width:95px;min-width:95px;height:58px;border-radius:5px;background:var(--surface2);overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
 .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .btn-stream{
-  width:100%;background:var(--accent);color:#fff;border:none;
+  width:100%;background:var(--accent);color:#061012;border:none;
   border-radius:8px;padding:13px;font-family:var(--display);
   font-size:18px;letter-spacing:1px;cursor:pointer;
   transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px;
@@ -374,7 +376,7 @@ nav{
   position:absolute;top:0;left:0;right:0;
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 16px;z-index:210;
-  background:linear-gradient(to bottom,rgba(0,0,0,.9),transparent);
+  background:rgba(0,0,0,.84);
   transition:opacity .4s;
 }
 .player-bar.faded{opacity:0;pointer-events:none}
@@ -503,7 +505,7 @@ nav{
 .sub-lang-btn:hover,.sub-lang-btn:active{border-color:rgba(255,255,255,.3);color:#fff}
 .sub-lang-btn.active{
   border-color:var(--accent);color:var(--accent);
-  background:rgba(255,60,95,.15);font-weight:700;
+  background:rgba(111,182,176,.15);font-weight:700;
 }
 
 /* List subtitle */
@@ -522,8 +524,8 @@ nav{
 }
 .sub-item:hover,.sub-item:active{background:rgba(255,255,255,.05)}
 .sub-item.active{
-  background:rgba(255,60,95,.1);
-  border-color:rgba(255,60,95,.2);
+  background:rgba(111,182,176,.1);
+  border-color:rgba(111,182,176,.22);
 }
 .sub-item-left{flex:1;min-width:0}
 .sub-item-name{
@@ -533,7 +535,7 @@ nav{
 .sub-item.active .sub-item-name{color:var(--accent)}
 .sub-item-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .sub-badge{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px}
-.sub-badge-hi{background:rgba(61,255,160,.12);color:var(--green)}
+.sub-badge-hi{background:rgba(127,200,169,.12);color:var(--green)}
 .sub-badge-dl{background:rgba(255,255,255,.06);color:rgba(255,255,255,.3)}
 .sub-item-load{
   font-size:12px;font-family:var(--mono);color:var(--accent);
@@ -594,12 +596,12 @@ nav{
 .dr-plat-bar{
   display:flex;gap:8px;padding:.7rem 1.2rem .5rem;
   border-bottom:1px solid var(--border);
-  background:var(--bg);flex-shrink:0;
+  background:rgba(11,13,16,.88);flex-shrink:0;
 }
 .dr-ptab{
-  background:var(--surface);border:1px solid var(--border2);
-  color:var(--text2);border-radius:20px;
-  padding:6px 16px;font-size:11px;font-family:var(--mono);
+  background:rgba(18,22,27,.82);border:1px solid var(--border2);
+  color:var(--text2);border-radius:999px;
+  padding:7px 16px;font-size:11px;font-family:var(--mono);
   cursor:pointer;transition:all .2s;flex-shrink:0;
 }
 .dr-ptab:hover{border-color:var(--text3);color:var(--text)}
@@ -611,11 +613,11 @@ nav{
 /* Search */
 .dr-search-row{
   display:flex;margin:.7rem 1.2rem .4rem;
-  border:1px solid var(--border2);border-radius:9px;
-  overflow:hidden;background:var(--surface);
-  transition:border-color .2s;flex-shrink:0;
+  border:1px solid var(--border2);border-radius:10px;
+  overflow:hidden;background:rgba(18,22,27,.88);
+  transition:border-color .2s,box-shadow .2s;flex-shrink:0;
 }
-.dr-search-row:focus-within{border-color:var(--accent)}
+.dr-search-row:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(111,182,176,.12)}
 .dr-search-input{
   flex:1;background:transparent;border:none;outline:none;
   padding:10px 14px;font-size:12px;font-family:var(--mono);
@@ -623,7 +625,7 @@ nav{
 }
 .dr-search-input::placeholder{color:var(--text3)}
 .dr-search-btn{
-  background:var(--accent);color:#fff;border:none;
+  background:var(--accent);color:#061012;border:none;
   padding:10px 16px;font-family:var(--display);
   font-size:14px;letter-spacing:1px;cursor:pointer;
   flex-shrink:0;transition:background .15s;
@@ -648,7 +650,7 @@ nav{
 }
 .dr-section-badge{
   font-size:9px;font-family:var(--mono);color:var(--accent);
-  background:var(--accent-dim);border:1px solid rgba(255,60,95,.2);
+  background:var(--accent-dim);border:1px solid rgba(111,182,176,.22);
   padding:2px 8px;border-radius:12px;
 }
 
@@ -665,12 +667,12 @@ nav{
 .dr-card{
   flex-shrink:0;width:110px;
   text-decoration:none;color:var(--text);
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:9px;overflow:hidden;cursor:pointer;
+  background:rgba(18,22,27,.9);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;cursor:pointer;
   transition:all .25s;display:block;
   animation:fu .3s ease both;
 }
-.dr-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 6px 20px rgba(255,60,95,.12)}
+.dr-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow)}
 .dr-card-poster{
   width:100%;aspect-ratio:2/3;position:relative;
   overflow:hidden;background:var(--surface2);
@@ -680,7 +682,7 @@ nav{
 .dr-card-poster-overlay{
   position:absolute;bottom:0;left:0;right:0;
   padding:20px 6px 6px;
-  background:linear-gradient(transparent,rgba(0,0,0,.85));
+  background:rgba(0,0,0,.72);
 }
 .dr-card-eps{
   font-size:9px;font-family:var(--mono);color:rgba(255,255,255,.7);
@@ -688,7 +690,7 @@ nav{
 .dr-card-rank{
   position:absolute;top:5px;left:5px;
   width:22px;height:22px;border-radius:4px;
-  background:var(--accent);color:#fff;
+  background:var(--accent);color:#061012;
   font-size:10px;font-family:var(--display);font-weight:700;
   display:flex;align-items:center;justify-content:center;
 }
@@ -714,8 +716,7 @@ nav{
 }
 .dr-skel-poster{
   width:100%;aspect-ratio:2/3;
-  background:linear-gradient(110deg,var(--surface2) 8%,var(--border) 18%,var(--surface2) 33%);
-  background-size:200% 100%;animation:shimmer 1.5s infinite;
+  background:var(--surface2);
 }
 .dr-skel-info{padding:7px 8px}
 .dr-skel-line{height:9px;border-radius:3px;background:var(--surface2);margin-bottom:4px}
@@ -743,6 +744,208 @@ nav{
   .dr-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
   .dr-card{width:90px}
 }
+
+/* Clean flat redesign */
+:root{
+  --bg:#0f1113;
+  --surface:#171a1e;
+  --surface2:#20242a;
+  --surface3:#272c33;
+  --border:#303740;
+  --border2:#3a424d;
+  --border3:#4a5360;
+  --text:#f1f0ec;
+  --text2:#b8b4aa;
+  --text3:#7f827f;
+  --accent:#a9b7a5;
+  --accent2:#c2ccb9;
+  --accent-dim:#222820;
+  --green:#a5b99c;
+  --shadow:0 14px 32px rgba(0,0,0,.24);
+  --plyr-color-main:#a9b7a5;
+}
+body{background:var(--bg)}
+nav{
+  height:64px;
+  padding:0 18px;
+  background:#111316;
+  border-bottom:1px solid var(--border);
+  gap:18px;
+}
+.logo{
+  font-size:24px;
+  letter-spacing:2.8px;
+  color:var(--text);
+}
+.logo span{color:var(--accent)}
+.nav-tabs{gap:8px}
+.ntab,.nav-extractor-btn,#btnInstallPwa{
+  height:36px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--text2);
+  letter-spacing:.6px;
+}
+.ntab{padding:0 14px}
+.ntab:hover,.nav-extractor-btn:hover,#btnInstallPwa:hover{
+  background:var(--surface2);
+  border-color:var(--border3);
+  color:var(--text);
+}
+.ntab.active{
+  color:var(--text);
+  background:var(--surface2);
+  border-color:var(--accent);
+}
+.search-area{padding:18px 18px 10px}
+.search-row,.dr-search-row{
+  height:48px;
+  border-radius:7px;
+  border-color:var(--border);
+  background:var(--surface);
+}
+.search-row:focus-within,.dr-search-row:focus-within{
+  border-color:var(--accent);
+  box-shadow:none;
+}
+#searchInput,.dr-search-input{
+  font-family:var(--body);
+  font-size:14px;
+  padding:0 16px;
+}
+.btn-search,.dr-search-btn,.btn-stream{
+  background:var(--accent);
+  color:#111316;
+  border-left:1px solid var(--border);
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.9px;
+}
+.btn-search:hover,.dr-search-btn:hover,.btn-stream:hover{background:var(--accent2)}
+.filter-wrap,.dr-plat-bar{
+  background:#111316;
+  border-bottom:1px solid var(--border);
+}
+.filter-wrap::before,.filter-wrap::after{display:none}
+.filter-row,.dr-plat-bar{
+  gap:8px;
+  padding:10px 18px;
+}
+.chip,.dr-ptab{
+  min-height:32px;
+  border-radius:6px;
+  background:transparent;
+  border-color:var(--border);
+  color:var(--text2);
+  padding:7px 13px;
+}
+.chip:hover,.dr-ptab:hover{
+  background:var(--surface2);
+  border-color:var(--border3);
+  color:var(--text);
+}
+.chip.active,.dr-ptab.active,.season-item.active,.episode-item:hover{
+  background:var(--accent-dim);
+  border-color:var(--accent);
+  color:var(--accent2);
+}
+.grid-wrap{padding:18px}
+.movie-grid{grid-template-columns:repeat(auto-fill,minmax(142px,1fr));gap:16px}
+.reco-section{margin-bottom:28px}
+.reco-header,.dr-section-head{margin-bottom:10px}
+.reco-title,.dr-section-title{
+  font-family:var(--body);
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:.8px;
+}
+.reco-badge,.dr-section-badge{
+  border-radius:5px;
+  background:var(--surface2);
+  border-color:var(--border);
+  color:var(--text2);
+}
+.reco-row,.dr-hscroll{gap:14px;padding-bottom:12px}
+.reco-card,.movie-card,.dr-card,.reco-skeleton,.dr-skel{
+  background:var(--surface);
+  border-color:var(--border);
+  border-radius:7px;
+}
+.reco-card{width:148px}
+.dr-card{width:126px}
+.reco-card:hover,.movie-card:hover,.dr-card:hover{
+  border-color:var(--accent);
+  transform:translateY(-2px);
+  box-shadow:var(--shadow);
+}
+.card-poster,.reco-card .card-poster,.dr-card-poster,.dr-skel-poster,.reco-skeleton .skel-poster{
+  background:var(--surface2);
+}
+.card-poster img,.reco-card .card-poster img,.dr-card-poster img{
+  filter:saturate(.9) contrast(1.02);
+}
+.card-info,.reco-card .card-info,.dr-card-info{padding:9px 10px 10px}
+.card-title,.reco-card .card-title,.dr-card-name{
+  font-size:12px;
+  line-height:1.35;
+}
+.card-year,.reco-card .card-year,.dr-card-meta,.dr-card-eps{
+  color:var(--text3);
+  font-size:10px;
+}
+.card-rating,.card-type-badge,.dr-card-rank{
+  border-radius:4px;
+  background:#111316;
+  border:1px solid rgba(255,255,255,.08);
+  color:var(--text2);
+}
+.type-movie,.type-series,.type-episode{background:#111316}
+.dr-card-poster-overlay{background:rgba(17,19,22,.76)}
+.load-more-btn,.dr-load-more,.btn-imdb,.sheet-close,.season-close,.pbtn,.sub-lang-btn,.sub-off-btn{
+  border-radius:6px;
+  background:var(--surface);
+  border-color:var(--border);
+}
+.load-more-btn:hover,.dr-load-more:hover,.btn-imdb:hover,.pbtn:hover{
+  background:var(--surface2);
+  border-color:var(--border3);
+  color:var(--text);
+}
+.detail-sheet,.season-sheet,.sub-panel{
+  background:var(--surface);
+  border-color:var(--border);
+  border-radius:10px 10px 0 0;
+}
+.detail-bg,.season-bg,.sub-backdrop{background:rgba(0,0,0,.68)}
+.badge,.prov-chip,.sub-badge{
+  border-radius:5px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text2);
+}
+.b-year,.b-rating,.b-genre,.b-type{background:var(--surface2);border-color:var(--border);color:var(--text2)}
+.sub-lang-btn.active,.sub-item.active{
+  background:var(--accent-dim);
+  border-color:var(--accent);
+  color:var(--accent2);
+}
+.sub-item.active .sub-item-name,.sub-item-load,.pbtn.active{color:var(--accent2)}
+.sub-badge-hi{background:var(--accent-dim);color:var(--accent2)}
+.sub-panel{background:#111316}
+.player-bar{background:rgba(0,0,0,.78)}
+@media(max-width:640px){
+  nav{height:58px;padding:0 12px;gap:10px}
+  .logo{font-size:21px}
+  .ntab{padding:0 10px;font-size:10px}
+  .nav-extractor-btn{display:none}
+  .search-area{padding:12px}
+  .grid-wrap{padding:12px}
+  .movie-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:12px}
+  .reco-card{width:128px}
+  .dr-card{width:104px}
+}
 </style>
 </head>
 <body>
@@ -751,12 +954,12 @@ nav{
 <nav>
   <div class="logo">MASDI<span>FOX</span></div>
   <div class="nav-tabs">
-    <div class="ntab active" id="ntFilm"   onclick="switchMainTab('film')">🎬 FILM</div>
-    <div class="ntab"        id="ntDracin" onclick="switchMainTab('dracin')">📱 DRACIN</div>
+    <div class="ntab active" id="ntFilm"   onclick="switchMainTab('film')">FILM</div>
+    <div class="ntab"        id="ntDracin" onclick="switchMainTab('dracin')">DRACIN</div>
   </div>
   <div class="nav-right">
     <button id="btnInstallPwa">+ INSTALL</button>
-    <a href="/extractor.html" class="nav-extractor-btn">🔗 EXTRACTOR</a>
+    <a href="/extractor.html" class="nav-extractor-btn">EXTRACTOR</a>
   </div>
   
 </nav>
@@ -780,24 +983,24 @@ nav{
 <!-- ── GENRE FILTER — REDESIGNED ── -->
 <div class="filter-wrap">
   <div class="filter-row" id="filterRow">
-    <div class="chip active" data-genre="all"       onclick="setGenre(this)">✦ Semua</div>
-    <div class="chip"        data-genre="28"        onclick="setGenre(this)">💥 Action</div>
-    <div class="chip"        data-genre="18"        onclick="setGenre(this)">🎭 Drama</div>
-    <div class="chip"        data-genre="35"        onclick="setGenre(this)">😂 Comedy</div>
-    <div class="chip"        data-genre="53"        onclick="setGenre(this)">🔪 Thriller</div>
-    <div class="chip"        data-genre="27"        onclick="setGenre(this)">👻 Horror</div>
-    <div class="chip"        data-genre="878"       onclick="setGenre(this)">🚀 Sci-Fi</div>
-    <div class="chip"        data-genre="10749"     onclick="setGenre(this)">💕 Romance</div>
-    <div class="chip"        data-genre="16"        onclick="setGenre(this)">⚡ Animation</div>
-    <div class="chip"        data-genre="80"        onclick="setGenre(this)">🕵️ Crime</div>
-    <div class="chip"        data-genre="12"        onclick="setGenre(this)">🗺️ Adventure</div>
-    <div class="chip"        data-genre="14"        onclick="setGenre(this)">🧙 Fantasy</div>
-    <div class="chip"        data-genre="10751"     onclick="setGenre(this)">👨‍👩‍👧 Family</div>
-    <div class="chip"        data-genre="36"        onclick="setGenre(this)">📜 History</div>
-    <div class="chip"        data-genre="10402"     onclick="setGenre(this)">🎵 Music</div>
-    <div class="chip"        data-genre="9648"      onclick="setGenre(this)">🔍 Mystery</div>
-    <div class="chip"        data-genre="37"        onclick="setGenre(this)">🤠 Western</div>
-    <div class="chip"        data-genre="10752"     onclick="setGenre(this)">⚔️ War</div>
+    <div class="chip active" data-genre="all"       onclick="setGenre(this)">Semua</div>
+    <div class="chip"        data-genre="28"        onclick="setGenre(this)">Action</div>
+    <div class="chip"        data-genre="18"        onclick="setGenre(this)">Drama</div>
+    <div class="chip"        data-genre="35"        onclick="setGenre(this)">Comedy</div>
+    <div class="chip"        data-genre="53"        onclick="setGenre(this)">Thriller</div>
+    <div class="chip"        data-genre="27"        onclick="setGenre(this)">Horror</div>
+    <div class="chip"        data-genre="878"       onclick="setGenre(this)">Sci-Fi</div>
+    <div class="chip"        data-genre="10749"     onclick="setGenre(this)">Romance</div>
+    <div class="chip"        data-genre="16"        onclick="setGenre(this)">Animation</div>
+    <div class="chip"        data-genre="80"        onclick="setGenre(this)">Crime</div>
+    <div class="chip"        data-genre="12"        onclick="setGenre(this)">Adventure</div>
+    <div class="chip"        data-genre="14"        onclick="setGenre(this)">Fantasy</div>
+    <div class="chip"        data-genre="10751"     onclick="setGenre(this)">Family</div>
+    <div class="chip"        data-genre="36"        onclick="setGenre(this)">History</div>
+    <div class="chip"        data-genre="10402"     onclick="setGenre(this)">Music</div>
+    <div class="chip"        data-genre="9648"      onclick="setGenre(this)">Mystery</div>
+    <div class="chip"        data-genre="37"        onclick="setGenre(this)">Western</div>
+    <div class="chip"        data-genre="10752"     onclick="setGenre(this)">War</div>
   </div>
 </div>
 
@@ -806,8 +1009,10 @@ nav{
 
   <!-- Platform Tabs -->
   <div class="dr-plat-bar">
-    <button class="dr-ptab active" data-platform="dramabox" onclick="dracinSwitchPlatform(this)">📱 DramaBox</button>
-    <button class="dr-ptab"        data-platform="reelshort" onclick="dracinSwitchPlatform(this)">🎬 ReelShort</button>
+    <button class="dr-ptab active" data-platform="dramabox" onclick="dracinSwitchPlatform(this)">DramaBox</button>
+    <button class="dr-ptab"        data-platform="reelshort" onclick="dracinSwitchPlatform(this)">ReelShort</button>
+    <button class="dr-ptab"        data-platform="melolo"    onclick="dracinSwitchPlatform(this)">Melolo</button>
+    <button class="dr-ptab"        data-platform="dramanova" onclick="dracinSwitchPlatform(this)">Dramanova</button>
   </div>
 
   <!-- Search -->
@@ -824,7 +1029,7 @@ nav{
   <!-- Trending / Rank -->
   <div id="dracinRankWrap" style="padding:0 1.2rem">
     <div class="dr-section-head">
-      <span class="dr-section-title">🔥 TRENDING</span>
+      <span class="dr-section-title">TRENDING</span>
       <span class="dr-section-badge" id="dracinRankBadge"></span>
     </div>
     <div class="dr-hscroll" id="dracinRankRow">
@@ -835,7 +1040,7 @@ nav{
   <!-- Browse All / Search Results -->
   <div style="padding:0 1.2rem">
     <div class="dr-section-head">
-      <span class="dr-section-title" id="dracinBrowseTitle">📚 SEMUA DRAMA</span>
+      <span class="dr-section-title" id="dracinBrowseTitle">SEMUA DRAMA</span>
     </div>
     <div id="dracin-grid" class="dr-grid">
       <!-- di-render JS -->
@@ -879,6 +1084,20 @@ nav{
   </div>
 
 </div>
+
+  <!-- PIN Modal for Dramanova -->
+  <div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center"> 
+    <div style="width:320px;background:#0f1113;border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,.06);box-shadow:0 10px 40px rgba(0,0,0,.6);">
+      <h3 style="margin:0 0 8px;font-family:'DM Sans',sans-serif;color:#fff">Masukkan PIN</h3>
+      <p style="margin:0 0 12px;color:#b8b4aa;font-size:13px">PIN diperlukan untuk mengakses Dramanova.</p>
+      <input id="pinInput" type="password" placeholder="PIN" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:transparent;color:#fff;margin-bottom:12px;font-size:14px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="pinCancel" style="background:transparent;border:1px solid rgba(255,255,255,.08);color:#b8b4aa;padding:8px 12px;border-radius:8px;cursor:pointer">Batal</button>
+        <button id="pinSubmit" style="background:#a9b7a5;border:none;color:#061012;padding:8px 12px;border-radius:8px;cursor:pointer">Masuk</button>
+      </div>
+      <div id="pinErr" style="color:#ff9b9b;margin-top:10px;display:none;font-size:13px"></div>
+    </div>
+  </div>
 
 <!-- ── DETAIL PANEL ── -->
 <div id="detailPanel">
@@ -1297,9 +1516,9 @@ function makeMovieCard(m, dataIdx, animIdx) {
     <div class="card-poster">
       ${img
         ? `<img src="${esc(img)}" alt="${esc(title)}" loading="lazy"
-             onerror="this.parentNode.innerHTML='<div class=no-img-icon>🎬</div>'">`
-        : `<div class="no-img-icon">🎬</div>`}
-      ${rating ? `<div class="card-rating">★ ${esc(rating)}</div>` : ""}
+             onerror="this.parentNode.innerHTML='<div class=no-img-icon>NO IMAGE</div>'">`
+        : `<div class="no-img-icon">NO IMAGE</div>`}
+      ${rating ? `<div class="card-rating">RATING ${esc(rating)}</div>` : ""}
       <div class="card-type-badge ${typeClass}">${typeLabel}</div>
     </div>
     <div class="card-info">
@@ -1313,14 +1532,14 @@ function makeMovieCard(m, dataIdx, animIdx) {
    RECOMMENDATION (TMDb)
 ═══════════════════════════════════════ */
 const RECO_CATEGORIES = [
-  {id:"recoTrending",icon:"🔥",title:"TRENDING HARI INI",badge:"POPULER",endpoint:"/trending/all/day"},
-  {id:"recoNowPlay", icon:"🎬",title:"SEDANG TAYANG",   badge:"BIOSKOP",endpoint:"/movie/now_playing"},
-  {id:"recoAction",  icon:"💥",title:"ACTION",          badge:"TOP",    endpoint:"/discover/movie?with_genres=28&sort_by=popularity.desc"},
-  {id:"recoComedy",  icon:"😂",title:"KOMEDI",          badge:"FUN",    endpoint:"/discover/movie?with_genres=35&sort_by=popularity.desc"},
-  {id:"recoDrama",   icon:"🎭",title:"DRAMA",           badge:"PILIHAN",endpoint:"/discover/movie?with_genres=18&sort_by=vote_average.desc&vote_count.gte=500"},
-  {id:"recoAnime",   icon:"⚡",title:"ANIME",           badge:"OTAKU",  endpoint:"/discover/movie?with_genres=16&sort_by=popularity.desc"},
-  {id:"recoHorror",  icon:"👻",title:"HORROR",          badge:"SERAM",  endpoint:"/discover/movie?with_genres=27&sort_by=popularity.desc"},
-  {id:"recoTV",      icon:"📺",title:"SERIAL TV POPULER",badge:"BINGE", endpoint:"/tv/popular"},
+  {id:"recoTrending",icon:"",title:"TRENDING HARI INI",badge:"POPULER",endpoint:"/trending/all/day"},
+  {id:"recoNowPlay", icon:"",title:"SEDANG TAYANG",   badge:"BIOSKOP",endpoint:"/movie/now_playing"},
+  {id:"recoAction",  icon:"",title:"ACTION",          badge:"TOP",    endpoint:"/discover/movie?with_genres=28&sort_by=popularity.desc"},
+  {id:"recoComedy",  icon:"",title:"KOMEDI",          badge:"FUN",    endpoint:"/discover/movie?with_genres=35&sort_by=popularity.desc"},
+  {id:"recoDrama",   icon:"",title:"DRAMA",           badge:"PILIHAN",endpoint:"/discover/movie?with_genres=18&sort_by=vote_average.desc&vote_count.gte=500"},
+  {id:"recoAnime",   icon:"",title:"ANIME",           badge:"OTAKU",  endpoint:"/discover/movie?with_genres=16&sort_by=popularity.desc"},
+  {id:"recoHorror",  icon:"",title:"HORROR",          badge:"SERAM",  endpoint:"/discover/movie?with_genres=27&sort_by=popularity.desc"},
+  {id:"recoTV",      icon:"",title:"SERIAL TV POPULER",badge:"BINGE", endpoint:"/tv/popular"},
 ];
 
 function tmdbToLocal(item) {
@@ -1352,7 +1571,7 @@ function renderRecoSkeleton(cid, title, icon, badge) {
     </div>`).join("");
   el.innerHTML = `
     <div class="reco-header">
-      <div class="reco-title"><span class="reco-icon">${icon}</span> ${title}</div>
+      <div class="reco-title">${title}</div>
       <div class="reco-badge">${badge}</div>
     </div>
     <div class="reco-row">${skels}</div>`;
@@ -1375,9 +1594,9 @@ function renderRecoCards(cid, title, icon, badge, items) {
         <div class="card-poster">
           ${img
             ? `<img src="${esc(img)}" alt="${esc(t)}" loading="lazy"
-                 onerror="this.parentNode.innerHTML='<div class=no-img-icon>🎬</div>'">`
-            : `<div class="no-img-icon">🎬</div>`}
-          ${rat ? `<div class="card-rating">★ ${esc(rat)}</div>` : ""}
+                 onerror="this.parentNode.innerHTML='<div class=no-img-icon>NO IMAGE</div>'">`
+            : `<div class="no-img-icon">NO IMAGE</div>`}
+          ${rat ? `<div class="card-rating">RATING ${esc(rat)}</div>` : ""}
           <div class="card-type-badge ${typeClass}">${typeLabel}</div>
         </div>
         <div class="card-info">
@@ -1388,7 +1607,7 @@ function renderRecoCards(cid, title, icon, badge, items) {
   }).join("");
   el.innerHTML = `
     <div class="reco-header">
-      <div class="reco-title"><span class="reco-icon">${icon}</span> ${title}</div>
+      <div class="reco-title">${title}</div>
       <div class="reco-badge">${badge}</div>
     </div>
     <div class="reco-row">${cards}</div>`;
@@ -2249,7 +2468,7 @@ function switchMainTab(tab) {
 
   if (tab === 'dracin' && !DR.initialized) {
     DR.initialized = true;
-    console.log('%c[Dracin] Inisialisasi...', 'color:#ff3c5f');
+    console.log('%c[Dracin] Inisialisasi...', 'color:#6fb6b0');
     setTimeout(() => {
       dracinLoadRank();
       dracinLoadBrowse(true);
@@ -2298,7 +2517,8 @@ function dracinMakeCard(book, rank = 0, forScroll = false) {
   a.innerHTML = `
     <div class="dr-card-poster">
       <img src="${esc(book.cover||'')}" loading="lazy" alt="${esc(book.bookName)}"
-           onerror="this.style.display='none'; this.parentNode.style.background='#222'; this.parentNode.innerHTML='📱';">
+           referrerpolicy="no-referrer"
+           onerror="this.style.display='none'; this.parentNode.style.background='#12161b'; this.parentNode.innerHTML='NO IMAGE';">
       ${rank > 0 ? `<div class="dr-card-rank">${rank}</div>` : ''}
       <div class="dr-card-poster-overlay">
         <div class="dr-card-eps">${eps}</div>
@@ -2324,16 +2544,60 @@ function dracinSkeletons(container, n = 8, isRow = false) {
 }
 
 /* Platform Switch */
-function dracinSwitchPlatform(btn) {
+async function dracinSwitchPlatform(btn) {
+  // If switching to dramanova, ensure PIN auth
+  const plat = btn.dataset.platform;
+  if (plat === 'dramanova') {
+    const token = sessionStorage.getItem('dramanova_token');
+    if (!token) {
+      // show modal
+      document.getElementById('pinErr').style.display = 'none';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinModal').style.display = 'flex';
+      // wait for user action
+      const ok = await new Promise(resolve => {
+        document.getElementById('pinCancel').onclick = () => { document.getElementById('pinModal').style.display='none'; resolve(false); };
+        document.getElementById('pinSubmit').onclick = async () => {
+          const pin = document.getElementById('pinInput').value || '';
+          try {
+            const res = await fetch('/api/dracin/auth', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
+            const j = await res.json();
+            if (j.status === 'success' && j.token) {
+              sessionStorage.setItem('dramanova_token', j.token);
+              document.getElementById('pinModal').style.display='none';
+              resolve(true);
+            } else {
+              document.getElementById('pinErr').textContent = j.message || 'PIN salah';
+              document.getElementById('pinErr').style.display = 'block';
+            }
+          } catch (e) {
+            document.getElementById('pinErr').textContent = 'Gagal memvalidasi PIN';
+            document.getElementById('pinErr').style.display = 'block';
+          }
+        };
+      });
+      if (!ok) return; // abort if user cancelled or failed
+    }
+  }
+
   document.querySelectorAll('.dr-ptab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  DR.platform = btn.dataset.platform;
+  DR.platform = plat;
   DR.browseMode = 'home';
   DR.page = 1;
   document.getElementById('dracinSearchInput').value = '';
-  document.getElementById('dracinBrowseTitle').textContent = '📚 SEMUA DRAMA';
+  document.getElementById('dracinBrowseTitle').textContent = 'SEMUA DRAMA';
   dracinLoadRank();
   dracinLoadBrowse(true);
+}
+
+// Helper fetch that attaches dramanova token when available
+function _dramanovaFetch(url, opts = {}) {
+  const token = sessionStorage.getItem('dramanova_token');
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  if (token) opts.headers['X-Dramanova-Token'] = token;
+  return fetch(url, opts);
 }
 
 /* Search */
@@ -2342,11 +2606,11 @@ function dracinSearch() {
   if (!q) {
     DR.browseMode = 'home';
     DR.searchQuery = '';
-    document.getElementById('dracinBrowseTitle').textContent = '📚 SEMUA DRAMA';
+    document.getElementById('dracinBrowseTitle').textContent = 'SEMUA DRAMA';
   } else {
     DR.browseMode = 'search';
     DR.searchQuery = q;
-    document.getElementById('dracinBrowseTitle').textContent = `🔎 HASIL: "${esc(q)}"`;
+    document.getElementById('dracinBrowseTitle').textContent = `HASIL: "${esc(q)}"`;
   }
   DR.page = 1;
   dracinLoadBrowse(true);
@@ -2366,7 +2630,7 @@ async function dracinLoadRank() {
   badge.textContent = '';
 
   try {
-    const res = await fetch(`/api/dracin/rank?platform=${DR.platform}&lang=in`);
+    const res = await _dramanovaFetch(`/api/dracin/rank?platform=${DR.platform}&lang=in`);
     const j = await res.json();
     const payload = (j?.status === "success") ? j.data : j;
     const books = payload?.books || [];
@@ -2403,7 +2667,7 @@ async function dracinLoadBrowse(reset = true) {
       ? `/api/dracin/search?platform=${DR.platform}&keyword=${encodeURIComponent(DR.searchQuery)}&page=${DR.page}&lang=in`
       : `/api/dracin/home?platform=${DR.platform}&page=${DR.page}&size=24&lang=in`;
 
-    const res = await fetch(url);
+    const res = await _dramanovaFetch(url);
     const j = await res.json();
     const payload = (j?.status === "success") ? j.data : j;
 
@@ -2431,8 +2695,37 @@ async function dracinLoadBrowse(reset = true) {
 </script>
 <script>
 /* ── PWA ── */
+// Daftar domain CDN yang harus bypass service worker (fetch langsung)
+// ByteDance / TikTok CDN untuk DramaBox, Melolo, ReelShort, dll.
+const SW_BYPASS_HOSTS = [
+  "fizzopic.org",
+  "p16-novel-sign-sg.fizzopic.org",
+  "p19-novel-sign-sg.fizzopic.org",
+  "lf16-ttcdn-sg.fizzopic.org",
+  "tiktokcdn.com",
+  "muscdn.com",
+  "byteimg.com",
+  "bytedance.com",
+];
+
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+  navigator.serviceWorker.register("/sw.js").then(reg => {
+    // Kirim daftar bypass ke SW agar bisa dikecualikan di fetch handler
+    if (reg.active) {
+      reg.active.postMessage({ type: "SET_BYPASS_HOSTS", hosts: SW_BYPASS_HOSTS });
+    }
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (sw) sw.addEventListener("statechange", () => {
+        if (sw.state === "activated") {
+          sw.postMessage({ type: "SET_BYPASS_HOSTS", hosts: SW_BYPASS_HOSTS });
+        }
+      });
+    });
+  }).catch(()=>{});
+
+  // Intercept fetch dari SW — jika URL adalah CDN yang di-bypass, jangan biarkan SW handle
+  navigator.serviceWorker.addEventListener("message", () => {});
 }
 let deferredPrompt;
 const btnInstall = document.getElementById("btnInstallPwa");
