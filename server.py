@@ -325,6 +325,70 @@ def proxy():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/api/proxy-browser")
+def proxy_browser():
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return jsonify({"error": "playwright not installed. Install playwright and run `playwright install` on the host."}), 501
+
+    target_url = request.args.get("url", "").strip()
+    if not target_url:
+        return "Missing url param", 400
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            page = browser.new_page()
+            # render page and wait for network to settle
+            page.goto(target_url, timeout=20000, wait_until="networkidle")
+            html = page.content()
+
+            # try to find .m3u8 URL in rendered HTML
+            import re
+            m = re.search(r'https?://[^"\'"\s>]+\\.m3u8[^"\'"\s>]*', html)
+            if m:
+                m3u8_url = m.group(0)
+                try:
+                    import requests as req
+                    try:
+                        from lib.config import VIDEO_SPOOF_HEADERS
+                    except Exception:
+                        VIDEO_SPOOF_HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://imdb.com/"}
+
+                    r2 = req.get(m3u8_url, headers=VIDEO_SPOOF_HEADERS, stream=True, timeout=20)
+                    content_type = r2.headers.get("Content-Type", "application/vnd.apple.mpegurl")
+
+                    if r2.status_code == 200:
+                        content = r2.text
+
+                        def rewrite(m):
+                            abs_link = urljoin(m3u8_url, m.group(1))
+                            return f"/api/proxy?url={quote(abs_link)}"
+
+                        new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
+                        browser.close()
+                        return Response(
+                            new_content.encode(),
+                            status=200,
+                            headers={"Content-Type": content_type, "Access-Control-Allow-Origin": "*"},
+                        )
+                    else:
+                        browser.close()
+                        return jsonify({"error": "failed fetching m3u8", "status": r2.status_code}), 502
+                except Exception as err:
+                    browser.close()
+                    return jsonify({"error": str(err)}), 502
+
+            # no m3u8 found in page
+            browser.close()
+            return jsonify({"status": "no_m3u8", "message": "No .m3u8 found in rendered page"}), 404
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 PLATFORM_REFERERS = {
     "reelshort":       "https://reelshort.com/",
     "melolo":          "https://melolo.tv/",
