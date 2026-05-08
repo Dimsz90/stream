@@ -61,7 +61,9 @@ def load(path):
 
 @app.route("/")
 def index():
-    return send_file("index.html")
+    resp = send_file("index.html")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 @app.route("/favicon.ico")
 def favicon():
@@ -76,17 +78,25 @@ def health():
 def static_files(filename):
     # 1. Cek file di root folder
     if os.path.exists(filename):
-        return send_file(filename)
+        resp = send_file(filename)
+        if filename in ("index.html", "sw.js") or filename.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-store"
+        return resp
     
     # 2. Cek file di dalam folder public/
     public_path = os.path.join("public", filename)
     if os.path.exists(public_path):
-        return send_file(public_path)
+        resp = send_file(public_path)
+        if filename == "sw.js":
+            resp.headers["Cache-Control"] = "no-store"
+        return resp
     
     # 3. Fallback untuk SPA (Single Page Application)
     if not request.path.startswith('/api/'):
         if os.path.exists("index.html"):
-            return send_file("index.html")
+            resp = send_file("index.html")
+            resp.headers["Cache-Control"] = "no-store"
+            return resp
             
     return jsonify({"error": "Not Found"}), 404
 
@@ -328,6 +338,10 @@ def imdb_api():
                 scheme = request.headers.get('X-Forwarded-Proto', 'https')
                 host = request.host
                 info["stream_url"] = f"{scheme}://{host}/api/proxy?url={quote(raw_url)}"
+                info["rawStreamUrl"] = raw_url
+                info["streamResolver"] = "imdb-vaplayer"
+                info["season"] = int(season) if str(season).isdigit() else season
+                info["episode"] = int(episode) if str(episode).isdigit() else episode
             info["embed_url"] = f"https://streamimdb.ru/embed/movie/{imdb_id}"
 
         return jsonify({"status": "success", **info})

@@ -1,7 +1,6 @@
-const CACHE_NAME = "StreamVault-v1.0";
+const CACHE_NAME = "StreamVault-v1.1";
 
 const PRECACHE = [
-  "/",
   "/extractor.html",
   "/manifest.json",
   "https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap",
@@ -51,6 +50,11 @@ self.addEventListener("fetch", (event) => {
 
   // API calls → network only
   if (url.pathname.startsWith("/api/")) return;
+
+  if (event.request.mode === "navigate" || event.request.destination === "document") {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

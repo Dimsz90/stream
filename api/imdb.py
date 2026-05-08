@@ -190,6 +190,10 @@ def do_GET(self):
                     host = self.headers.get("Host", "")
                     protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
                     info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
+                    info["rawStreamUrl"] = raw_url
+                    info["streamResolver"] = "imdb-vaplayer"
+                    info["season"] = int(season) if str(season).isdigit() else season
+                    info["episode"] = int(episode) if str(episode).isdigit() else episode
                 info["embed_url"] = f"https://streamimdb.ru/embed/movie/{imdb_id}"
 
             return self.send_json({"status": "success", **info})
