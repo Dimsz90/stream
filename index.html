@@ -2139,7 +2139,7 @@ async function startStream() {
     const res  = await fetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
     const data = await res.json();
     if (data.stream_url) {
-      playHls(data.stream_url);
+      playHls(data.stream_url, {alternateStreamEndpoint: `${STREAM_API}/api/get-video?id=${encodeURIComponent(id)}`});
     } else {
       showPError("Stream tidak tersedia untuk film ini.");
     }
@@ -2186,7 +2186,9 @@ async function startTvEpisodeStream(season, episode) {
       document.getElementById("playerTitle").textContent = `${title} - ${data.episodeTitle} (S${season}E${episode})`;
     }
     if (data.stream_url || data.streamUrl || data.link) {
-      playHls(data.stream_url || data.streamUrl || data.link);
+      const imdbId = SUB.imdbId || selectedItem["#IMDB_ID"] || "";
+      const alternateStreamEndpoint = imdbId ? `${STREAM_API}/api/get-video?id=${encodeURIComponent(imdbId)}` : "";
+      playHls(data.stream_url || data.streamUrl || data.link, {alternateStreamEndpoint});
     } else {
       showPError(data.message || "Stream episode tidak tersedia.");
     }
@@ -2223,6 +2225,29 @@ function getDirectStreamFallback(streamUrl) {
   } catch {
     const m = String(streamUrl).match(/[?&]url=([^&]+)/);
     return m ? decodeURIComponent(m[1]) : "";
+  }
+}
+
+function normalizeStreamUrl(url) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url) && url.toLowerCase().includes(".m3u8") && !url.includes("/api/proxy?url=")) {
+    return `${STREAM_API}/api/proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+async function tryAlternateStream(opts) {
+  if (!opts.alternateStreamEndpoint || opts.alternateTried) return false;
+  try {
+    showPLoading("Mencoba sumber stream alternatif...");
+    const res = await fetch(opts.alternateStreamEndpoint);
+    const data = await res.json();
+    const altUrl = normalizeStreamUrl(data.stream_url || data.streamUrl || data.link || data.url || "");
+    if (!res.ok || !altUrl) return false;
+    playHls(altUrl, {...opts, alternateTried:true, skipDirectFallback:false});
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -2269,7 +2294,13 @@ function playHls(streamUrl, opts = {}) {
         const directUrl = opts.skipDirectFallback ? "" : getDirectStreamFallback(streamUrl);
         if (directUrl && directUrl !== streamUrl) {
           showPLoading("Proxy diblokir, mencoba stream langsung...");
-          playHls(directUrl, {skipDirectFallback:true});
+          playHls(directUrl, {...opts, skipDirectFallback:true});
+          return;
+        }
+        if (opts.alternateStreamEndpoint && !opts.alternateTried) {
+          tryAlternateStream(opts).then((started) => {
+            if (!started) showPError("Stream gagal dimuat.");
+          });
           return;
         }
         showPError("Stream gagal dimuat.");
