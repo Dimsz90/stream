@@ -91,12 +91,56 @@ def static_files(filename):
 @app.route("/api/debug")
 def debug():
     results = {"python": sys.version, "env": "production (railway)"}
-    for pkg in ["requests", "bs4", "yt_dlp", "playwright", "PIL", "pillow_heif"]:
+
+    def _get_pkg_version(name: str):
         try:
-            mod = __import__(pkg)
-            results[pkg] = f"OK ({getattr(mod, '__version__', '?')})"
-        except ImportError as e:
-            results[pkg] = f"MISSING: {e}"
+            mod = __import__(name)
+        except Exception as imp_err:
+            return False, str(imp_err)
+
+        # Common version attributes
+        for attr in ("__version__", "version", "VERSION"):
+            v = getattr(mod, attr, None)
+            if isinstance(v, str):
+                return True, v
+            if hasattr(v, "__version__"):
+                return True, getattr(v, "__version__", "?")
+
+        # Package-specific fallbacks
+        if name == "yt_dlp":
+            try:
+                import yt_dlp as y
+                ver = getattr(y, "__version__", None) or getattr(y, "version", None)
+                if isinstance(ver, str):
+                    return True, ver
+            except Exception:
+                pass
+
+        if name == "playwright":
+            try:
+                import importlib.metadata as md
+                ver = md.version("playwright")
+                return True, ver
+            except Exception:
+                pass
+
+        # Try importlib.metadata with the module name as distribution name
+        try:
+            import importlib.metadata as md
+            ver = md.version(name)
+            return True, ver
+        except Exception:
+            pass
+
+        return True, "?"
+
+    for pkg in ["requests", "bs4", "yt_dlp", "playwright", "PIL", "pillow_heif"]:
+        ok, info = _get_pkg_version(pkg)
+        if not ok:
+            results[pkg] = f"MISSING: {info}"
+        else:
+            results[pkg] = f"OK ({info})"
+
     return jsonify(results)
 
 @app.route("/api/get-video")
@@ -291,6 +335,20 @@ def proxy():
     try:
         resp = req.get(target_url, headers=VIDEO_SPOOF_HEADERS, stream=True, timeout=15)
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
+
+        # If the remote returns an HTML page that looks like a Cloudflare block
+        # or an explicit 403/503, attempt the Playwright browser-based fallback
+        try:
+            body_sample = resp.text[:2000].lower()
+        except Exception:
+            body_sample = ""
+
+        if resp.status_code in (403, 503) or ("cloudflare" in body_sample and ("blocked" in body_sample or "attention required" in body_sample)):
+            try:
+                return proxy_browser()
+            except Exception:
+                # If fallback fails, continue and return the original response
+                pass
 
         if "mpegurl" in content_type.lower() or target_url.endswith(".m3u8"):
             content = resp.text
