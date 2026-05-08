@@ -194,12 +194,14 @@ def dracin_api(subpath):
         # Allow auth endpoint through
         if DRAMANOVA_PIN and platform == 'dramanova':
             # accept token via header or query param
-            token = request.headers.get('X-Dramanova-Token') or request.args.get('dramanova_token')
+            token = request.headers.get('X-Dramanova-Token') or request.args.get('dramanova_token') or request.cookies.get('dramanova_token')
             if not token or not _validate_dramanova_token(token):
                 return jsonify({"status": "error", "message": "Access to dramanova requires PIN authentication"}), 403
-
         mod = load("api/dracin.py")
         params = {k: request.args.getlist(k) for k in request.args.keys()}
+        # ensure validated token is forwarded to build_response which validates query params
+        if DRAMANOVA_PIN and platform == 'dramanova' and token:
+            params['dramanova_token'] = [token]
         data, status_code = mod.build_response(f"/api/dracin/{subpath}", params)
         return jsonify(data), status_code
     except Exception as e:
@@ -216,7 +218,13 @@ def dracin_auth():
         return jsonify({"status": "error", "message": "PIN required"}), 400
     if pin == DRAMANOVA_PIN:
         token = _make_dramanova_token()
-        return jsonify({"status": "success", "token": token}), 200
+        resp = jsonify({"status": "success", "token": token})
+        # set cookie so browsers will send token automatically (fallback when headers/JS are blocked)
+        resp.set_cookie(
+            'dramanova_token', token,
+            max_age=3600, secure=True, httponly=True, samesite='Lax'
+        )
+        return resp, 200
     return jsonify({"status": "error", "message": "PIN invalid"}), 403
 
 @app.route("/api/scan", methods=["POST"])

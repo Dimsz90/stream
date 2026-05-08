@@ -586,14 +586,27 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             return None
         # Coba dari root dulu, lalu dari data (beberapa response dibungkus)
         items = _melolo_extract_list(raw) or _melolo_extract_list(raw.get("data", {}))
-        books = [_melolo_norm_book(b) for b in items]
+        books_all = [_melolo_norm_book(b) for b in items]
+        total = len(books_all)
+        # Implement simple pagination
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+        start = (page - 1) * size
+        end = start + size
+        books = books_all[start:end]
+        has_more = end < total
         return {
             "platform": platform,
             "page":     page,
             "sections": [],
             "books":    books,
-            "hasMore":  False,
+            "hasMore":  has_more,
             "bannerList": [],
+            "total": total,
         }
 
     if cfg.get("_engine") == "dramanova":
@@ -653,7 +666,7 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
     }
 
 
-def get_rank(platform="dramabox", rank_type=1, lang="in") -> dict | None:
+def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | None:
     """
     /api/rank → data.data.rankList[]
     Untuk melolo: Captain v1 /api/v1/bookmall (same endpoint, pakai items teratas)
@@ -669,7 +682,11 @@ def get_rank(platform="dramabox", rank_type=1, lang="in") -> dict | None:
         if not raw:
             return None
         items = _melolo_extract_list(raw) or _melolo_extract_list(raw.get("data", {}))
-        books = [_melolo_norm_book(b) for b in items[:20]]
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        books = [_melolo_norm_book(b) for b in items[:size]]
         return {
             "platform":  platform,
             "rankType":  rank_type,
