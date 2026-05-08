@@ -2173,11 +2173,15 @@ async function startTvEpisodeStream(season, episode) {
   document.getElementById("playerTitle").textContent = `${title} - S${season}E${episode}`;
 
   try {
-    const q = new URLSearchParams({id: tmdbId, type: "tv", s: season, e: episode});
-    const res = await fetch(`${STREAM_API}/api/tmdb-stream?${q}`);
+    const imdbId = selectedItem["#IMDB_ID"] || "";
+    const q = imdbId
+      ? new URLSearchParams({id: imdbId, action: "stream", s: season, e: episode})
+      : new URLSearchParams({id: tmdbId, type: "tv", s: season, e: episode});
+    const endpoint = imdbId ? "imdb" : "tmdb-stream";
+    const res = await fetch(`${STREAM_API}/api/${endpoint}?${q}`);
     const data = await res.json();
     if (data.totalEpisodes) currentPlayback.totalEpisodes = data.totalEpisodes;
-    if (data.imdbId) SUB.imdbId = data.imdbId;
+    if (data.imdbId || data.imdb_id) SUB.imdbId = data.imdbId || data.imdb_id;
     if (data.episodeTitle) {
       document.getElementById("playerTitle").textContent = `${title} - ${data.episodeTitle} (S${season}E${episode})`;
     }

@@ -321,7 +321,9 @@ def imdb_api():
 
         if action == "stream":
             media_type = "tv" if info.get("type") == "series" else "movie"
-            raw_url    = mod.get_fast_stream(imdb_id, media_type)
+            season = request.args.get("s") or request.args.get("season") or "1"
+            episode = request.args.get("e") or request.args.get("episode") or "1"
+            raw_url = mod.get_fast_stream(imdb_id, media_type, season, episode)
             if raw_url:
                 scheme = request.headers.get('X-Forwarded-Proto', 'https')
                 host = request.host

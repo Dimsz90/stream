@@ -68,15 +68,21 @@ def get_movie_info(imdb_id: str) -> dict:
     return info
 
 
-def get_fast_stream(imdb_id: str, media_type: str = "movie"):
+def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episode=None):
     cache_key = f"stream:{imdb_id}:{media_type}"
+    params = {"imdb": imdb_id, "type": media_type}
+    if media_type == "tv" and season and episode:
+        cache_key += f":s{season}:e{episode}"
+        params["season"] = season
+        params["episode"] = episode
+
     cached = imdb_cache.get(cache_key)
     if cached:
         return cached
 
-    api_url = f"https://streamdata.vaplayer.ru/api.php?imdb={imdb_id}&type={media_type}"
+    api_url = "https://streamdata.vaplayer.ru/api.php"
     try:
-        r = requests.get(api_url, headers=VIDEO_SPOOF_HEADERS, timeout=5)
+        r = requests.get(api_url, params=params, headers=VIDEO_SPOOF_HEADERS, timeout=5)
         if r.status_code == 200:
             data = r.json()
             streams = data.get("data", {}).get("stream_urls", [])
@@ -177,7 +183,9 @@ def do_GET(self):
 
             if action == "stream":
                 m_type  = "tv" if info.get("type") == "series" else "movie"
-                raw_url = get_fast_stream(imdb_id, m_type)
+                season = params.get("s", params.get("season", ["1"]))[0]
+                episode = params.get("e", params.get("episode", ["1"]))[0]
+                raw_url = get_fast_stream(imdb_id, m_type, season, episode)
                 if raw_url:
                     host = self.headers.get("Host", "")
                     protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
