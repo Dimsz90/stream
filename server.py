@@ -398,12 +398,20 @@ def proxy():
         attempts = []
         last_resp = None
         last_playlist_text = None
+        stream_proxy = os.environ.get("STREAM_PROXY_URL", "").strip()
+        proxy_cfg = {"http": stream_proxy, "https": stream_proxy} if stream_proxy else None
 
         session = req.Session()
         for name, headers in _header_variants(url):
-            resp = session.get(url, headers=headers, stream=True, timeout=15 if name == "dev" else 20)
+            resp = session.get(
+                url,
+                headers=headers,
+                proxies=proxy_cfg,
+                stream=True,
+                timeout=15 if name == "dev" else 20,
+            )
             last_resp = resp
-            attempts.append({"client": "requests", "headers": name, "status": resp.status_code})
+            attempts.append({"client": "requests", "headers": name, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
             if not is_playlist:
                 if resp.ok:
                     return resp, attempts, None
@@ -421,11 +429,12 @@ def proxy():
                     url,
                     headers=VIDEO_SPOOF_HEADERS,
                     impersonate=browser,
+                    proxies=proxy_cfg,
                     stream=True,
                     timeout=20,
                 )
                 last_resp = resp
-                attempts.append({"client": "curl_cffi", "headers": "dev", "impersonate": browser, "status": resp.status_code})
+                attempts.append({"client": "curl_cffi", "headers": "dev", "impersonate": browser, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
                 if not is_playlist:
                     if resp.ok:
                         return resp, attempts, None

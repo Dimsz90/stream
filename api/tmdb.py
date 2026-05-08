@@ -85,7 +85,7 @@ def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
         streams = data.get("data", {}).get("stream_urls", [])
         if ok and streams:
             url = streams[0].replace("\\/", "/")
-            tmdb_cache.set(cache_key, url, ttl=1800)
+            tmdb_cache.set(cache_key, url, ttl=30)
             return url
     except Exception:
         return None

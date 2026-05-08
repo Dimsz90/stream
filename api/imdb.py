@@ -69,7 +69,6 @@ def get_movie_info(imdb_id: str) -> dict:
 
 
 def get_fast_stream(imdb_id: str, media_type: str = "movie"):
-    # Cek cache
     cache_key = f"stream:{imdb_id}:{media_type}"
     cached = imdb_cache.get(cache_key)
     if cached:
@@ -83,7 +82,7 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie"):
             streams = data.get("data", {}).get("stream_urls", [])
             if streams:
                 url = streams[0].replace("\\/", "/")
-                imdb_cache.set(cache_key, url, ttl=1800)  # cache 30 menit
+                imdb_cache.set(cache_key, url, ttl=30)
                 return url
     except Exception:
         pass
