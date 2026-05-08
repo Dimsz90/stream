@@ -337,6 +337,7 @@ def imdb_api():
 @app.route("/api/proxy")
 def proxy():
     import requests as req
+    from urllib.parse import urlparse
     try:
         from lib.config import VIDEO_SPOOF_HEADERS
     except ImportError:
@@ -347,29 +348,24 @@ def proxy():
         return "Missing url param", 400
 
     try:
-        resp = req.get(target_url, headers=VIDEO_SPOOF_HEADERS, stream=True, timeout=15)
+        parsed_target = urlparse(target_url)
+        origin = f"{parsed_target.scheme}://{parsed_target.netloc}"
+        headers = {
+            **VIDEO_SPOOF_HEADERS,
+            "Referer": f"{origin}/",
+            "Origin": origin,
+            "Accept": "application/vnd.apple.mpegurl,application/x-mpegURL,video/mp2t,video/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        resp = req.get(target_url, headers=headers, stream=True, timeout=20)
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
-
-        # If the remote returns an HTML page that looks like a Cloudflare block
-        # or an explicit 403/503, attempt the Playwright browser-based fallback
-        try:
-            body_sample = resp.text[:2000].lower()
-        except Exception:
-            body_sample = ""
-
-        if resp.status_code in (403, 503) or ("cloudflare" in body_sample and ("blocked" in body_sample or "attention required" in body_sample)):
-            try:
-                return proxy_browser()
-            except Exception:
-                # If fallback fails, continue and return the original response
-                pass
 
         if "mpegurl" in content_type.lower() or target_url.endswith(".m3u8"):
             content = resp.text
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
-                return f"/api/proxy?url={quote(abs_link)}"
+                return f"/api/proxy?url={quote(abs_link, safe='')}"
 
             new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
             return Response(
@@ -378,12 +374,14 @@ def proxy():
                 headers={
                     "Content-Type":                content_type,
                     "Access-Control-Allow-Origin": "*",
+                    "Cache-Control":               "no-store",
                 },
             )
 
         def generate():
             for chunk in resp.iter_content(chunk_size=65536):
-                yield chunk
+                if chunk:
+                    yield chunk
 
         return Response(
             generate(),
@@ -391,6 +389,7 @@ def proxy():
             headers={
                 "Content-Type":                content_type,
                 "Access-Control-Allow-Origin": "*",
+                "Cache-Control":               "no-store",
             },
         )
 
@@ -459,7 +458,9 @@ def proxy_browser():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        msg = str(e)
+        status = 501 if "Executable doesn't exist" in msg or "playwright install" in msg else 500
+        return jsonify({"error": msg}), status
 
 PLATFORM_REFERERS = {
     "reelshort":       "https://reelshort.com/",
