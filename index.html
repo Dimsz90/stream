@@ -1415,7 +1415,7 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 ═══════════════════════════════════════ */
 const IMDB_API   = "https://imdb.iamidiotareyoutoo.com";
 const STREAM_API_REMOTE = "https://vid-downloader-production-c8b5.up.railway.app";
-const STREAM_PROXY_FALLBACK = "https://stream-i0u9.onrender.com";
+const STREAM_PROXY_FALLBACK = STREAM_API_REMOTE;
 const STREAM_API = (location.protocol.startsWith("http") && (
   location.hostname === "localhost" ||
   location.hostname === "127.0.0.1" ||
