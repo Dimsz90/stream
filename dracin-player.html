@@ -389,10 +389,8 @@ episodes.forEach((ep,i)=>{const btn=document.createElement('button');btn.classNa
 // Gunakan field 'episode' yang sudah dinormalisasi oleh API
 const epNum = ep.episode || ep.chapterIndex+1 || (i+1);
 btn.textContent = epNum;
-// API normalisasi: isPay selalu ada (0 = gratis, 1 = berbayar)
-const locked = ep.isPay === 1;
-if(locked)btn.classList.add('locked');
-btn.onclick=()=>{if(!locked)playEp(i)};grid.appendChild(btn)})}
+// Semua episode dibuat bisa diklik; resolver video akan menangani jika upstream menolak.
+btn.onclick=()=>playEp(i);grid.appendChild(btn)})}
 // Fetch all episodes from OUR API
 async function init(){
     if(!bookId) return;

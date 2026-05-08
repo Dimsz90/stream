@@ -984,7 +984,7 @@ html,body{max-width:100%;overflow-x:hidden}
   width:100%;
   min-width:0;
 }
-#dracin-section .dr-hscroll .dr-card{
+  #dracin-section .dr-hscroll .dr-card{
   width:110px;
   flex:0 0 110px;
 }
@@ -1023,10 +1023,91 @@ html,body{max-width:100%;overflow-x:hidden}
     line-height:1.25;
   }
   #dracin-section .dr-card-info{padding:7px 7px 8px}
-  #dracin-section .dr-hscroll .dr-card{
+#dracin-section .dr-hscroll .dr-card{
     width:96px;
     flex-basis:96px;
   }
+}
+
+/* Premium app refresh */
+:root{
+  --bg:#08090b;
+  --surface:#101216;
+  --surface2:#171a20;
+  --border:#242832;
+  --border2:#303642;
+  --border3:#454d5c;
+  --text:#f5f7fa;
+  --text2:#a6afbb;
+  --text3:#707a87;
+  --accent:#e11d48;
+  --accent2:#fb7185;
+  --accent-dim:rgba(225,29,72,.14);
+  --green:#14b8a6;
+  --plyr-color-main:#e11d48;
+}
+body{background:radial-gradient(circle at 18% -10%,rgba(20,184,166,.12),transparent 28%),var(--bg)}
+nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255,255,.08)}
+.logo{font-family:var(--body);font-weight:700;font-size:18px;letter-spacing:.3px}
+.logo span{color:var(--accent2)}
+.ntab{height:38px;border-radius:7px;font-family:var(--body);font-weight:700;font-size:12px;letter-spacing:.2px}
+.ntab.active{color:#fff;background:var(--accent);border-color:var(--accent);box-shadow:0 10px 28px rgba(225,29,72,.24)}
+.search-area{padding:16px 20px 10px}
+.search-row,.dr-search-row{border-radius:8px;background:#101216;border-color:#242832}
+.grid-wrap,#dracin-section{padding:18px 20px 24px}
+.movie-grid,.dr-grid{gap:16px;grid-template-columns:repeat(auto-fill,minmax(138px,1fr))}
+.reco-row,.dr-hscroll,.cw-row{gap:14px}
+.reco-card,.movie-card,.dr-card,.cw-card{background:#111419;border:1px solid rgba(255,255,255,.08);border-radius:8px;box-shadow:none}
+.reco-card:hover,.movie-card:hover,.dr-card:hover,.cw-card:hover{border-color:rgba(225,29,72,.72);box-shadow:0 16px 40px rgba(0,0,0,.35);transform:translateY(-4px)}
+.card-poster,.reco-card .card-poster,.dr-card-poster{background:#171a20}
+.reco-title,.dr-section-title,.cw-title{font-family:var(--body);font-size:16px;font-weight:800;letter-spacing:.2px}
+.reco-badge,.dr-section-badge,.cw-badge{font-family:var(--body);border-radius:999px;color:#fecdd3;background:rgba(225,29,72,.12);border-color:rgba(225,29,72,.22)}
+.filter-wrap,.dr-plat-bar{background:rgba(8,9,11,.76)}
+.chip,.dr-ptab{border-radius:999px;font-family:var(--body);font-weight:700}
+.chip.active,.dr-ptab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.detail-sheet,.season-sheet,.dracin-detail-sheet{background:#101216;border:1px solid rgba(255,255,255,.09)}
+
+.cw-section{display:none;margin-bottom:22px}
+.cw-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cw-title{display:flex;align-items:center;gap:8px}
+.cw-row{display:flex;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.cw-row::-webkit-scrollbar{height:4px}
+.cw-row::-webkit-scrollbar-thumb{background:var(--border2);border-radius:999px}
+.cw-card{width:220px;min-width:220px;display:grid;grid-template-columns:66px 1fr;gap:10px;padding:9px;cursor:pointer}
+.cw-poster{width:66px;aspect-ratio:2/3;border-radius:6px;overflow:hidden;background:#191d24}
+.cw-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.cw-name{font-size:13px;font-weight:800;line-height:1.25;margin-bottom:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cw-meta{font-size:11px;color:var(--text2);margin-bottom:10px}
+.cw-progress{height:4px;border-radius:999px;background:#262b35;overflow:hidden}
+.cw-progress span{display:block;height:100%;width:var(--pct,8%);background:linear-gradient(90deg,var(--accent),var(--green))}
+.cw-action{margin-top:9px;font-size:10px;font-weight:800;color:#fda4af}
+
+#dracinDetailPanel{position:fixed;inset:0;z-index:145;display:none}
+.dracin-detail-bg{position:absolute;inset:0;background:rgba(0,0,0,.76);backdrop-filter:blur(6px)}
+.dracin-detail-sheet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 24px));max-height:88vh;overflow:auto;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.dracin-detail-inner{display:grid;grid-template-columns:170px 1fr;gap:18px;padding:18px}
+.dracin-detail-poster{aspect-ratio:2/3;border-radius:8px;background:#191d24;overflow:hidden}
+.dracin-detail-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.dracin-detail-title{font-size:24px;font-weight:900;line-height:1.1;margin:4px 34px 8px 0}
+.dracin-detail-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.dracin-pill{font-size:10px;font-weight:800;color:#fecdd3;background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.24);border-radius:999px;padding:4px 8px}
+.dracin-detail-desc{font-size:13px;color:var(--text2);line-height:1.65;margin-bottom:14px;max-height:112px;overflow:auto}
+.dracin-episode-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:7px;margin:8px 0 14px}
+.dracin-episode-preview button{height:34px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-weight:800;cursor:pointer}
+.dracin-episode-preview button:hover{border-color:var(--accent);color:#fff;background:var(--accent)}
+.dracin-detail-actions{display:flex;gap:10px}
+.dracin-primary,.dracin-secondary{height:42px;border-radius:8px;border:1px solid var(--border2);font-weight:900;cursor:pointer;padding:0 16px}
+.dracin-primary{background:var(--accent);border-color:var(--accent);color:#fff;flex:1}
+.dracin-secondary{background:transparent;color:var(--text2)}
+.dracin-detail-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer}
+@media(max-width:640px){
+  .grid-wrap,#dracin-section{padding:12px}
+  .movie-grid,.dr-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .cw-card{width:190px;min-width:190px}
+  .dracin-detail-sheet{inset:auto 0 0 0;left:0;top:auto;transform:none;width:100%;border-radius:14px 14px 0 0}
+  .dracin-detail-inner{grid-template-columns:96px 1fr;gap:12px;padding:16px}
+  .dracin-detail-title{font-size:18px}
+  .dracin-detail-actions{flex-direction:column}
 }
 </style>
 </head>
@@ -1110,6 +1191,14 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="spinner"></div><span id="dracinStatusTxt">Memuat...</span>
   </div>
 
+  <div class="cw-section" id="dracinContinueSection" style="padding:0 1.2rem">
+    <div class="cw-head">
+      <span class="cw-title">Lanjut Nonton</span>
+      <span class="cw-badge" id="dracinContinueBadge"></span>
+    </div>
+    <div class="cw-row" id="dracinContinueRow"></div>
+  </div>
+
   <!-- Trending / Rank -->
   <div id="dracinRankWrap" style="padding:0 1.2rem">
     <div class="dr-section-head">
@@ -1139,6 +1228,14 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <!-- ── GRID ── -->
 <div class="grid-wrap" id="gridWrap">
+  <div class="cw-section" id="filmContinueSection">
+    <div class="cw-head">
+      <span class="cw-title">Lanjut Nonton</span>
+      <span class="cw-badge" id="filmContinueBadge"></span>
+    </div>
+    <div class="cw-row" id="filmContinueRow"></div>
+  </div>
+
   <!-- Recommendation area -->
   <div id="recoArea">
     <div class="reco-section" id="recoTrending"></div>
@@ -1212,6 +1309,27 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <!-- ── PLAYER ── -->
 <!-- Season / Episode Picker -->
+<div id="dracinDetailPanel">
+  <div class="dracin-detail-bg" onclick="closeDracinDetail()"></div>
+  <div class="dracin-detail-sheet">
+    <button class="dracin-detail-close" onclick="closeDracinDetail()">x</button>
+    <div class="dracin-detail-inner">
+      <div class="dracin-detail-poster"><img id="drdPoster" src="" alt=""></div>
+      <div>
+        <div class="dracin-detail-title" id="drdTitle">Drama</div>
+        <div class="dracin-detail-meta" id="drdMeta"></div>
+        <div class="dracin-detail-desc" id="drdDesc"></div>
+        <div class="sub-label">Episode</div>
+        <div class="dracin-episode-preview" id="drdEpisodes"></div>
+        <div class="dracin-detail-actions">
+          <button class="dracin-primary" onclick="playSelectedDracin()">TONTON SEKARANG</button>
+          <button class="dracin-secondary" onclick="closeDracinDetail()">TUTUP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="seasonModal">
   <div class="season-bg" onclick="closeSeasonModal()"></div>
   <div class="season-sheet">
@@ -1351,6 +1469,34 @@ const LANGS = [
 let _subCues = [], _subTimer = null;
 let seasonModalItem = null;
 let currentPlayback = {mediaType:"movie", tmdbId:null, season:1, episode:1, totalEpisodes:null, title:""};
+
+function saveFilmContinueProgress(videoEl) {
+  try {
+    if (!selectedItem || !videoEl || !isFinite(videoEl.duration) || videoEl.duration < 20) return;
+    const pct = Math.max(0, Math.min(0.98, videoEl.currentTime / videoEl.duration));
+    if (pct < .03) return;
+    const id = `film_${currentPlayback.mediaType}_${selectedItem["#IMDB_ID"] || selectedItem._tmdb_id || currentPlayback.title}`;
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    const existing = all.findIndex(x => x.id === id);
+    const epTitle = currentPlayback.mediaType === 'tv'
+      ? `S${currentPlayback.season}E${currentPlayback.episode}`
+      : 'Film';
+    const entry = {
+      id,
+      mediaType: currentPlayback.mediaType === 'tv' ? 'tv' : 'movie',
+      title: currentPlayback.title || selectedItem["#TITLE"] || 'Film',
+      poster: selectedItem["#IMG_POSTER"] || '',
+      href: '#',
+      epTitle,
+      pct,
+      item: selectedItem,
+    };
+    if (existing >= 0) all[existing] = entry; else all.unshift(entry);
+    if (all.length > 24) all.length = 24;
+    localStorage.setItem('cw_progress', JSON.stringify(all));
+    if (typeof renderContinueWatching === 'function') renderContinueWatching();
+  } catch {}
+}
 
 /* ═══════════════════════════════════════
    NAV TABS
@@ -2071,7 +2217,9 @@ function playHls(streamUrl) {
 
   if (hlsInst)  { hlsInst.destroy();  hlsInst  = null; }
   if (plyrInst) { plyrInst.destroy(); plyrInst = null; }
+  v.ontimeupdate = () => saveFilmContinueProgress(v);
   v.onended = () => {
+    saveFilmContinueProgress(v);
     if (currentPlayback.mediaType === "tv") changeEpisode(1);
   };
 
@@ -2534,6 +2682,7 @@ let _mainTab = 'film';
 
 function switchMainTab(tab) {
   _mainTab = tab;
+  renderContinueWatching();
 
   document.querySelectorAll('.ntab').forEach(t => t.classList.remove('active'));
   document.getElementById(tab === 'film' ? 'ntFilm' : 'ntDracin').classList.add('active');
@@ -2594,6 +2743,10 @@ function dracinMakeCard(book, rank = 0, forScroll = false) {
   const sourcePlatform = book.platform || DR.platform;
   const href = `/dracin-player.html?id=${encodeURIComponent(book.bookId)}&platform=${encodeURIComponent(sourcePlatform)}&cover=${encodeURIComponent(book.cover||'')}`;
   a.href = href;
+  a.onclick = e => {
+    e.preventDefault();
+    openDracinDetail({...book, platform: sourcePlatform, href});
+  };
 
   let views = '';
   if (book.playCount) {
@@ -2620,6 +2773,132 @@ function dracinMakeCard(book, rank = 0, forScroll = false) {
     </div>
   `;
   return a;
+}
+
+function getContinueItems() {
+  try {
+    const rows = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    return Array.isArray(rows) ? rows.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function continueHref(item) {
+  if (item.mediaType === 'dracin') {
+    return `/dracin-player.html?id=${encodeURIComponent(item.bookId || '')}&platform=${encodeURIComponent(item.platform || 'dramabox')}&ep=${encodeURIComponent(item.epIdx || 0)}&cover=${encodeURIComponent(item.poster || '')}`;
+  }
+  return item.href || '#';
+}
+
+function renderContinueList(sectionId, rowId, badgeId, items) {
+  const section = document.getElementById(sectionId);
+  const row = document.getElementById(rowId);
+  const badge = document.getElementById(badgeId);
+  if (!section || !row || !badge) return;
+  if (!items.length) {
+    section.style.display = 'none';
+    row.innerHTML = '';
+    badge.textContent = '';
+    return;
+  }
+  section.style.display = 'block';
+  badge.textContent = `${items.length} item`;
+  row.innerHTML = items.slice(0, 12).map(item => {
+    const pct = Math.max(6, Math.min(100, Math.round((item.pct || 0) * 100 || 8)));
+    const meta = item.mediaType === 'dracin'
+      ? `${(item.platform || 'dracin').toUpperCase()} · Ep ${item.epNum || (item.epIdx + 1) || 1}`
+      : (item.epTitle || item.mediaType || 'Film');
+    const action = item.mediaType === 'dracin'
+      ? `location.href='${esc(continueHref(item))}'`
+      : `openDetail(JSON.parse(this.dataset.item))`;
+    const dataItem = esc(JSON.stringify(item.item || {
+      "#TITLE": item.title || 'Untitled',
+      "#IMG_POSTER": item.poster || '',
+      "#TYPE": item.mediaType === 'tv' ? 'tvseries' : 'movie'
+    }));
+    return `
+      <div class="cw-card" onclick="${action}" data-item="${dataItem}">
+        <div class="cw-poster">
+          ${item.poster ? `<img src="${esc(item.poster)}" alt="${esc(item.title || '')}" loading="lazy" onerror="this.style.display='none'">` : ''}
+        </div>
+        <div>
+          <div class="cw-name">${esc(item.title || 'Untitled')}</div>
+          <div class="cw-meta">${esc(meta)}</div>
+          <div class="cw-progress" style="--pct:${pct}%"><span></span></div>
+          <div class="cw-action">LANJUTKAN</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderContinueWatching() {
+  const items = getContinueItems();
+  renderContinueList(
+    'dracinContinueSection',
+    'dracinContinueRow',
+    'dracinContinueBadge',
+    items.filter(item => item.mediaType === 'dracin')
+  );
+  renderContinueList(
+    'filmContinueSection',
+    'filmContinueRow',
+    'filmContinueBadge',
+    items.filter(item => item.mediaType !== 'dracin')
+  );
+}
+
+let selectedDracinBook = null;
+let selectedDracinEpisodes = [];
+
+function dracinPlayerHref(book, epIdx = 0) {
+  return `/dracin-player.html?id=${encodeURIComponent(book.bookId || '')}&platform=${encodeURIComponent(book.platform || DR.platform || 'dramabox')}&ep=${encodeURIComponent(epIdx)}&cover=${encodeURIComponent(book.cover || '')}`;
+}
+
+async function openDracinDetail(book) {
+  selectedDracinBook = book;
+  selectedDracinEpisodes = [];
+  document.getElementById('drdTitle').textContent = book.bookName || 'Drama';
+  document.getElementById('drdPoster').src = book.cover || '';
+  document.getElementById('drdDesc').textContent = book.introduction || 'Sinopsis belum tersedia.';
+  const tags = book.tags || book.tagNames || [];
+  document.getElementById('drdMeta').innerHTML = [
+    book.platform || DR.platform,
+    book.chapterCount ? `${book.chapterCount} Ep` : '',
+    book.playCount || '',
+    ...tags.slice(0, 4)
+  ].filter(Boolean).map(x => `<span class="dracin-pill">${esc(String(x))}</span>`).join('');
+  document.getElementById('drdEpisodes').innerHTML = `<div class="episode-empty">Memuat episode...</div>`;
+  document.getElementById('dracinDetailPanel').style.display = 'block';
+
+  try {
+    const payload = await dracinFetchPayload(`/api/dracin/episodes?id=${encodeURIComponent(book.bookId)}&platform=${encodeURIComponent(book.platform || DR.platform)}&lang=in`, { ttl: 120000 });
+    selectedDracinEpisodes = payload?.episodes || [];
+    renderDracinEpisodePreview();
+  } catch {
+    document.getElementById('drdEpisodes').innerHTML = `<div class="episode-empty">Episode belum bisa dimuat.</div>`;
+  }
+}
+
+function renderDracinEpisodePreview() {
+  const eps = selectedDracinEpisodes.slice(0, 24);
+  if (!eps.length) {
+    document.getElementById('drdEpisodes').innerHTML = `<button onclick="playSelectedDracin()">1</button>`;
+    return;
+  }
+  document.getElementById('drdEpisodes').innerHTML = eps.map((ep, i) => {
+    const n = ep.episode || ep.chapterIndex + 1 || i + 1;
+    return `<button onclick="playSelectedDracin(${i})">${esc(n)}</button>`;
+  }).join('');
+}
+
+function closeDracinDetail() {
+  document.getElementById('dracinDetailPanel').style.display = 'none';
+}
+
+function playSelectedDracin(epIdx = 0) {
+  if (!selectedDracinBook) return;
+  location.href = dracinPlayerHref(selectedDracinBook, epIdx);
 }
 
 function dracinSkeletons(container, n = 8, isRow = false) {
@@ -2832,6 +3111,7 @@ async function dracinLoadBrowse(reset = true) {
     }
   }
 }
+renderContinueWatching();
 </script>
 <script>
 /* ── PWA ── */
