@@ -186,11 +186,12 @@ def tmdb_stream():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/api/dracin", defaults={"subpath": ""})
 @app.route("/api/dracin/<path:subpath>")
 def dracin_api(subpath):
     try:
         # Protect Dramanova platform: require token if configured
-        platform = request.args.get('platform', 'dramabox')
+        platform = request.args.get('platform', 'all')
         # Allow auth endpoint through
         if DRAMANOVA_PIN and platform == 'dramanova':
             # accept token via header or query param

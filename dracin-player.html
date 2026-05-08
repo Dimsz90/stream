@@ -136,7 +136,7 @@ const platform=P.get('platform')||'dramabox';
 const startEp=parseInt(P.get('ep'))||0;
 const coverUrl=P.get('cover')||'';
 
-let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null;
+let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,spinnerTimer=null;
 const vid=document.getElementById('vid'),spinner=document.getElementById('spinner'),centerPlay=document.getElementById('centerPlay');
 const progBar=document.getElementById('progBar'),bufBar=document.getElementById('bufBar'),progThumb=document.getElementById('progThumb');
 const timeDisp=document.getElementById('timeDisp'),playBtn=document.getElementById('playBtn'),playIcon=document.getElementById('playIcon');
@@ -156,14 +156,21 @@ document.getElementById('playerWrap').addEventListener('click',e=>{if(e.target.c
 document.addEventListener('touchstart',showUI,{passive:true});
 
 // Play/pause
-function togglePlay(){if(vid.paused){vid.play().catch(()=>{});centerPlay.classList.remove('show')}else{vid.pause();centerPlay.classList.add('show')}}
+function hideSpinner(){clearTimeout(spinnerTimer);spinner.classList.remove('show')}
+function showSpinner(){clearTimeout(spinnerTimer);spinner.classList.add('show');spinnerTimer=setTimeout(()=>{if(vid.readyState>=2||vid.currentTime>0)hideSpinner()},3500)}
+function playSafely(){
+  const p=vid.play();
+  if(p&&typeof p.catch==='function'){
+    p.catch(()=>{hideSpinner();centerPlay.classList.add('show')});
+  }
+}
+function togglePlay(){if(vid.paused){playSafely();centerPlay.classList.remove('show')}else{vid.pause();centerPlay.classList.add('show')}}
 playBtn.onclick=togglePlay;
-centerPlay.onclick=()=>{vid.play().catch(()=>{});centerPlay.classList.remove('show')};
+centerPlay.onclick=()=>{playSafely();centerPlay.classList.remove('show')};
 vid.onplay=()=>{playIcon.innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';centerPlay.classList.remove('show');showUI()};
 vid.onpause=()=>{playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';centerPlay.classList.add('show')};
 
 // Progress
-vid.ontimeupdate=()=>{if(!vid.duration)return;const p=vid.currentTime/vid.duration*100;progBar.style.width=p+'%';progThumb.style.left=p+'%';timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);checkAutoNext()};
 vid.onprogress=()=>{if(vid.buffered.length>0){const b=vid.buffered.end(vid.buffered.length-1)/vid.duration*100;bufBar.style.width=b+'%'}};
 
 // Seek
@@ -185,9 +192,14 @@ document.getElementById('muteBtn').onclick=()=>{vid.muted=!vid.muted;volSlider.v
 document.getElementById('fsBtn').onclick=()=>{const w=document.getElementById('playerWrap');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen().catch(()=>{})};
 
 // Loading state
-vid.onwaiting=()=>spinner.classList.add('show');
-vid.oncanplay=()=>spinner.classList.remove('show');
-vid.onplaying=()=>spinner.classList.remove('show');
+vid.onwaiting=()=>showSpinner();
+vid.onstalled=()=>showSpinner();
+vid.onloadedmetadata=()=>hideSpinner();
+vid.onloadeddata=()=>hideSpinner();
+vid.oncanplay=()=>hideSpinner();
+vid.onplaying=()=>hideSpinner();
+vid.ontimeupdate=()=>{hideSpinner();if(!vid.duration)return;const p=vid.currentTime/vid.duration*100;progBar.style.width=p+'%';progThumb.style.left=p+'%';timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);checkAutoNext()};
+vid.onerror=()=>{hideSpinner();centerPlay.classList.add('show');console.error('[VIDEO] error',vid.error)};
 
 // Keyboard
 document.onkeydown=e=>{if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
@@ -257,6 +269,26 @@ async function getVideoUrl(ep){
             }
             return '';
         }
+        if(platform === 'shortwave'){
+            const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=shortwave&lang=in');
+            const j = await r.json();
+            const link = j.link || (j.data && j.data.url) || '';
+            if(j.status === 'success' && link){
+                ep.url = link;
+                return link;
+            }
+            return '';
+        }
+        if(platform === 'reelshort'){
+            const r = await fetch('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=reelshort&lang=in');
+            const j = await r.json();
+            const link = j.link || (j.data && j.data.url) || '';
+            if(j.status === 'success' && link){
+                ep.url = link;
+                return link;
+            }
+            return '';
+        }
         const r = await fetch('/api/get-video?id=' + encodeURIComponent(epVid));
         const j = await r.json();
         if(j.status === 'success' && j.link){
@@ -274,38 +306,40 @@ function destroyHLS(){if(hls){hls.destroy();hls=null}}
 async function playEp(idx){
 curIdx=idx;updateNav();destroyHLS();
 clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
-spinner.classList.add('show');centerPlay.classList.remove('show');
+showSpinner();centerPlay.classList.remove('show');
 try{
 let url=preloadedUrl&&idx===curIdx?preloadedUrl:await getVideoUrl(episodes[idx]);
 preloadedUrl=null;
 if(url.includes('.m3u8')){
   loadHlsChain(url);
 }
-else if(url){vid.src=url;vid.play().catch(()=>{})}
+else if(url){vid.src=url;playSafely()}
 setTimeout(()=>preloadNext(),2000);
 saveCW(idx);
-}catch(e){console.error(e);spinner.classList.remove('show')}}
+}catch(e){console.error(e);hideSpinner()}}
 
 // HLS with multi-fallback chain: direct -> Render proxy (if needed)
 function loadHlsChain(rawUrl, index = 0) {
   // Untuk Dracin, biasanya link langsung bisa diputar. 
   // Jika perlu proxy, tambahkan logic di sini.
   if(hls) hls.destroy();
+  showSpinner();
 
   if(Hls.isSupported()){
     hls = new Hls({maxBufferLength:30,maxMaxBufferLength:60,startLevel:-1,capLevelToPlayerSize:true});
     hls.loadSource(rawUrl);
     hls.attachMedia(vid);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>{vid.play().catch(()=>{});spinner.classList.remove('show')});
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{playSafely()});
+    hls.on(Hls.Events.FRAG_BUFFERED,()=>hideSpinner());
     hls.on(Hls.Events.ERROR,(_,d)=>{
       if(d.fatal) {
-        spinner.classList.remove('show');
+        hideSpinner();
         console.error("[HLS] Fatal Error", d);
       }
     });
   } else {
     vid.src = rawUrl;
-    vid.play().catch(()=>{});
+    playSafely();
   }
 }
 
@@ -369,7 +403,7 @@ async function init(){
             // API sudah menormalisasi: d.episodes, d.bookName, d.cover
             episodes=d.episodes||[];
             document.getElementById('titleEl').textContent=d.bookName||'Drama';
-            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+({'dramabox':'DramaBox','reelshort':'ReelShort','melolo':'Melolo','dramanova':'Dramanova'}[platform]||platform);
+            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+({'dramabox':'DramaBox','reelshort':'ReelShort','melolo':'Melolo','dramanova':'Dramanova','shortwave':'ShortWave'}[platform]||platform);
             // Update tab title
             document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
             renderEps();

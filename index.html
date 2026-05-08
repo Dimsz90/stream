@@ -946,6 +946,88 @@ nav{
   .reco-card{width:128px}
   .dr-card{width:104px}
 }
+
+/* Dracin mobile layout guard */
+html,body{max-width:100%;overflow-x:hidden}
+#dracin-section{
+  width:100%;
+  max-width:100vw;
+  overflow-x:hidden;
+}
+#dracin-section .dr-plat-bar{
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  white-space:nowrap;
+  padding-inline:12px;
+  max-width:100vw;
+}
+#dracin-section .dr-plat-bar::-webkit-scrollbar{display:none}
+#dracin-section .dr-ptab{white-space:nowrap}
+#dracinRankWrap,
+#dracin-section > div[style*="padding:0 1.2rem"]{
+  padding-left:12px!important;
+  padding-right:12px!important;
+}
+#dracin-section .dr-search-row{
+  width:auto;
+  max-width:calc(100vw - 24px);
+  margin:12px;
+}
+#dracin-section .dr-grid{
+  grid-template-columns:repeat(auto-fill,minmax(98px,1fr));
+  gap:10px;
+  width:100%;
+}
+#dracin-section .dr-grid .dr-card{
+  width:100%;
+  min-width:0;
+}
+#dracin-section .dr-hscroll .dr-card{
+  width:110px;
+  flex:0 0 110px;
+}
+@media(max-width:480px){
+  #dracin-section .dr-plat-bar{gap:6px;padding-inline:10px}
+  #dracin-section .dr-ptab{
+    min-height:30px;
+    padding:6px 10px;
+    font-size:10px;
+  }
+  #dracin-section .dr-search-row{
+    margin:10px;
+    max-width:calc(100vw - 20px);
+  }
+  #dracin-section .dr-search-input{
+    padding:9px 10px;
+    font-size:11px;
+  }
+  #dracin-section .dr-search-btn{
+    width:54px;
+    padding:0;
+    font-size:12px;
+    letter-spacing:.6px;
+  }
+  #dracinRankWrap,
+  #dracin-section > div[style*="padding:0 1.2rem"]{
+    padding-left:10px!important;
+    padding-right:10px!important;
+  }
+  #dracin-section .dr-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+  }
+  #dracin-section .dr-card-name{
+    font-size:10px;
+    line-height:1.25;
+  }
+  #dracin-section .dr-card-info{padding:7px 7px 8px}
+  #dracin-section .dr-hscroll .dr-card{
+    width:96px;
+    flex-basis:96px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1009,9 +1091,11 @@ nav{
 
   <!-- Platform Tabs -->
   <div class="dr-plat-bar">
-    <button class="dr-ptab active" data-platform="dramabox" onclick="dracinSwitchPlatform(this)">DramaBox</button>
+    <button class="dr-ptab active" data-platform="all" onclick="dracinSwitchPlatform(this)">Semua</button>
+    <button class="dr-ptab"        data-platform="dramabox" onclick="dracinSwitchPlatform(this)">DramaBox</button>
     <button class="dr-ptab"        data-platform="reelshort" onclick="dracinSwitchPlatform(this)">ReelShort</button>
     <button class="dr-ptab"        data-platform="melolo"    onclick="dracinSwitchPlatform(this)">Melolo</button>
+    <button class="dr-ptab"        data-platform="shortwave" onclick="dracinSwitchPlatform(this)">ShortWave</button>
     <button class="dr-ptab"        data-platform="dramanova" onclick="dracinSwitchPlatform(this)">Dramanova</button>
   </div>
 
@@ -2478,7 +2562,7 @@ function switchMainTab(tab) {
 
 /* DRACIN STATE */
 const DR = {
-  platform: 'dramabox',
+  platform: 'all',
   browseMode: 'home',
   searchQuery: '',
   page: 1,
@@ -2502,7 +2586,8 @@ function dracinMakeCard(book, rank = 0, forScroll = false) {
   a.className = 'dr-card';
   if (forScroll) a.style.width = '110px';
 
-  const href = `/dracin-player.html?id=${encodeURIComponent(book.bookId)}&platform=${encodeURIComponent(DR.platform)}&cover=${encodeURIComponent(book.cover||'')}`;
+  const sourcePlatform = book.platform || DR.platform;
+  const href = `/dracin-player.html?id=${encodeURIComponent(book.bookId)}&platform=${encodeURIComponent(sourcePlatform)}&cover=${encodeURIComponent(book.cover||'')}`;
   a.href = href;
 
   let views = '';

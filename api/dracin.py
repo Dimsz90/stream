@@ -59,6 +59,14 @@ DRACIN_TOKEN = "b426511825c6dac73f4d897eb0bf7471036c75f4d8314329540d5850bd70deaa
 # Konfigurasi per-platform
 # Setiap platform mendefinisikan prefix dan field mapping-nya sendiri
 PLATFORMS = {
+    "all": {
+        "label": "Semua",
+        "icon":  "",
+        "_engine": "aggregate",
+        "ttl_home":  600,
+        "ttl_rank":  1800,
+        "ttl_search":120,
+    },
     "dramabox": {
         "prefix":   "/dramaboxv4",
         "label":    "DramaBox",
@@ -95,30 +103,15 @@ PLATFORMS = {
         "ttl_ep":    300,
     },
     "reelshort": {
-        "prefix":   "/reelshortv2",
         "label":    "ReelShort",
         "icon":     "🎬",
-        "book_id":      "bookId",
-        "book_name":    "bookName",
-        "cover":        "coverImage",
-        "introduction": "introduction",
-        "tags":         "tags",
-        "play_count":   "playCount",
-        "chapter_count":"chapterCount",
-        "ep_list":      "episodes",
-        "ep_num":       "chapterIndex",
-        "ep_url":       "videoUrl",
-        "ep_pay":       "isCharge",
-        "ep_title":     "title",
-        "ch_list":      "list",
-        "ch_id":        "chapterId",
-        "ch_index":     "chapterIndex",
-        "ch_pay":       "isCharge",
+        "_engine": "reelshort",
         "ttl_home":  600,
         "ttl_rank":  3600,
         "ttl_search":120,
         "ttl_detail":300,
         "ttl_ep":    300,
+        "ttl_video": 120,
     },
     # ── Melolo — pakai Captain API v1 (endpoint berbeda) ──────────────────────
     # Tidak pakai prefix/dracin-style fetch, ditangani oleh _melolo_fetch()
@@ -142,7 +135,20 @@ PLATFORMS = {
         "ttl_ep":    300,
         "ttl_video": 300,
     },
+    "shortwave": {
+        "label": "ShortWave",
+        "icon":  "",
+        "_engine": "shortwave",
+        "ttl_home":  600,
+        "ttl_rank":  1800,
+        "ttl_search":120,
+        "ttl_detail":300,
+        "ttl_ep":    300,
+        "ttl_video": 120,
+    },
 }
+
+AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave")
 
 # ── Melolo / Captain v1 config ────────────────────────────────────────────────
 CAPTAIN_BASE  = os.environ.get("CAPTAIN_BASE_URL", "https://captain.sapimu.au").rstrip("/")
@@ -442,7 +448,250 @@ def _dramanova_norm_episode(raw: dict, idx: int) -> dict:
         "_raw":        raw,
     }
 
-_cache = TTLCache(default_ttl=300, max_size=200)
+
+def _reelshort_fetch(path: str, params: dict | None = None, ttl: int = 300):
+    """Fetch Captain ReelShort endpoints."""
+    return _melolo_fetch("reelshort", path, params=params, ttl=ttl)
+
+
+def _reelshort_norm_book(raw: dict) -> dict:
+    return {
+        "bookId":       str(raw.get("book_id") or raw.get("bookId") or raw.get("id") or ""),
+        "bookName":     raw.get("book_title") or raw.get("bookName") or raw.get("title") or "Untitled",
+        "cover":        raw.get("book_pic") or raw.get("cover") or raw.get("coverImage") or "",
+        "introduction": raw.get("special_desc") or raw.get("description") or raw.get("introduction") or "",
+        "tags":         raw.get("tags") if isinstance(raw.get("tags"), list) else [],
+        "playCount":    raw.get("read_count") or raw.get("collect_count") or raw.get("playCount") or 0,
+        "chapterCount": raw.get("chapter_count") or raw.get("chapterCount") or 0,
+        "collectCount": raw.get("collect_count") or 0,
+        "isDubbed":     raw.get("is_dub") == 1,
+        "firstChapterId": raw.get("first_chapter_id") or "",
+        "_raw":         raw,
+    }
+
+
+def _reelshort_extract_books(raw: dict) -> list:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+
+    books = []
+    for section in data.get("lists") or []:
+        if isinstance(section, dict):
+            books.extend(section.get("books") or [])
+    if books:
+        return books
+
+    for key in ("books", "list", "rows", "records", "items", "dramas"):
+        val = data.get(key)
+        if isinstance(val, list) and val:
+            return val
+    return []
+
+
+def _reelshort_extract_rank_books(raw: dict) -> list:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+
+    place_list = data.get("place_list") or data.get("placeList") or data.get("rankings") or []
+    books = []
+    for place in place_list:
+        if isinstance(place, dict):
+            books.extend(place.get("list") or place.get("books") or [])
+    if books:
+        return books
+    return _reelshort_extract_books(raw)
+
+
+def _reelshort_norm_episode(raw: dict, idx: int) -> dict:
+    ep_num = raw.get("serial_number") or raw.get("episode") or idx + 1
+    chapter_id = raw.get("chapter_id") or raw.get("chapterId") or raw.get("id") or ""
+    return {
+        "episode":     ep_num,
+        "chapterIndex":idx,
+        "chapterId":   str(chapter_id),
+        "vid":         str(chapter_id),
+        "url":         raw.get("url") or raw.get("videoUrl") or "",
+        "isPay":       int(raw.get("is_lock") or raw.get("isLock") or raw.get("isCharge") or 0),
+        "title":       raw.get("chapter_name") or raw.get("chapterName") or f"Episode {ep_num}",
+        "duration":    raw.get("duration") or 0,
+        "_raw":        raw,
+    }
+
+
+def _reelshort_pick_video_url(raw: dict) -> str:
+    videos = raw.get("videos") or []
+    if not isinstance(videos, list) or not videos:
+        return ""
+
+    def score(v):
+        try:
+            dpi = int(v.get("Dpi") or v.get("dpi") or 0)
+        except Exception:
+            dpi = 0
+        encode = str(v.get("Encode") or v.get("encode") or "").upper()
+        compat = 2 if encode in ("H264", "AVC", "AVC1") else 1 if encode == "H265" else 0
+        return (compat, dpi)
+
+    best = sorted(videos, key=score, reverse=True)[0]
+    return best.get("PlayURL") or best.get("playUrl") or best.get("url") or ""
+
+
+def get_reelshort_video(book_id: str, chapter_id: str, lang="in") -> dict | None:
+    if not book_id or not chapter_id:
+        return None
+    raw = _reelshort_fetch(
+        f"/api/v1/book/{book_id}/chapter/{chapter_id}/video",
+        {"lang": lang},
+        ttl=PLATFORMS["reelshort"]["ttl_video"],
+    )
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return None
+    direct_url = _reelshort_pick_video_url(data)
+    return {
+        "vid":       chapter_id,
+        "chapterId": chapter_id,
+        "url":       direct_url,
+        "directUrl": direct_url,
+        "locked":    data.get("locked", False),
+        "videos":    data.get("videos") or [],
+        "_raw":      data,
+    }
+
+
+def _shortwave_fetch(path: str, params: dict | None = None, ttl: int = 300):
+    """Fetch Captain ShortWave endpoints."""
+    return _melolo_fetch("shortwave", path, params=params, ttl=ttl)
+
+
+def _shortwave_norm_book(raw: dict) -> dict:
+    tags = raw.get("tags") or raw.get("categoryNames") or raw.get("categories") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    return {
+        "bookId":       str(raw.get("drama_id") or raw.get("dramaId") or raw.get("id") or ""),
+        "bookName":     raw.get("drama_title") or raw.get("title") or raw.get("name") or "Untitled",
+        "cover":        raw.get("drama_cover") or raw.get("cover") or raw.get("poster") or "",
+        "introduction": raw.get("description") or raw.get("drama_description") or "",
+        "tags":         [str(t) for t in tags] if isinstance(tags, list) else [],
+        "playCount":    raw.get("fav_count") or raw.get("viewCount") or raw.get("views") or 0,
+        "chapterCount": raw.get("total_episodes") or raw.get("episode_count") or raw.get("chapterCount") or 0,
+        "playUrl":      raw.get("play_url") or "",
+        "_raw":         raw,
+    }
+
+
+def _shortwave_extract_top_list(raw: dict) -> list:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    return (
+        data.get("list")
+        or data.get("rows")
+        or data.get("dramas")
+        or data.get("records")
+        or data.get("items")
+        or []
+    )
+
+
+def _shortwave_extract_rank_books(raw: dict) -> list:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return []
+    place_list = data.get("place_list") or data.get("placeList") or []
+    books = []
+    for place in place_list:
+        if isinstance(place, dict):
+            books.extend(place.get("list") or [])
+    return books
+
+
+def _shortwave_book_key(raw: dict) -> str:
+    return str(
+        raw.get("drama_id")
+        or raw.get("dramaId")
+        or raw.get("book_id")
+        or raw.get("bookId")
+        or raw.get("id")
+        or raw.get("book_title")
+        or raw.get("title")
+        or raw.get("drama_title")
+        or ""
+    )
+
+
+def _shortwave_merge_books(*groups: list) -> list:
+    merged = []
+    seen = set()
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        for item in group:
+            if not isinstance(item, dict):
+                continue
+            key = _shortwave_book_key(item)
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            merged.append(item)
+    return merged
+
+
+def _shortwave_norm_episode(raw: dict, idx: int) -> dict:
+    ep_num = raw.get("episode") or raw.get("chapter_index") or raw.get("chapterIndex") or idx + 1
+    chapter_id = raw.get("chapter_id") or raw.get("chapterId") or raw.get("id") or ""
+    return {
+        "episode":     ep_num,
+        "chapterIndex":idx,
+        "chapterId":   str(chapter_id),
+        "vid":         str(chapter_id),
+        "url":         raw.get("stream_url") or raw.get("url") or "",
+        "isPay":       0 if raw.get("is_free", True) else 1,
+        "title":       raw.get("chapter_name") or raw.get("chapterName") or f"Episode {ep_num}",
+        "cover":       raw.get("cover") or "",
+        "duration":    raw.get("chapter_duration") or raw.get("duration") or 0,
+        "subtitles":   raw.get("subtitles") or [],
+        "nextChapterId": raw.get("next_chapter_id"),
+        "prevChapterId": raw.get("prev_chapter_id"),
+        "_raw":        raw,
+    }
+
+
+def get_shortwave_video(drama_id: str, chapter_id: str, lang="in") -> dict | None:
+    if not drama_id or not chapter_id:
+        return None
+    raw = _shortwave_fetch(
+        f"/api/stream/{drama_id}/{chapter_id}",
+        {"lang": lang},
+        ttl=PLATFORMS["shortwave"]["ttl_video"],
+    )
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return None
+    direct_url = data.get("stream_url") or ""
+    return {
+        "vid":       chapter_id,
+        "chapterId": chapter_id,
+        "url":       direct_url,
+        "directUrl": direct_url,
+        "duration":  data.get("chapter_duration") or 0,
+        "subtitles": data.get("subtitles") or [],
+        "nextChapterId": data.get("next_chapter_id"),
+        "prevChapterId": data.get("prev_chapter_id"),
+        "_raw":      data,
+    }
+
+_cache = TTLCache(default_ttl=300, max_size=1000)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -556,6 +805,53 @@ def _norm_episode(cfg: dict, ep: dict, idx: int) -> dict:
     }
 
 
+def _book_source_key(book: dict) -> str:
+    return f"{book.get('platform', '')}:{book.get('bookId') or book.get('bookName') or ''}"
+
+
+def _stamp_books(books: list, platform: str) -> list:
+    stamped = []
+    for book in books or []:
+        if not isinstance(book, dict):
+            continue
+        b = book.copy()
+        b.setdefault("platform", platform)
+        stamped.append(b)
+    return stamped
+
+
+def _merge_books(*groups: list) -> list:
+    merged = []
+    seen = set()
+    for group in groups:
+        for book in group or []:
+            if not isinstance(book, dict):
+                continue
+            key = _book_source_key(book)
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            merged.append(book)
+    return merged
+
+
+def _interleave_books(*groups: list) -> list:
+    normalized = [group or [] for group in groups]
+    max_len = max((len(group) for group in normalized), default=0)
+    woven = []
+    for idx in range(max_len):
+        for group in normalized:
+            if idx < len(group):
+                woven.append(group[idx])
+    return _merge_books(woven)
+
+
+def _aggregate_cache_get(kind: str, params: dict):
+    cache_key = f"aggregate:{kind}:{json.dumps(params, sort_keys=True)}"
+    return cache_key, _cache.get(cache_key)
+
+
 # ── API Public Functions ─────────────────────────────────────────────────────
 
 def get_platforms() -> list:
@@ -579,6 +875,35 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
         return None
 
     # ── Engine: melolo (Captain v1) ───────────────────────────────────────────
+    if cfg.get("_engine") == "aggregate":
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+        cache_key, cached = _aggregate_cache_get("home", {"page": page, "size": size, "lang": lang})
+        if cached is not None:
+            return cached
+
+        groups = []
+        for source in AGGREGATE_PLATFORMS:
+            data = get_home(source, page=page, size=size, lang=lang)
+            if data:
+                groups.append(_stamp_books(data.get("books", []), source))
+        books = _interleave_books(*groups)
+        result = {
+            "platform":   platform,
+            "page":       page,
+            "sections":   [],
+            "books":      books,
+            "hasMore":    any(len(group) >= size for group in groups),
+            "bannerList": [],
+            "total":      len(books),
+        }
+        _cache.set(cache_key, result, ttl=cfg["ttl_home"])
+        return result
+
     if cfg.get("_engine") == "melolo":
         raw = _melolo_fetch(platform, "/api/v1/bookmall",
                             {"lang": lang}, ttl=cfg["ttl_home"])
@@ -625,6 +950,94 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             "sections":   [],
             "books":      [_dramanova_norm_book(b) for b in rows],
             "hasMore":    page * size < total,
+            "bannerList": [],
+            "total":      total,
+        }
+
+    if cfg.get("_engine") == "reelshort":
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+
+        foryou_raw = _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"])
+        more_raw = _reelshort_fetch(
+            "/api/v1/more",
+            {"lang": lang, "page": page, "page_size": size},
+            ttl=cfg["ttl_home"],
+        )
+        all_raw = _reelshort_fetch(
+            "/api/all",
+            {"lang": lang, "page": page, "page_size": size},
+            ttl=cfg["ttl_rank"],
+        )
+        top_raw = _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
+        rank_raw = _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+
+        items = _shortwave_merge_books(
+            _reelshort_extract_rank_books(rank_raw or {}),
+            _reelshort_extract_books(top_raw or {}),
+            _reelshort_extract_books(foryou_raw or {}),
+            _reelshort_extract_books(all_raw or {}),
+            _reelshort_extract_books(more_raw or {}),
+        )
+        total = len(items)
+        start = (page - 1) * size
+        end = start + size
+        books = items[start:end]
+        more_items = _reelshort_extract_books(more_raw or {})
+        if not books and more_items:
+            books = more_items
+        return {
+            "platform":   platform,
+            "page":       page,
+            "sections":   [],
+            "books":      [_reelshort_norm_book(b) for b in books],
+            "hasMore":    end < total or len(more_items) >= size,
+            "bannerList": [],
+            "total":      total,
+        }
+
+    if cfg.get("_engine") == "shortwave":
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+
+        more_raw = _shortwave_fetch(
+            "/api/more",
+            {"lang": lang, "page": page, "page_size": size},
+            ttl=cfg["ttl_home"],
+        )
+        all_raw = _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
+        top_raw = _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
+        rank_raw = _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        rank_items = _shortwave_extract_rank_books(rank_raw or {})
+        if not rank_items:
+            rank_raw = _shortwave_fetch("/api/ranking", {"lang": lang}, ttl=cfg["ttl_rank"])
+            rank_items = _shortwave_extract_rank_books(rank_raw or {})
+
+        all_items = _shortwave_extract_top_list(all_raw or {})
+        top_items = _shortwave_extract_top_list(top_raw or {})
+        more_items = _shortwave_extract_top_list(more_raw or {})
+
+        items = _shortwave_merge_books(rank_items, top_items, all_items, more_items)
+        total = len(items)
+        start = (page - 1) * size
+        end = start + size
+        books = items[start:end]
+        if not books and more_items:
+            books = _shortwave_merge_books(more_items)
+        return {
+            "platform":   platform,
+            "page":       page,
+            "sections":   [],
+            "books":      [_shortwave_norm_book(b) for b in books],
+            "hasMore":    end < total or len(more_items) >= size,
             "bannerList": [],
             "total":      total,
         }
@@ -676,6 +1089,30 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
         return None
 
     # ── Engine: melolo ────────────────────────────────────────────────────────
+    if cfg.get("_engine") == "aggregate":
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        cache_key, cached = _aggregate_cache_get("rank", {"rank_type": rank_type, "lang": lang, "size": size})
+        if cached is not None:
+            return cached
+
+        groups = []
+        for source in AGGREGATE_PLATFORMS:
+            data = get_rank(source, rank_type=rank_type, lang=lang, size=size)
+            if data:
+                groups.append(_stamp_books(data.get("books", []), source))
+        books = _interleave_books(*groups)[:size]
+        result = {
+            "platform":  platform,
+            "rankType":  rank_type,
+            "rankTypes": [],
+            "books":     books,
+        }
+        _cache.set(cache_key, result, ttl=cfg["ttl_rank"])
+        return result
+
     if cfg.get("_engine") == "melolo":
         raw = _melolo_fetch(platform, "/api/v1/bookmall",
                             {"lang": lang}, ttl=cfg["ttl_rank"])
@@ -713,6 +1150,52 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
             "books":     [_dramanova_norm_book(b) for b in items],
         }
 
+    if cfg.get("_engine") == "reelshort":
+        rank_raw = _reelshort_fetch("/api/v1/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        top_raw = _reelshort_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
+        foryou_raw = _reelshort_fetch("/api/v1/foryou", {"lang": lang}, ttl=cfg["ttl_rank"])
+        all_raw = _reelshort_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
+        items = _shortwave_merge_books(
+            _reelshort_extract_rank_books(rank_raw or {}),
+            _reelshort_extract_books(top_raw or {}),
+            _reelshort_extract_books(foryou_raw or {}),
+            _reelshort_extract_books(all_raw or {}),
+        )
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        return {
+            "platform":  platform,
+            "rankType":  rank_type,
+            "rankTypes": [],
+            "books":     [_reelshort_norm_book(b) for b in items[:size]],
+        }
+
+    if cfg.get("_engine") == "shortwave":
+        rank_raw = _shortwave_fetch("/api/rankings", {"lang": lang}, ttl=cfg["ttl_rank"])
+        rank_items = _shortwave_extract_rank_books(rank_raw or {})
+        if not rank_items:
+            rank_raw = _shortwave_fetch("/api/ranking", {"lang": lang}, ttl=cfg["ttl_rank"])
+            rank_items = _shortwave_extract_rank_books(rank_raw or {})
+        top_raw = _shortwave_fetch("/api/top", {"lang": lang}, ttl=cfg["ttl_rank"])
+        all_raw = _shortwave_fetch("/api/all", {"lang": lang}, ttl=cfg["ttl_rank"])
+        items = _shortwave_merge_books(
+            rank_items,
+            _shortwave_extract_top_list(top_raw or {}),
+            _shortwave_extract_top_list(all_raw or {}),
+        )
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        return {
+            "platform":  platform,
+            "rankType":  rank_type,
+            "rankTypes": [],
+            "books":     [_shortwave_norm_book(b) for b in items[:size]],
+        }
+
     # ── Engine: dracin ────────────────────────────────────────────────────────
     raw = _fetch(platform, "/api/rank",
                  {"lang": lang},
@@ -743,6 +1226,32 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
         return None
 
     # ── Engine: melolo ────────────────────────────────────────────────────────
+    if cfg.get("_engine") == "aggregate":
+        try:
+            page = int(page or 1)
+        except Exception:
+            page = 1
+        cache_key, cached = _aggregate_cache_get("search", {"keyword": keyword, "page": page, "lang": lang})
+        if cached is not None:
+            return cached
+
+        groups = []
+        for source in AGGREGATE_PLATFORMS:
+            data = search_drama(keyword, platform=source, page=page, lang=lang)
+            if data:
+                groups.append(_stamp_books(data.get("books", []), source))
+        books = _interleave_books(*groups)
+        result = {
+            "platform": platform,
+            "keyword":  keyword,
+            "page":     page,
+            "books":    books,
+            "hasMore":  any(len(group) >= 20 for group in groups),
+            "total":    len(books),
+        }
+        _cache.set(cache_key, result, ttl=cfg["ttl_search"])
+        return result
+
     if cfg.get("_engine") == "melolo":
         offset = (page - 1) * 20
         raw = _melolo_fetch(platform, "/api/v1/search",
@@ -776,6 +1285,40 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
             "books":    [_dramanova_norm_book(b) for b in rows],
             "hasMore":  False,
             "total":    raw.get("total", len(rows)),
+        }
+
+    if cfg.get("_engine") == "reelshort":
+        raw = _reelshort_fetch(
+            f"/api/v1/search/{quote(keyword, safe='')}",
+            {"lang": lang},
+            ttl=cfg["ttl_search"],
+        )
+        rows = _reelshort_extract_books(raw or {})
+        return {
+            "platform": platform,
+            "keyword":  keyword,
+            "page":     page,
+            "books":    [_reelshort_norm_book(b) for b in rows],
+            "hasMore":  False,
+            "total":    len(rows),
+        }
+
+    if cfg.get("_engine") == "shortwave":
+        raw = _shortwave_fetch(
+            f"/api/search/{quote(keyword, safe='')}",
+            {"lang": lang},
+            ttl=cfg["ttl_search"],
+        )
+        rows = raw.get("data") if isinstance(raw, dict) else []
+        if not isinstance(rows, list):
+            rows = []
+        return {
+            "platform": platform,
+            "keyword":  keyword,
+            "page":     page,
+            "books":    [_shortwave_norm_book(b) for b in rows],
+            "hasMore":  False,
+            "total":    len(rows),
         }
 
     # ── Engine: dracin ────────────────────────────────────────────────────────
@@ -830,6 +1373,52 @@ def get_detail(drama_id: str, platform="dramabox", lang="en") -> dict | None:
             "freeCount":     len([c for c in chapters if c["isPay"] == 0]),
             "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
             "totalChapters": len(chapters),
+            "performers":    [],
+            "rating":        {"show": False, "score": "", "count": ""},
+            "recommends":    [],
+            "downLoadQuality": [],
+        }
+
+    if cfg.get("_engine") == "reelshort":
+        book_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"])
+        chapters_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"])
+        bdata = book_raw.get("data") if isinstance(book_raw, dict) else {}
+        chapter_data = chapters_raw.get("data") if isinstance(chapters_raw, dict) else {}
+        if not isinstance(bdata, dict):
+            return None
+        raw_eps = chapter_data.get("chapters") if isinstance(chapter_data, dict) else []
+        chapters = [_reelshort_norm_episode(ep, i) for i, ep in enumerate(raw_eps or [])]
+        return {
+            "bookId":        drama_id,
+            "platform":      platform,
+            "bookStatus":    1,
+            "corner":        None,
+            "chapters":      chapters,
+            "freeCount":     len([c for c in chapters if c["isPay"] == 0]),
+            "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
+            "totalChapters": bdata.get("chapter_count") or len(chapters),
+            "performers":    [],
+            "rating":        {"show": False, "score": "", "count": ""},
+            "recommends":    [],
+            "downLoadQuality": [],
+        }
+
+    if cfg.get("_engine") == "shortwave":
+        raw = _shortwave_fetch(f"/api/drama/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"])
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if not isinstance(data, dict):
+            return None
+        raw_eps = data.get("episodes") or []
+        chapters = [_shortwave_norm_episode(ep, i) for i, ep in enumerate(raw_eps)]
+        return {
+            "bookId":        drama_id,
+            "platform":      platform,
+            "bookStatus":    1,
+            "corner":        None,
+            "chapters":      chapters,
+            "freeCount":     len([c for c in chapters if c["isPay"] == 0]),
+            "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
+            "totalChapters": data.get("total_episodes") or len(chapters),
             "performers":    [],
             "rating":        {"show": False, "score": "", "count": ""},
             "recommends":    [],
@@ -991,6 +1580,53 @@ def get_episodes(drama_id: str, platform="dramabox", lang="in") -> dict | None:
             "freeCount":     len(free_eps),
         }
 
+    if cfg.get("_engine") == "reelshort":
+        book_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}", {"lang": lang}, ttl=cfg["ttl_detail"])
+        chapters_raw = _reelshort_fetch(f"/api/v1/book/{drama_id}/chapters", {"lang": lang}, ttl=cfg["ttl_ep"])
+        bdata = book_raw.get("data") if isinstance(book_raw, dict) else {}
+        chapter_data = chapters_raw.get("data") if isinstance(chapters_raw, dict) else {}
+        if not isinstance(bdata, dict):
+            return None
+
+        raw_eps = chapter_data.get("chapters") if isinstance(chapter_data, dict) else []
+        episodes = [_reelshort_norm_episode(ep, i) for i, ep in enumerate(raw_eps or [])]
+        free_eps = [e for e in episodes if e["isPay"] == 0]
+        return {
+            "bookId":        drama_id,
+            "bookName":      bdata.get("book_title") or "Drama",
+            "cover":         bdata.get("book_pic") or "",
+            "description":   bdata.get("special_desc") or "",
+            "totalEpisodes": bdata.get("chapter_count") or len(episodes),
+            "quality":       720,
+            "platform":      platform,
+            "episodes":      episodes,
+            "freeCount":     len(free_eps),
+        }
+
+    if cfg.get("_engine") == "shortwave":
+        raw = _shortwave_fetch(f"/api/drama/{drama_id}", {"lang": lang}, ttl=cfg["ttl_ep"])
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if not isinstance(data, dict):
+            return None
+
+        raw_eps = data.get("episodes") or []
+        episodes = []
+        for i, ep in enumerate(raw_eps):
+            episodes.append(_shortwave_norm_episode(ep, i))
+
+        free_eps = [e for e in episodes if e["isPay"] == 0]
+        return {
+            "bookId":        drama_id,
+            "bookName":      data.get("drama_title") or data.get("title") or "Drama",
+            "cover":         data.get("drama_cover") or data.get("cover") or "",
+            "description":   data.get("drama_description") or data.get("description") or "",
+            "totalEpisodes": data.get("total_episodes") or len(episodes),
+            "quality":       720,
+            "platform":      platform,
+            "episodes":      episodes,
+            "freeCount":     len(free_eps),
+        }
+
     # ── Engine: dracin ────────────────────────────────────────────────────────
     raw = _fetch(platform, f"/api/drama/{drama_id}/episodes",
                  {"lang": lang},
@@ -1027,6 +1663,12 @@ def get_languages(platform="dramabox") -> list | None:
     if not cfg:
         return None
 
+    if cfg.get("_engine") == "aggregate":
+        return [
+            {"code": "in", "label": "Indonesia", "flag": "ID"},
+            {"code": "en", "label": "English", "flag": "EN"},
+        ]
+
     if cfg.get("_engine") == "melolo":
         raw = _melolo_fetch(platform, "/api/v1/languages", ttl=86400)
         if not raw:
@@ -1036,6 +1678,20 @@ def get_languages(platform="dramabox") -> list | None:
     if cfg.get("_engine") == "dramanova":
         raw = _dramanova_fetch("/api/v1/languages", ttl=86400)
         return raw if isinstance(raw, list) else None
+
+    if cfg.get("_engine") == "reelshort":
+        raw = _reelshort_fetch("/api/set-lang/in", ttl=86400)
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if isinstance(data, dict):
+            return data.get("languages") or []
+        return None
+
+    if cfg.get("_engine") == "shortwave":
+        raw = _shortwave_fetch("/api/set-lang/in", ttl=86400)
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if isinstance(data, dict):
+            return data.get("languages") or []
+        return None
 
     raw = _fetch(platform, "/api/languages", ttl=86400)  # cache 24 jam
     if not raw or raw.get("code", -1) != 0:
@@ -1058,7 +1714,7 @@ def build_response(path: str, params: dict) -> tuple[dict, int]:
         v = params.get(key, [default])
         return (v[0] if v else default) or default
 
-    platform = p("platform", "dramabox")
+    platform = p("platform", "all")
     lang     = p("lang",     "in")
 
     # Protect dramanova when configured: require dramanova_token query param
@@ -1132,6 +1788,18 @@ def build_response(path: str, params: dict) -> tuple[dict, int]:
             return {"status": "error", "message": "Parameter 'id' wajib diisi"}, 400
         if platform == "dramanova":
             data = get_dramanova_video(file_id)
+            if data and data.get("url"):
+                return {"status": "success", "data": data, "link": data["url"]}, 200
+            return {"status": "error", "message": "Video tidak ditemukan"}, 404
+        if platform == "reelshort":
+            book_id = p("bookId", p("book_id", ""))
+            data = get_reelshort_video(book_id, file_id, lang=lang)
+            if data and data.get("url"):
+                return {"status": "success", "data": data, "link": data["url"]}, 200
+            return {"status": "error", "message": "Video tidak ditemukan"}, 404
+        if platform == "shortwave":
+            drama_id = p("bookId", p("drama_id", ""))
+            data = get_shortwave_video(drama_id, file_id, lang=lang)
             if data and data.get("url"):
                 return {"status": "success", "data": data, "link": data["url"]}, 200
             return {"status": "error", "message": "Video tidak ditemukan"}, 404
