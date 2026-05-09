@@ -57,7 +57,8 @@ except ImportError:
     }
 
 # ── Konfigurasi ──────────────────────────────────────────────────────────────
-DRACIN_BASE  = "https://captain.sapimu.au"
+CAPTAIN_ROOT = os.environ.get("CAPTAIN_BASE_URL", "https://captain.sapimu.au").rstrip("/")
+DRACIN_BASE  = os.environ.get("DRACIN_BASE_URL", CAPTAIN_ROOT).rstrip("/")
 DRACIN_TOKEN = os.environ.get("DRACIN_TOKEN") or os.environ.get("CAPTAIN_TOKEN", "")
 
 # Konfigurasi per-platform
@@ -155,7 +156,7 @@ PLATFORMS = {
 AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave")
 
 # ── Melolo / Captain v1 config ────────────────────────────────────────────────
-CAPTAIN_BASE  = os.environ.get("CAPTAIN_BASE_URL", "https://captain.sapimu.au").rstrip("/")
+CAPTAIN_BASE  = CAPTAIN_ROOT
 CAPTAIN_TOKEN = os.environ.get("CAPTAIN_TOKEN", DRACIN_TOKEN)  # fallback ke token dracin
 
 def _melolo_headers() -> dict:

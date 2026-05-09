@@ -435,9 +435,6 @@ def dracin_api(subpath):
     denied = require_subscription()
     if denied:
         return denied
-    if remote_api_enabled():
-        path = f"/api/dracin/{subpath}" if subpath else "/api/dracin"
-        return remote_api_json(path)
 
     try:
         # Protect Dramanova platform: require token if configured
@@ -461,9 +458,6 @@ def dracin_api(subpath):
 
 @app.route('/api/dracin/auth', methods=['POST'])
 def dracin_auth():
-    if remote_api_enabled():
-        return remote_api_json("/api/dracin/auth")
-
     if not DRAMANOVA_PIN:
         return jsonify({"status": "error", "message": "PIN auth not configured"}), 404
     data = request.get_json(silent=True) or {}
