@@ -137,6 +137,7 @@ const bookId=P.get('id');
 const platform=P.get('platform')||'dramabox';
 const startEp=parseInt(P.get('ep'))||0;
 const coverUrl=P.get('cover')||'';
+const SUBSCRIPTION_SESSION_KEY='streamvault_subscription_token';
 
 let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,preloadedIdx=-1,spinnerTimer=null,playSeq=0;
 const videoUrlCache=new Map(),videoUrlInflight=new Map();
@@ -148,6 +149,23 @@ const rewindBtn=document.getElementById('rewindBtn'),forwardBtn=document.getElem
 const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
 const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
 const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
+
+function withSubscriptionHeaders(headers={}){
+    const subToken=localStorage.getItem(SUBSCRIPTION_SESSION_KEY)||'';
+    return subToken ? {...headers,'X-Subscription-Token':subToken} : headers;
+}
+
+async function appFetch(url, options={}){
+    options={...options,headers:withSubscriptionHeaders(options.headers||{})};
+    const res=await fetch(url,options);
+    if(res.status===401||res.status===403){
+        const body=await res.clone().json().catch(()=>({}));
+        if(body.subscription_required){
+            document.getElementById('titleEl').textContent=body.message||'Login langganan diperlukan';
+        }
+    }
+    return res;
+}
 
 // Format time
 function fmt(s){if(!s||!isFinite(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec}
@@ -258,7 +276,7 @@ async function fetchVideoLink(reqUrl, options={}){
     const cached=videoUrlCache.get(key);
     if(cached&&cached.expires>Date.now())return cached.link;
     if(videoUrlInflight.has(key))return videoUrlInflight.get(key);
-    const promise=fetch(reqUrl,options).then(r=>r.json()).then(j=>{
+    const promise=appFetch(reqUrl,options).then(r=>r.json()).then(j=>{
         const link=j.link||(j.data&&j.data.url)||'';
         if(j.status==='success'&&link)videoUrlCache.set(key,{link,expires:Date.now()+120000});
         return link;
@@ -426,7 +444,7 @@ async function init(){
         reqUrl = u.pathname + u.search + u.hash;
       }
     } catch (e) {}
-    const r=await fetch(reqUrl, { headers });
+    const r=await appFetch(reqUrl, { headers });
     const j=await r.json();
         if(j.status === 'success'){
             const d=j.data;

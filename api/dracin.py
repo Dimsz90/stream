@@ -58,7 +58,7 @@ except ImportError:
 
 # ── Konfigurasi ──────────────────────────────────────────────────────────────
 DRACIN_BASE  = "https://captain.sapimu.au"
-DRACIN_TOKEN = "b426511825c6dac73f4d897eb0bf7471036c75f4d8314329540d5850bd70deaa"
+DRACIN_TOKEN = os.environ.get("DRACIN_TOKEN") or os.environ.get("CAPTAIN_TOKEN", "")
 
 # Konfigurasi per-platform
 # Setiap platform mendefinisikan prefix dan field mapping-nya sendiri
@@ -423,7 +423,14 @@ def get_dramanova_video(file_id: str) -> dict | None:
     if not isinstance(raw, dict):
         return None
     direct_url = _dramanova_pick_video_url(raw)
-    proxied_url = f"/api/proxy?url={quote(direct_url, safe='')}" if direct_url else ""
+    if direct_url:
+        try:
+            from lib.proxy_signing import sign_proxy_url
+            proxied_url = sign_proxy_url(direct_url)
+        except Exception:
+            proxied_url = f"/api/proxy?url={quote(direct_url, safe='')}"
+    else:
+        proxied_url = ""
     return {
         "vid":       raw.get("vid") or file_id,
         "url":       proxied_url,

@@ -146,6 +146,12 @@ def do_GET(self):
             if not target_url:
                 return self.send_error(400)
             try:
+                from lib.proxy_signing import validate_proxy_signature
+                if not validate_proxy_signature(target_url, params.get("exp", [""])[0], params.get("sig", [""])[0]):
+                    return self.send_json({"status": "error", "message": "Proxy URL tidak valid atau sudah kedaluwarsa"}, 403)
+            except Exception:
+                return self.send_json({"status": "error", "message": "Proxy URL tidak valid"}, 403)
+            try:
                 parsed_target = urlparse(target_url)
                 spoof = {
                     **VIDEO_SPOOF_HEADERS,
@@ -168,7 +174,11 @@ def do_GET(self):
                     content = resp.text
                     def rewrite(m):
                         abs_link = urljoin(target_url, m.group(1))
-                        return f"/api/proxy?url={quote(abs_link)}"
+                        try:
+                            from lib.proxy_signing import sign_proxy_url
+                            return sign_proxy_url(abs_link)
+                        except Exception:
+                            return f"/api/proxy?url={quote(abs_link)}"
                     new_content = re.sub(
                         r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE
                     )
@@ -199,7 +209,11 @@ def do_GET(self):
                 if raw_url:
                     host = self.headers.get("Host", "")
                     protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
-                    info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
+                    try:
+                        from lib.proxy_signing import sign_proxy_url
+                        info["stream_url"] = sign_proxy_url(raw_url, f"{protocol}://{host}")
+                    except Exception:
+                        info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
                     info["rawStreamUrl"] = raw_url
                     info["streamResolver"] = "imdb-vaplayer"
                     info["season"] = int(season) if str(season).isdigit() else season

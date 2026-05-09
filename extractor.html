@@ -47,6 +47,18 @@ body {
   overflow-x: hidden;
 }
 
+.subauth-gate{position:fixed;inset:0;z-index:10000;background:rgba(5,5,7,.86);backdrop-filter:blur(18px);display:none;align-items:center;justify-content:center;padding:20px}
+.subauth-gate.visible{display:flex}
+.subauth-box{width:min(360px,100%);background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.subauth-title{font-family:var(--display);font-size:30px;letter-spacing:1px;margin-bottom:6px}
+.subauth-text{font-size:13px;color:var(--text2);line-height:1.45;margin-bottom:16px}
+.subauth-form{display:flex;flex-direction:column;gap:10px}
+.subauth-input{width:100%;background:rgba(255,255,255,.035);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font:13px var(--mono);padding:12px 13px;outline:none}
+.subauth-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.subauth-btn{height:42px;border:0;border-radius:var(--r-sm);background:var(--accent);color:#fff;font-family:var(--display);font-size:18px;letter-spacing:1px;cursor:pointer}
+.subauth-btn:disabled{opacity:.55;cursor:not-allowed}
+.subauth-error{display:none;color:#ff9b9b;font-size:12px;line-height:1.4;margin-top:12px}
+
 /* Grain overlay */
 body::before {
   content: '';
@@ -608,6 +620,19 @@ footer {
 </head>
 <body>
 
+<div class="subauth-gate" id="subAuthGate">
+  <div class="subauth-box">
+    <div class="subauth-title">MASUK LANGGANAN</div>
+    <div class="subauth-text">Masukkan username dan PIN. Setelah masuk, akses akan dicek otomatis selama langganan masih aktif.</div>
+    <form class="subauth-form" id="subAuthForm">
+      <input class="subauth-input" id="subAuthUsername" type="text" placeholder="Username" autocomplete="username">
+      <input class="subauth-input" id="subAuthPin" type="password" placeholder="PIN" autocomplete="current-password">
+      <button class="subauth-btn" id="subAuthSubmit" type="submit">MASUK</button>
+    </form>
+    <div class="subauth-error" id="subAuthError"></div>
+  </div>
+</div>
+
 <!-- ════════════════════════════
      HEADER
 ════════════════════════════ -->
@@ -796,6 +821,106 @@ footer {
 <script>
 /* ─── Konfigurasi ─── */
 const API = "";   // kosong = same origin (Vercel / localhost)
+let subscriptionConfigPromise = null;
+let subscriptionLoginPromise = null;
+const SUBSCRIPTION_SESSION_KEY = "streamvault_subscription_token";
+
+async function getSubscriptionConfig() {
+  if (!subscriptionConfigPromise) {
+    subscriptionConfigPromise = fetch(`${API}/api/subscription/config`)
+      .then(r => r.json())
+      .catch(() => ({ enabled: false }));
+  }
+  return subscriptionConfigPromise;
+}
+
+async function requireSubscriptionToken() {
+  const cfg = await getSubscriptionConfig();
+  if (!cfg.enabled) return "";
+
+  const savedToken = localStorage.getItem(SUBSCRIPTION_SESSION_KEY) || "";
+  if (savedToken) return savedToken;
+
+  return showSubscriptionLogin();
+}
+
+function setSubscriptionError(message) {
+  const err = document.getElementById("subAuthError");
+  if (!err) return;
+  err.textContent = message || "";
+  err.style.display = message ? "block" : "none";
+}
+
+function showSubscriptionLogin(message = "") {
+  if (subscriptionLoginPromise) return subscriptionLoginPromise;
+
+  const gate = document.getElementById("subAuthGate");
+  const form = document.getElementById("subAuthForm");
+  const usernameInput = document.getElementById("subAuthUsername");
+  const pinInput = document.getElementById("subAuthPin");
+  const submit = document.getElementById("subAuthSubmit");
+
+  if (!gate || !form || !usernameInput || !pinInput || !submit) {
+    return Promise.reject(new Error("UI login langganan tidak tersedia."));
+  }
+
+  setSubscriptionError(message);
+  pinInput.value = "";
+  gate.classList.add("visible");
+  setTimeout(() => usernameInput.focus(), 30);
+
+  subscriptionLoginPromise = new Promise((resolve, reject) => {
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const username = usernameInput.value.trim().toLowerCase();
+      const pin = pinInput.value.trim();
+      if (!username || !pin) {
+        setSubscriptionError("Username dan PIN wajib diisi.");
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = "MEMERIKSA...";
+      setSubscriptionError("");
+
+      try {
+        const token = await loginSubscription(username, pin);
+        localStorage.setItem(SUBSCRIPTION_SESSION_KEY, token);
+        gate.classList.remove("visible");
+        resolve(token);
+      } catch (err) {
+        setSubscriptionError(err.message || "Login langganan gagal.");
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "MASUK";
+      }
+    };
+  }).finally(() => {
+    subscriptionLoginPromise = null;
+  });
+
+  return subscriptionLoginPromise;
+}
+
+async function loginSubscription(username, pin) {
+  const res = await fetch(`${API}/api/subscription/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status !== "success" || !data.token) {
+    throw new Error(data.message || "Login langganan gagal.");
+  }
+  return data.token;
+}
+
+async function initSubscriptionGate() {
+  const cfg = await getSubscriptionConfig();
+  if (cfg.enabled && !localStorage.getItem(SUBSCRIPTION_SESSION_KEY)) {
+    showSubscriptionLogin();
+  }
+}
 
 /* ─── State Global ─── */
 let allVideos    = [];
@@ -825,7 +950,19 @@ const LANGS = [
 
 /* ─── API Helper ─── */
 async function apiFetch(url, opt = {}) {
-  return fetch(url, opt);
+  const reqOpt = { ...opt, headers: { ...(opt.headers || {}) } };
+  const token = await requireSubscriptionToken();
+  if (token) reqOpt.headers["X-Subscription-Token"] = token;
+
+  const res = await fetch(url, reqOpt);
+  if (res.status !== 401 && res.status !== 403) return res;
+
+  const body = await res.clone().json().catch(() => ({}));
+  if (!body.subscription_required) return res;
+  localStorage.removeItem(SUBSCRIPTION_SESSION_KEY);
+  const freshToken = await showSubscriptionLogin(body.message || "Langganan aktif diperlukan.");
+  reqOpt.headers["X-Subscription-Token"] = freshToken;
+  return fetch(url, reqOpt);
 }
 
 /* ─── SPA ─── */
@@ -1159,7 +1296,7 @@ async function modeImdb(url) {
   SUB_STATE.Imdb.imdbId = id;
 
   try {
-    const r = await fetch(`${API}/api/imdb?id=${id}&action=stream`);
+    const r = await apiFetch(`${API}/api/imdb?id=${id}&action=stream`);
     const d = await r.json();
 
     if (d.status !== "success") throw new Error(d.error || "Gagal mengambil data");
@@ -1455,6 +1592,8 @@ function dlItem(i) {
   a.href = v.url; a.download = (v.title || "video") + ".mp4"; a.target = "_blank";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
+
+initSubscriptionGate();
 </script>
 </body>
 </html>

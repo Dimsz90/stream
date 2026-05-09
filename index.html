@@ -33,6 +33,18 @@
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex;flex-direction:column}
 
+.subauth-gate{position:fixed;inset:0;z-index:10000;background:rgba(5,7,10,.86);backdrop-filter:blur(18px);display:none;align-items:center;justify-content:center;padding:20px}
+.subauth-gate.visible{display:flex}
+.subauth-box{width:min(360px,100%);background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.subauth-title{font-family:var(--display);font-size:28px;letter-spacing:1px;margin-bottom:6px}
+.subauth-text{font-size:13px;color:var(--text2);line-height:1.45;margin-bottom:16px}
+.subauth-form{display:flex;flex-direction:column;gap:10px}
+.subauth-input{width:100%;background:rgba(255,255,255,.035);border:1px solid var(--border2);border-radius:8px;color:var(--text);font:13px var(--mono);padding:12px 13px;outline:none}
+.subauth-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.subauth-btn{height:42px;border:0;border-radius:8px;background:var(--accent);color:#061012;font-family:var(--display);font-size:18px;letter-spacing:1px;cursor:pointer}
+.subauth-btn:disabled{opacity:.55;cursor:not-allowed}
+.subauth-error{display:none;color:#ff9b9b;font-size:12px;line-height:1.4;margin-top:12px}
+
 /* ── NAV ── */
 nav{
   background:rgba(11,13,16,.92);
@@ -577,6 +589,7 @@ nav{
 #subOverlay span{
   background:rgba(0,0,0,.7);padding:2px 10px;border-radius:4px;
   display:inline;box-decoration-break:clone;-webkit-box-decoration-break:clone;
+  white-space:pre-line;
 }
 
 
@@ -1113,6 +1126,19 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 </head>
 <body>
 
+<div class="subauth-gate" id="subAuthGate">
+  <div class="subauth-box">
+    <div class="subauth-title">MASUK LANGGANAN</div>
+    <div class="subauth-text">Masukkan username dan PIN. Setelah masuk, akses akan dicek otomatis selama langganan masih aktif.</div>
+    <form class="subauth-form" id="subAuthForm">
+      <input class="subauth-input" id="subAuthUsername" type="text" placeholder="Username" autocomplete="username">
+      <input class="subauth-input" id="subAuthPin" type="password" placeholder="PIN" autocomplete="current-password">
+      <button class="subauth-btn" id="subAuthSubmit" type="submit">MASUK</button>
+    </form>
+    <div class="subauth-error" id="subAuthError"></div>
+  </div>
+</div>
+
 <!-- ── NAV ── -->
 <nav>
   <div class="logo">MASDI<span>FOX</span></div>
@@ -1414,17 +1440,130 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
    CONFIG
 ═══════════════════════════════════════ */
 const IMDB_API   = "https://imdb.iamidiotareyoutoo.com";
-const STREAM_API_REMOTE = "https://vid-downloader-production-c8b5.up.railway.app";
-const STREAM_PROXY_FALLBACK = STREAM_API_REMOTE;
-const STREAM_API = (location.protocol.startsWith("http") && (
-  location.hostname === "localhost" ||
-  location.hostname === "127.0.0.1" ||
-  location.hostname.includes("railway.app") ||
-  location.hostname.includes("render.com")
-)) ? location.origin : STREAM_API_REMOTE;
+const STREAM_API = location.protocol.startsWith("http") ? location.origin : "";
+const STREAM_PROXY_FALLBACK = "";
 const TMDB_KEY   = "b354b15ec55ecfd9b1d511617d1e0688";
 const TMDB_BASE  = "https://api.themoviedb.org/3";
 const TMDB_IMG   = "https://image.tmdb.org/t/p/w300";
+
+let subscriptionConfigPromise = null;
+let subscriptionLoginPromise = null;
+const SUBSCRIPTION_SESSION_KEY = "streamvault_subscription_token";
+
+async function getSubscriptionConfig() {
+  if (!subscriptionConfigPromise) {
+    subscriptionConfigPromise = fetch(`${STREAM_API}/api/subscription/config`)
+      .then(r => r.json())
+      .catch(() => ({ enabled: false }));
+  }
+  return subscriptionConfigPromise;
+}
+
+async function requireSubscriptionToken() {
+  const cfg = await getSubscriptionConfig();
+  if (!cfg.enabled) return "";
+
+  const savedToken = localStorage.getItem(SUBSCRIPTION_SESSION_KEY) || "";
+  if (savedToken) return savedToken;
+
+  return showSubscriptionLogin();
+}
+
+function setSubscriptionError(message) {
+  const err = document.getElementById("subAuthError");
+  if (!err) return;
+  err.textContent = message || "";
+  err.style.display = message ? "block" : "none";
+}
+
+function showSubscriptionLogin(message = "") {
+  if (subscriptionLoginPromise) return subscriptionLoginPromise;
+
+  const gate = document.getElementById("subAuthGate");
+  const form = document.getElementById("subAuthForm");
+  const usernameInput = document.getElementById("subAuthUsername");
+  const pinInput = document.getElementById("subAuthPin");
+  const submit = document.getElementById("subAuthSubmit");
+
+  if (!gate || !form || !usernameInput || !pinInput || !submit) {
+    return Promise.reject(new Error("UI login langganan tidak tersedia."));
+  }
+
+  setSubscriptionError(message);
+  pinInput.value = "";
+  gate.classList.add("visible");
+  setTimeout(() => usernameInput.focus(), 30);
+
+  subscriptionLoginPromise = new Promise((resolve, reject) => {
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const username = usernameInput.value.trim().toLowerCase();
+      const pin = pinInput.value.trim();
+      if (!username || !pin) {
+        setSubscriptionError("Username dan PIN wajib diisi.");
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = "MEMERIKSA...";
+      setSubscriptionError("");
+
+      try {
+        const token = await loginSubscription(username, pin);
+        localStorage.setItem(SUBSCRIPTION_SESSION_KEY, token);
+        gate.classList.remove("visible");
+        resolve(token);
+      } catch (err) {
+        setSubscriptionError(err.message || "Login langganan gagal.");
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "MASUK";
+      }
+    };
+  }).finally(() => {
+    subscriptionLoginPromise = null;
+  });
+
+  return subscriptionLoginPromise;
+}
+
+async function loginSubscription(username, pin) {
+  const res = await fetch(`${STREAM_API}/api/subscription/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status !== "success" || !data.token) {
+    throw new Error(data.message || "Login langganan gagal.");
+  }
+  return data.token;
+}
+
+async function appFetch(url, opt = {}) {
+  const reqOpt = { ...opt, headers: { ...(opt.headers || {}) } };
+  const token = await requireSubscriptionToken();
+  const cfg = await getSubscriptionConfig();
+  if (cfg.enabled && !token) throw new Error("Login langganan diperlukan.");
+  if (token) reqOpt.headers["X-Subscription-Token"] = token;
+
+  const res = await fetch(url, reqOpt);
+  if (res.status !== 401 && res.status !== 403) return res;
+
+  const body = await res.clone().json().catch(() => ({}));
+  if (!body.subscription_required) return res;
+  localStorage.removeItem(SUBSCRIPTION_SESSION_KEY);
+  const freshToken = await showSubscriptionLogin(body.message || "Langganan aktif diperlukan.");
+  reqOpt.headers["X-Subscription-Token"] = freshToken;
+  return fetch(url, reqOpt);
+}
+
+async function initSubscriptionGate() {
+  const cfg = await getSubscriptionConfig();
+  if (cfg.enabled && !localStorage.getItem(SUBSCRIPTION_SESSION_KEY)) {
+    showSubscriptionLogin();
+  }
+}
 
 /* Items per page & max pages */
 const PAGE_SIZE = 20;      // TMDb default per page
@@ -1470,6 +1609,10 @@ const LANGS = [
 let _subCues = [], _subTimer = null;
 let seasonModalItem = null;
 let currentPlayback = {mediaType:"movie", tmdbId:null, season:1, episode:1, totalEpisodes:null, title:""};
+
+async function subtitleFetch(url, opt = {}) {
+  return appFetch(url, opt);
+}
 
 function saveFilmContinueProgress(videoEl) {
   try {
@@ -2137,7 +2280,7 @@ async function startStream() {
     `${title}${selectedItem["#YEAR"] ? " ("+selectedItem["#YEAR"]+")" : ""}`;
 
   try {
-    const res  = await fetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
+    const res  = await appFetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
     const data = await res.json();
     if (data.stream_url) {
       playHls(data.stream_url, {alternateStreamEndpoint: `${STREAM_API}/api/get-video?id=${encodeURIComponent(id)}`});
@@ -2179,7 +2322,7 @@ async function startTvEpisodeStream(season, episode) {
       ? new URLSearchParams({id: imdbId, action: "stream", s: season, e: episode})
       : new URLSearchParams({id: tmdbId, type: "tv", s: season, e: episode});
     const endpoint = imdbId ? "imdb" : "tmdb-stream";
-    const res = await fetch(`${STREAM_API}/api/${endpoint}?${q}`);
+    const res = await appFetch(`${STREAM_API}/api/${endpoint}?${q}`);
     const data = await res.json();
     if (data.totalEpisodes) currentPlayback.totalEpisodes = data.totalEpisodes;
     if (data.imdbId || data.imdb_id) SUB.imdbId = data.imdbId || data.imdb_id;
@@ -2229,28 +2372,35 @@ function getDirectStreamFallback(streamUrl) {
   }
 }
 
-function normalizeStreamUrl(url) {
+async function signProxyUrl(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return "";
+  const res = await appFetch(`${STREAM_API}/api/proxy/sign?url=${encodeURIComponent(url)}`);
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? (data.url || "") : "";
+}
+
+async function normalizeStreamUrl(url) {
   if (!url) return "";
   if (/^https?:\/\//i.test(url) && url.toLowerCase().includes(".m3u8") && !url.includes("/api/proxy?url=")) {
-    return `${STREAM_API}/api/proxy?url=${encodeURIComponent(url)}`;
+    return await signProxyUrl(url);
   }
   return url;
 }
 
-function getFallbackProxyUrl(streamUrl) {
+async function getFallbackProxyUrl(streamUrl) {
   const rawUrl = getDirectStreamFallback(streamUrl) || streamUrl;
   if (!STREAM_PROXY_FALLBACK || !rawUrl || !/^https?:\/\//i.test(rawUrl)) return "";
   if (rawUrl.includes(`${STREAM_PROXY_FALLBACK}/api/proxy?url=`)) return "";
-  return `${STREAM_PROXY_FALLBACK}/api/proxy?url=${encodeURIComponent(rawUrl)}`;
+  return await signProxyUrl(rawUrl);
 }
 
 async function tryAlternateStream(opts) {
   if (!opts.alternateStreamEndpoint || opts.alternateTried) return false;
   try {
     showPLoading("Mencoba sumber stream alternatif...");
-    const res = await fetch(opts.alternateStreamEndpoint);
+    const res = await appFetch(opts.alternateStreamEndpoint);
     const data = await res.json();
-    const altUrl = normalizeStreamUrl(data.stream_url || data.streamUrl || data.link || data.url || "");
+    const altUrl = await normalizeStreamUrl(data.stream_url || data.streamUrl || data.link || data.url || "");
     if (!res.ok || !altUrl) return false;
     playHls(altUrl, {...opts, alternateTried:true, skipDirectFallback:false});
     return true;
@@ -2296,7 +2446,7 @@ function playHls(streamUrl, opts = {}) {
 
       v.play().catch(()=>{});
     });
-    hlsInst.on(Hls.Events.ERROR, (e, d) => {
+    hlsInst.on(Hls.Events.ERROR, async (e, d) => {
       if (d.fatal) {
         if(hlsInst){hlsInst.destroy();hlsInst=null;}
         const directUrl = opts.skipDirectFallback ? "" : getDirectStreamFallback(streamUrl);
@@ -2305,7 +2455,7 @@ function playHls(streamUrl, opts = {}) {
           playHls(directUrl, {...opts, skipDirectFallback:true});
           return;
         }
-        const fallbackProxyUrl = opts.skipProxyFallback ? "" : getFallbackProxyUrl(streamUrl);
+        const fallbackProxyUrl = opts.skipProxyFallback ? "" : await getFallbackProxyUrl(streamUrl);
         if (fallbackProxyUrl) {
           showPLoading("Proxy utama diblokir, mencoba proxy cadangan...");
           playHls(fallbackProxyUrl, {...opts, skipProxyFallback:true, skipDirectFallback:false});
@@ -2584,9 +2734,9 @@ async function fetchSubtitles(lang) {
     else if (SUB.title) q = `query=${encodeURIComponent(SUB.title)}&lang=${lang}`;
     else { list.innerHTML = `<div class="sub-empty">Tidak ada ID film</div>`; return; }
 
-    const r = await fetch(`${STREAM_API}/api/subtitle/search?${q}`);
+    const r = await subtitleFetch(`${STREAM_API}/api/subtitle/search?${q}`);
     const d = await r.json();
-    if (d.status==="error") { list.innerHTML=`<div class="sub-empty">⚠ ${esc(d.error||"API error")}</div>`; return; }
+    if (!r.ok || d.status==="error") { list.innerHTML=`<div class="sub-empty">⚠ ${esc(d.error||"API error")}</div>`; return; }
 
     const items = (d.data||[]).slice(0,12);
     if (!items.length) { list.innerHTML=`<div class="sub-empty">Tidak ada subtitle ${lang.toUpperCase()}</div>`; return; }
@@ -2617,7 +2767,7 @@ async function loadSubtitle(fileId, idx) {
   if (itemEl) itemEl.classList.add("loading");
 
   try {
-    const r = await fetch(`${STREAM_API}/api/subtitle/download?file_id=${fileId}`);
+    const r = await subtitleFetch(`${STREAM_API}/api/subtitle/download?file_id=${fileId}`);
     if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.error||`HTTP ${r.status}`); }
     const srt = await r.text();
     if (!srt||srt.trim().length<10) throw new Error("File subtitle kosong");
@@ -2697,7 +2847,12 @@ function startSubOverlay() {
   _subTimer = setInterval(() => {
     const now = Date.now()/1000 - t0;
     const cue = _subCues.find(c=>now>=c.start&&now<c.end);
-    overlay.innerHTML = cue ? `<span>${cue.text.replace(/\n/g,"<br>")}</span>` : "";
+    overlay.innerHTML = "";
+    if (cue) {
+      const span = document.createElement("span");
+      span.textContent = cue.text;
+      overlay.appendChild(span);
+    }
   }, 200);
 }
 
@@ -3033,7 +3188,8 @@ async function dracinSwitchPlatform(btn) {
 }
 
 // Helper fetch that attaches dramanova token when available
-function _dramanovaFetch(url, opts = {}) {
+async function _dramanovaFetch(url, opts = {}) {
+  await requireSubscriptionToken();
   const token = sessionStorage.getItem('dramanova_token');
   opts = opts || {};
   opts.headers = opts.headers || {};
@@ -3048,11 +3204,12 @@ function _dramanovaFetch(url, opts = {}) {
       // ignore if URL parsing fails
     }
   }
-  return fetch(url, opts);
+  return appFetch(url, opts);
 }
 
 async function dracinFetchPayload(url, opts = {}) {
-  const token = sessionStorage.getItem('dramanova_token') || '';
+  const subToken = await requireSubscriptionToken();
+  const token = `${subToken}|${sessionStorage.getItem('dramanova_token') || ''}`;
   const ttl = opts.ttl || 45000;
   const key = `${token}|${url}`;
   const cached = DR.fetchCache.get(key);
@@ -3181,6 +3338,7 @@ async function dracinLoadBrowse(reset = true) {
   }
 }
 renderContinueWatching();
+initSubscriptionGate();
 </script>
 <script>
 /* ── PWA ── */

@@ -13,6 +13,19 @@ from urllib.parse import urlparse, parse_qs
 # Tambah api/ ke path agar bisa import lib.*
 sys.path.insert(0, os.path.dirname(__file__))
 
+from lib.subscription import check_subscription
+
+PROTECTED_PATHS = (
+    "/api/get-video",
+    "/api/tmdb-stream",
+    "/api/scan",
+    "/api/formats",
+    "/api/download",
+    "/api/imdb",
+    "/api/subtitle/search",
+    "/api/subtitle/download",
+)
+
 # ── Route Publik ──────────────────────────────────────────────────────────────
 
 
@@ -22,10 +35,18 @@ class handler(BaseHTTPRequestHandler):
     # ── GET ────────────────────────────────────────────────────────────────────
     def do_GET(self):
         path = urlparse(self.path).path
+        if self._subscription_denied(path):
+            return
 
         # /api/debug
         if path == "/api/debug":
             return self._dispatch_module("debug", "GET")
+
+        if path == "/api/subscription/config":
+            return self._dispatch_module("subscription", "GET")
+
+        if path == "/api/proxy/sign":
+            return self._dispatch_module("proxy_sign", "GET")
 
         # /api/imdb
         if path == "/api/imdb":
@@ -67,6 +88,8 @@ class handler(BaseHTTPRequestHandler):
     # ── POST ───────────────────────────────────────────────────────────────────
     def do_POST(self):
         path = urlparse(self.path).path
+        if self._subscription_denied(path):
+            return
 
         if path == "/api/scan":
             return self._dispatch_module("scan", "POST")
@@ -76,6 +99,9 @@ class handler(BaseHTTPRequestHandler):
 
         if path == "/api/formats":
             return self._dispatch_module("formats", "POST")
+
+        if path == "/api/subscription/login":
+            return self._dispatch_module("subscription", "POST")
 
         self._send_json({"error": "Route tidak ditemukan"}, 404)
 
@@ -119,11 +145,21 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json({"error": f"Internal error: {e}"}, 500)
 
+    def _subscription_denied(self, path: str) -> bool:
+        protected = path in PROTECTED_PATHS or path.startswith("/api/dracin/")
+        if not protected:
+            return False
+        ok, payload, status_code = check_subscription(self.headers)
+        if ok:
+            return False
+        self._send_json(payload, status_code)
+        return True
+
     # ── Utilities ─────────────────────────────────────────────────────────────
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, x-api-token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Subscription-Token, x-api-token")
 
     def _send_json(self, data, code=200):
         body = json.dumps(data, ensure_ascii=False).encode()

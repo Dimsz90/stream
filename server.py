@@ -9,6 +9,7 @@ import re
 import tempfile
 import mimetypes
 import traceback
+import secrets
 from urllib.parse import quote, urljoin, urlparse
 
 from flask import Flask, send_file, request, jsonify, Response
@@ -21,6 +22,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 app = Flask(__name__)
 CORS(app)
+
+REMOTE_PROXY_CACHE = {}
+REMOTE_PROXY_TTL = 60 * 60 * 4
 
 # DRAMANOVA protection: set via environment
 DRAMANOVA_PIN = os.environ.get("DRAMANOVA_PIN")
@@ -57,6 +61,123 @@ def load(path):
     spec.loader.exec_module(mod)
     return mod
 
+def require_subscription():
+    from lib.subscription import check_subscription
+
+    ok, payload, status_code = check_subscription(request.headers)
+    if ok:
+        return None
+    return jsonify(payload), status_code
+
+def sign_proxy_url(url, base=""):
+    from lib.proxy_signing import sign_proxy_url as _sign_proxy_url
+
+    return _sign_proxy_url(url, base=base)
+
+def require_proxy_signature(target_url):
+    from lib.proxy_signing import validate_proxy_signature
+
+    if validate_proxy_signature(target_url, request.args.get("exp", ""), request.args.get("sig", "")):
+        return None
+    return jsonify({"status": "error", "message": "Proxy URL tidak valid atau sudah kedaluwarsa"}), 403
+
+def remote_api_enabled():
+    from lib.config import STREAM_API_REMOTE, USE_STREAM_API_REMOTE
+
+    return USE_STREAM_API_REMOTE and bool(STREAM_API_REMOTE)
+
+def remote_base():
+    from lib.config import STREAM_API_REMOTE
+
+    return STREAM_API_REMOTE.rstrip("/")
+
+def cache_remote_proxy_url(url):
+    exp = int(time.time()) + REMOTE_PROXY_TTL
+    token = secrets.token_urlsafe(18)
+    REMOTE_PROXY_CACHE[token] = {"url": url, "exp": exp}
+    sig = hmac.new(DRAMANOVA_SECRET.encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"/api/remote-proxy?id={token}&exp={exp}&sig={sig}"
+
+def get_cached_remote_proxy_url(token, exp, sig):
+    try:
+        exp = int(exp)
+    except Exception:
+        return ""
+    expected = hmac.new(DRAMANOVA_SECRET.encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
+    if time.time() > exp or not hmac.compare_digest(expected, str(sig or "")):
+        return ""
+    item = REMOTE_PROXY_CACHE.get(token)
+    if not item or item.get("exp", 0) < time.time():
+        REMOTE_PROXY_CACHE.pop(token, None)
+        return ""
+    return item.get("url", "")
+
+def rewrite_remote_urls(obj):
+    base = remote_base()
+    if isinstance(obj, dict):
+        return {k: rewrite_remote_urls(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [rewrite_remote_urls(v) for v in obj]
+    if isinstance(obj, str) and obj.startswith(base):
+        return cache_remote_proxy_url(obj)
+    return obj
+
+def remote_api_json(path):
+    import requests as req
+
+    target = f"{remote_base()}{path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('utf-8')}"
+    headers = {}
+    token = request.headers.get("X-Subscription-Token")
+    if token:
+        headers["X-Subscription-Token"] = token
+    try:
+        resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), timeout=25)
+        data = resp.json()
+        return jsonify(rewrite_remote_urls(data)), resp.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Remote API gagal: {e}"}), 502
+
+def remote_api_passthrough(path):
+    import requests as req
+
+    target = f"{remote_base()}{path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('utf-8')}"
+    headers = {}
+    token = request.headers.get("X-Subscription-Token")
+    if token:
+        headers["X-Subscription-Token"] = token
+    try:
+        resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), stream=True, timeout=25)
+        def generate():
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    yield chunk
+        return Response(generate(), status=resp.status_code, headers={
+            "Content-Type": resp.headers.get("Content-Type", "application/octet-stream"),
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Remote API gagal: {e}"}), 502
+
+def is_safe_static_path(filename):
+    parts = filename.replace("\\", "/").split("/")
+    if any(part in ("", ".", "..") or part.startswith(".") for part in parts):
+        return False
+    ext = os.path.splitext(filename)[1].lower()
+    blocked_exts = {".py", ".pyc", ".pyo", ".env", ".md", ".log", ".db", ".sqlite", ".sqlite3"}
+    blocked_names = {
+        "procfile",
+        "requirements.txt",
+        "railway.json",
+        "vercel.json",
+        "vercel.json.example",
+    }
+    return ext not in blocked_exts and os.path.basename(filename).lower() not in blocked_names
+
 # ── 1. STATIC FILES & SPA ROUTING ─────────────────────────────────────────────
 
 @app.route("/")
@@ -74,8 +195,88 @@ def favicon():
 def health():
     return jsonify({"status": "ok"}), 200
 
+@app.route("/api/subscription/config")
+def subscription_config():
+    from lib.config import REQUIRE_SUBSCRIPTION
+
+    return jsonify({
+        "enabled": REQUIRE_SUBSCRIPTION,
+    }), 200
+
+@app.route("/api/subscription/login", methods=["POST"])
+def subscription_login():
+    from lib.subscription import login_subscriber
+
+    data = request.get_json(silent=True) or {}
+    body, status_code = login_subscriber(data.get("username", ""), data.get("pin", ""))
+    return jsonify(body), status_code
+
+@app.route("/api/proxy/sign")
+def proxy_sign():
+    denied = require_subscription()
+    if denied:
+        return denied
+
+    target_url = request.args.get("url", "").strip()
+    if not target_url:
+        return jsonify({"error": "Missing url param"}), 400
+    parsed = urlparse(target_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return jsonify({"error": "Invalid url param"}), 400
+
+    host = request.host
+    scheme = request.headers.get("X-Forwarded-Proto") or (
+        "http" if "localhost" in host or "127.0.0.1" in host else "https"
+    )
+    return jsonify({"status": "success", "url": sign_proxy_url(target_url, f"{scheme}://{host}")})
+
+@app.route("/api/remote-proxy")
+def remote_proxy():
+    import requests as req
+
+    target_url = get_cached_remote_proxy_url(
+        request.args.get("id", ""),
+        request.args.get("exp", ""),
+        request.args.get("sig", ""),
+    )
+    if not target_url:
+        return jsonify({"status": "error", "message": "Remote proxy URL tidak valid atau sudah kedaluwarsa"}), 403
+
+    try:
+        resp = req.get(target_url, stream=True, timeout=25)
+        content_type = resp.headers.get("Content-Type", "application/octet-stream")
+        is_playlist = "mpegurl" in content_type.lower() or target_url.lower().split("?", 1)[0].endswith(".m3u8")
+
+        if is_playlist:
+            text = resp.text
+            def rewrite(m):
+                abs_link = urljoin(target_url, m.group(1).strip())
+                return cache_remote_proxy_url(abs_link)
+            text = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, text, flags=re.MULTILINE)
+            return Response(text.encode(), status=resp.status_code, headers={
+                "Content-Type": content_type,
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "no-store",
+            })
+
+        def generate():
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    yield chunk
+
+        return Response(generate(), status=resp.status_code, headers={
+            "Content-Type": content_type,
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 502
+
 @app.route("/<path:filename>")
 def static_files(filename):
+    if not is_safe_static_path(filename):
+        return jsonify({"error": "Not Found"}), 404
+
     # 1. Cek file di root folder
     if os.path.exists(filename):
         resp = send_file(filename)
@@ -160,6 +361,12 @@ def debug():
 
 @app.route("/api/get-video")
 def get_video():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/get-video")
+
     video_id = request.args.get("id", "").strip()
     if not video_id:
         return jsonify({"status": "error", "message": "ID kosong"}), 400
@@ -177,6 +384,12 @@ def get_video():
 
 @app.route("/api/tmdb-stream")
 def tmdb_stream():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/tmdb-stream")
+
     tmdb_id = request.args.get("id", request.args.get("tmdb_id", "")).strip()
     media_type = request.args.get("type", "movie").strip()
     season = int(request.args.get("s", request.args.get("season", 1)) or 1)
@@ -195,8 +408,12 @@ def tmdb_stream():
             media_type,
             season,
             episode,
-            proxy_base=f"{scheme}://{host}",
+            proxy_base=None,
         )
+        if data.get("rawStreamUrl"):
+            data["streamUrl"] = sign_proxy_url(data["rawStreamUrl"], f"{scheme}://{host}")
+            data["stream_url"] = data["streamUrl"]
+            data["link"] = data["streamUrl"]
         return jsonify(data), 200 if data.get("success") else 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -204,6 +421,13 @@ def tmdb_stream():
 @app.route("/api/dracin", defaults={"subpath": ""})
 @app.route("/api/dracin/<path:subpath>")
 def dracin_api(subpath):
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        path = f"/api/dracin/{subpath}" if subpath else "/api/dracin"
+        return remote_api_json(path)
+
     try:
         # Protect Dramanova platform: require token if configured
         platform = request.args.get('platform', 'all')
@@ -245,6 +469,12 @@ def dracin_auth():
 
 @app.route("/api/scan", methods=["POST"])
 def scan():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/scan")
+
     data = request.get_json() or {}
     url  = data.get("url", "").strip()
     if not url:
@@ -258,6 +488,12 @@ def scan():
 
 @app.route("/api/formats", methods=["POST"])
 def formats():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/formats")
+
     data = request.get_json() or {}
     url  = data.get("url", "").strip()
     if not url:
@@ -271,6 +507,10 @@ def formats():
 
 @app.route("/api/download", methods=["POST"])
 def download():
+    denied = require_subscription()
+    if denied:
+        return denied
+
     data      = request.get_json() or {}
     url       = data.get("url", "").strip()
     format_id = data.get("format_id", "bestvideo+bestaudio/best")
@@ -315,6 +555,12 @@ def download():
 
 @app.route("/api/imdb")
 def imdb_api():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/imdb")
+
     raw_id = request.args.get("id", "").strip()
     action = request.args.get("action", "info").strip()
 
@@ -337,7 +583,7 @@ def imdb_api():
             if raw_url:
                 scheme = request.headers.get('X-Forwarded-Proto', 'https')
                 host = request.host
-                info["stream_url"] = f"{scheme}://{host}/api/proxy?url={quote(raw_url)}"
+                info["stream_url"] = sign_proxy_url(raw_url, f"{scheme}://{host}")
                 info["rawStreamUrl"] = raw_url
                 info["streamResolver"] = "imdb-vaplayer"
                 info["season"] = int(season) if str(season).isdigit() else season
@@ -361,6 +607,9 @@ def proxy():
     target_url = request.args.get("url", "").strip()
     if not target_url:
         return "Missing url param", 400
+    denied = require_proxy_signature(target_url)
+    if denied:
+        return denied
 
     def _playlist_state(resp, body=None):
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
@@ -489,7 +738,7 @@ def proxy():
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
-                return f"/api/proxy?url={quote(abs_link)}"
+                return sign_proxy_url(abs_link)
 
             new_content = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, content, flags=re.MULTILINE)
             return Response(
@@ -560,7 +809,7 @@ def proxy_browser():
 
                         def rewrite(m):
                             abs_link = urljoin(m3u8_url, m.group(1))
-                            return f"/api/proxy?url={quote(abs_link)}"
+                            return sign_proxy_url(abs_link)
 
                         new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
                         browser.close()
@@ -691,6 +940,12 @@ def img_proxy():
 
 @app.route("/api/subtitle/search")
 def subtitle_search():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_json("/api/subtitle/search")
+
     imdb_id    = request.args.get("imdb_id", "").strip() or None
     tmdb_id    = request.args.get("tmdb_id", "").strip() or None
     query      = request.args.get("query",   "").strip() or None
@@ -721,6 +976,12 @@ def subtitle_search():
 
 @app.route("/api/subtitle/download")
 def subtitle_download():
+    denied = require_subscription()
+    if denied:
+        return denied
+    if remote_api_enabled():
+        return remote_api_passthrough("/api/subtitle/download")
+
     file_id = request.args.get("file_id", "").strip()
     if not file_id:
         return jsonify({"error": "file_id wajib diisi"}), 400
@@ -752,6 +1013,10 @@ def subtitle_download():
 @app.route("/api/melolo/languages")
 @app.route("/api/captain/<platform>/languages")
 def captain_languages(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import languages
     data, code = languages(platform)
     return jsonify(data), code
@@ -760,6 +1025,10 @@ def captain_languages(platform="melolo"):
 @app.route("/api/melolo/home")
 @app.route("/api/captain/<platform>/home")
 def captain_home(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import home
     lang = request.args.get("lang", "en")
     data, code = home(platform, lang)
@@ -769,6 +1038,10 @@ def captain_home(platform="melolo"):
 @app.route("/api/melolo/tabs")
 @app.route("/api/captain/<platform>/tabs")
 def captain_tabs(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import tabs
     gender = request.args.get("gender", "0")
     lang   = request.args.get("lang", "en")
@@ -779,6 +1052,10 @@ def captain_tabs(platform="melolo"):
 @app.route("/api/melolo/categories")
 @app.route("/api/captain/<platform>/categories")
 def captain_categories(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import categories
     gender = request.args.get("gender", "0")
     lang   = request.args.get("lang", "en")
@@ -789,6 +1066,10 @@ def captain_categories(platform="melolo"):
 @app.route("/api/melolo/search")
 @app.route("/api/captain/<platform>/search")
 def captain_search(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import search
     q      = request.args.get("q", "").strip()
     lang   = request.args.get("lang", "en")
@@ -803,6 +1084,10 @@ def captain_search(platform="melolo"):
 @app.route("/api/melolo/suggest")
 @app.route("/api/captain/<platform>/suggest")
 def captain_suggest(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import suggest
     q    = request.args.get("q", "").strip()
     lang = request.args.get("lang", "en")
@@ -815,6 +1100,10 @@ def captain_suggest(platform="melolo"):
 @app.route("/api/melolo/book")
 @app.route("/api/captain/<platform>/book")
 def captain_book(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import book
     book_id = request.args.get("id", "").strip()
     lang    = request.args.get("lang", "en")
@@ -827,6 +1116,10 @@ def captain_book(platform="melolo"):
 @app.route("/api/melolo/series")
 @app.route("/api/captain/<platform>/series")
 def captain_series(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import series
     book_id = request.args.get("id", "").strip()
     lang    = request.args.get("lang", "en")
@@ -839,6 +1132,10 @@ def captain_series(platform="melolo"):
 @app.route("/api/melolo/videos")
 @app.route("/api/captain/<platform>/videos")
 def captain_videos(platform="melolo"):
+    denied = require_subscription()
+    if denied:
+        return denied
+
     from api.melolo import videos
     book_id = request.args.get("id", "").strip()
     lang    = request.args.get("lang", "en")

@@ -111,7 +111,13 @@ def build_stream_payload(tmdb_id, media_type="movie", season=1, episode=1, proxy
         season_info = get_season_info(tmdb_id, season) or {}
 
     stream_url = find_stream(tmdb_id, media_type, season, episode)
-    proxied_url = f"{proxy_base}/api/proxy?url={quote(stream_url)}" if proxy_base and stream_url else stream_url
+    proxied_url = stream_url
+    if proxy_base and stream_url:
+        try:
+            from lib.proxy_signing import sign_proxy_url
+            proxied_url = sign_proxy_url(stream_url, proxy_base)
+        except Exception:
+            proxied_url = f"{proxy_base}/api/proxy?url={quote(stream_url)}"
 
     title = media.get("title") or media.get("name") or "Unknown Title"
     ep_title = None

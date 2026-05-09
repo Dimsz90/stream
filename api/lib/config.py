@@ -13,6 +13,23 @@ OS_HEADERS = {
     "User-Agent":   "StreamVault v2.2",
 }
 
+# ── Supabase Username/PIN Subscription ───────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+SUBSCRIPTION_SECRET = (
+    os.environ.get("SUBSCRIPTION_SECRET")
+    or os.environ.get("DRAMANOVA_SECRET")
+    or os.environ.get("SECRET_KEY")
+    or "streamvault-subscription-dev-secret"
+)
+
+# Jika 1/true/yes/on, API premium wajib punya username/PIN dengan subscription aktif.
+REQUIRE_SUBSCRIPTION = os.environ.get("REQUIRE_SUBSCRIPTION", "").lower() in ("1", "true", "yes", "on")
+
+# Remote stream worker. Dipakai server-side supaya URL remote tidak perlu ada di HTML.
+STREAM_API_REMOTE = os.environ.get("STREAM_API_REMOTE", "").rstrip("/")
+USE_STREAM_API_REMOTE = os.environ.get("USE_STREAM_API_REMOTE", "").lower() in ("1", "true", "yes", "on")
+
 # ── OMDb ──────────────────────────────────────────────────────────────────────
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 TMDB_BASE    = "https://api.themoviedb.org/3"
