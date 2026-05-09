@@ -91,11 +91,24 @@ def remote_base():
 
     return STREAM_API_REMOTE.rstrip("/")
 
+def remote_proxy_secret():
+    from lib.config import SUBSCRIPTION_SECRET
+
+    return SUBSCRIPTION_SECRET
+
+def remote_forward_headers():
+    headers = {}
+    for name in ("X-Subscription-Token", "X-Dramanova-Token"):
+        value = request.headers.get(name)
+        if value:
+            headers[name] = value
+    return headers
+
 def cache_remote_proxy_url(url):
     exp = int(time.time()) + REMOTE_PROXY_TTL
     token = secrets.token_urlsafe(18)
     REMOTE_PROXY_CACHE[token] = {"url": url, "exp": exp}
-    sig = hmac.new(DRAMANOVA_SECRET.encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(remote_proxy_secret().encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
     return f"/api/remote-proxy?id={token}&exp={exp}&sig={sig}"
 
 def get_cached_remote_proxy_url(token, exp, sig):
@@ -103,7 +116,7 @@ def get_cached_remote_proxy_url(token, exp, sig):
         exp = int(exp)
     except Exception:
         return ""
-    expected = hmac.new(DRAMANOVA_SECRET.encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
+    expected = hmac.new(remote_proxy_secret().encode(), f"remote-proxy:{token}:{exp}".encode(), hashlib.sha256).hexdigest()
     if time.time() > exp or not hmac.compare_digest(expected, str(sig or "")):
         return ""
     item = REMOTE_PROXY_CACHE.get(token)
@@ -120,6 +133,8 @@ def rewrite_remote_urls(obj):
         return [rewrite_remote_urls(v) for v in obj]
     if isinstance(obj, str) and obj.startswith(base):
         return cache_remote_proxy_url(obj)
+    if isinstance(obj, str) and obj.startswith(("/api/proxy", "/api/remote-proxy")):
+        return cache_remote_proxy_url(f"{base}{obj}")
     return obj
 
 def remote_api_json(path):
@@ -128,10 +143,7 @@ def remote_api_json(path):
     target = f"{remote_base()}{path}"
     if request.query_string:
         target = f"{target}?{request.query_string.decode('utf-8')}"
-    headers = {}
-    token = request.headers.get("X-Subscription-Token")
-    if token:
-        headers["X-Subscription-Token"] = token
+    headers = remote_forward_headers()
     try:
         resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), timeout=25)
         data = resp.json()
@@ -145,10 +157,7 @@ def remote_api_passthrough(path):
     target = f"{remote_base()}{path}"
     if request.query_string:
         target = f"{target}?{request.query_string.decode('utf-8')}"
-    headers = {}
-    token = request.headers.get("X-Subscription-Token")
-    if token:
-        headers["X-Subscription-Token"] = token
+    headers = remote_forward_headers()
     try:
         resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), stream=True, timeout=25)
         def generate():
@@ -223,6 +232,8 @@ def proxy_sign():
     parsed = urlparse(target_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return jsonify({"error": "Invalid url param"}), 400
+    if remote_api_enabled():
+        return remote_api_json("/api/proxy/sign")
 
     host = request.host
     scheme = request.headers.get("X-Forwarded-Proto") or (
@@ -450,6 +461,9 @@ def dracin_api(subpath):
 
 @app.route('/api/dracin/auth', methods=['POST'])
 def dracin_auth():
+    if remote_api_enabled():
+        return remote_api_json("/api/dracin/auth")
+
     if not DRAMANOVA_PIN:
         return jsonify({"status": "error", "message": "PIN auth not configured"}), 404
     data = request.get_json(silent=True) or {}
@@ -772,6 +786,10 @@ def proxy():
 
 @app.route("/api/proxy-browser")
 def proxy_browser():
+    denied = require_subscription()
+    if denied:
+        return denied
+
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
