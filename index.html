@@ -1670,6 +1670,32 @@ function updateSubscriptionUi(subscription) {
   }
 }
 
+function subscriptionActiveText(subscription) {
+  if (!subscription?.active) return "";
+  if (!subscription.valid_until) return "Langganan kamu sudah aktif.";
+  try {
+    const date = new Date(subscription.valid_until);
+    return `Langganan aktif sampai ${date.toLocaleString("id-ID")}.`;
+  } catch {
+    return `Langganan aktif sampai ${subscription.valid_until}.`;
+  }
+}
+
+function renderSubscriptionActive(subscription, autoClose = false) {
+  const status = document.getElementById("subscriptionStatusText");
+  const paymentEl = document.getElementById("subscriptionPayment");
+  const state = document.getElementById("subscriptionPayState");
+  updateSubscriptionUi(subscription);
+  if (status) status.textContent = subscriptionActiveText(subscription);
+  if (state) state.textContent = "Pembayaran berhasil. Langganan sudah aktif.";
+  if (paymentEl) paymentEl.classList.remove("visible");
+  if (subscriptionPollTimer) {
+    clearInterval(subscriptionPollTimer);
+    subscriptionPollTimer = null;
+  }
+  if (autoClose) setTimeout(closeSubscriptionModal, 1200);
+}
+
 async function showSubscriptionPlans(message = "") {
   const cfg = await getSubscriptionConfig();
   if (cfg.enabled && !localStorage.getItem(SUBSCRIPTION_SESSION_KEY)) {
@@ -1689,6 +1715,11 @@ async function showSubscriptionPlans(message = "") {
   paymentEl.classList.remove("visible");
   status.textContent = message || "Pilih paket untuk membuka akses streaming.";
   modal.classList.add("visible");
+
+  const me = await refreshSubscriptionMe();
+  if (me?.subscription?.active) {
+    renderSubscriptionActive(me.subscription, false);
+  }
 
   plansEl.innerHTML = [
     { id: "weekly", label: "Mingguan", price: "Rp 7.000", days: "7 hari akses" },
@@ -1730,6 +1761,12 @@ async function createSubscriptionPayment(plan) {
   link.style.display = "none";
 
   try {
+    const me = await refreshSubscriptionMe();
+    if (me?.subscription?.active) {
+      renderSubscriptionActive(me.subscription, false);
+      return;
+    }
+
     const res = await fetch(`${STREAM_API}/api/subscription/payment/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...subscriptionHeaders() },
@@ -1763,6 +1800,12 @@ function startSubscriptionPolling(invoice, paymentToken) {
   if (subscriptionPollTimer) clearInterval(subscriptionPollTimer);
 
   const verify = async () => {
+    const me = await refreshSubscriptionMe();
+    if (me?.subscription?.active) {
+      renderSubscriptionActive(me.subscription, true);
+      return;
+    }
+
     const res = await fetch(`${STREAM_API}/api/subscription/payment/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...subscriptionHeaders() },
@@ -1774,8 +1817,7 @@ function startSubscriptionPolling(invoice, paymentToken) {
       subscriptionPollTimer = null;
       currentSubscriber = data;
       updateSubscriptionUi(data.subscription);
-      if (state) state.textContent = "Pembayaran berhasil. Langganan sudah aktif.";
-      setTimeout(closeSubscriptionModal, 1200);
+      renderSubscriptionActive(data.subscription, true);
       return;
     }
     if (state) state.textContent = data.payment_status ? `Status: ${data.payment_status}` : "Menunggu pembayaran...";
