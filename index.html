@@ -1536,6 +1536,24 @@ function setSubscriptionError(message) {
   err.style.display = message ? "block" : "none";
 }
 
+function updateSubAuthMode() {
+  const title = document.getElementById("subAuthTitle");
+  const text = document.getElementById("subAuthText");
+  const pinInput = document.getElementById("subAuthPin");
+  const submit = document.getElementById("subAuthSubmit");
+  const toggle = document.getElementById("subAuthToggle");
+  if (!title || !text || !pinInput || !submit || !toggle) return;
+
+  const isRegister = subAuthMode === "register";
+  title.textContent = isRegister ? "REGISTER AKUN" : "MASUK AKUN";
+  text.textContent = isRegister
+    ? "Buat username dan password. Setelah register, kamu bisa pilih paket langganan."
+    : "Masukkan username dan password. Kalau belum punya akun, daftar dulu di sini.";
+  submit.textContent = isRegister ? "REGISTER" : "MASUK";
+  toggle.textContent = isRegister ? "SUDAH PUNYA AKUN? MASUK" : "REGISTER AKUN BARU";
+  pinInput.placeholder = "Password";
+}
+
 function showSubscriptionLogin(message = "") {
   if (subscriptionLoginPromise) return subscriptionLoginPromise;
 
@@ -1545,8 +1563,6 @@ function showSubscriptionLogin(message = "") {
   const pinInput = document.getElementById("subAuthPin");
   const submit = document.getElementById("subAuthSubmit");
   const toggle = document.getElementById("subAuthToggle");
-  const title = document.getElementById("subAuthTitle");
-  const text = document.getElementById("subAuthText");
 
   if (!gate || !form || !usernameInput || !pinInput || !submit || !toggle) {
     return Promise.reject(new Error("UI login akun tidak tersedia."));
@@ -1565,17 +1581,6 @@ function showSubscriptionLogin(message = "") {
       updateSubAuthMode();
       setSubscriptionError("");
     };
-
-    function updateSubAuthMode() {
-      const isRegister = subAuthMode === "register";
-      title.textContent = isRegister ? "REGISTER AKUN" : "MASUK AKUN";
-      text.textContent = isRegister
-        ? "Buat username dan password. Setelah register, kamu bisa pilih paket langganan."
-        : "Masukkan username dan password. Kalau belum punya akun, daftar dulu di sini.";
-      submit.textContent = isRegister ? "REGISTER" : "MASUK";
-      toggle.textContent = isRegister ? "SUDAH PUNYA AKUN? MASUK" : "REGISTER AKUN BARU";
-      pinInput.placeholder = "Password";
-    }
 
     form.onsubmit = async e => {
       e.preventDefault();
