@@ -319,6 +319,7 @@ def payment_methods():
 @app.route("/api/payments/webhook", methods=["POST"])
 @app.route("/api/payment/webhook", methods=["POST"])
 @app.route("/api/bayargg/webhook", methods=["POST"])
+@app.route("/webhook/payment", methods=["POST"])
 def payment_webhook():
     try:
         from lib.bayar_gg import verify_webhook

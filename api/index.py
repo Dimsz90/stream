@@ -123,6 +123,9 @@ class handler(BaseHTTPRequestHandler):
         if path in ("/api/payments/webhook", "/api/payment/webhook", "/api/bayargg/webhook"):
             return self._dispatch_module("payment", "POST")
 
+        if path == "/webhook/payment":
+            return self._dispatch_module("payment", "POST")
+
         self._send_json({"error": "Route tidak ditemukan"}, 404)
 
     # ── OPTIONS (CORS preflight) ──────────────────────────────────────────────
