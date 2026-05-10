@@ -2577,7 +2577,7 @@ async function startStream() {
     const res  = await appFetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
     const data = await res.json();
     if (data.stream_url) {
-      playHls(data.stream_url, {alternateStreamEndpoint: `${STREAM_API}/api/get-video?id=${encodeURIComponent(id)}`});
+      playHls(data.stream_url, {alternateStreamEndpoint: `${STREAM_API}/api/get-video?id=${encodeURIComponent(id)}`, forceHls:true});
     } else {
       showPError("Stream tidak tersedia untuk film ini.");
     }
@@ -2626,7 +2626,7 @@ async function startTvEpisodeStream(season, episode) {
     if (data.stream_url || data.streamUrl || data.link) {
       const imdbId = SUB.imdbId || selectedItem["#IMDB_ID"] || "";
       const alternateStreamEndpoint = imdbId ? `${STREAM_API}/api/get-video?id=${encodeURIComponent(imdbId)}` : "";
-      playHls(data.stream_url || data.streamUrl || data.link, {alternateStreamEndpoint});
+      playHls(data.stream_url || data.streamUrl || data.link, {alternateStreamEndpoint, forceHls:true});
     } else {
       showPError(data.message || "Stream episode tidak tersedia.");
     }
@@ -2696,7 +2696,7 @@ async function tryAlternateStream(opts) {
     const data = await res.json();
     const altUrl = await normalizeStreamUrl(data.stream_url || data.streamUrl || data.link || data.url || "");
     if (!res.ok || !altUrl) return false;
-    playHls(altUrl, {...opts, alternateTried:true, skipDirectFallback:false});
+    playHls(altUrl, {...opts, alternateTried:true, skipDirectFallback:false, forceHls:true});
     return true;
   } catch {
     return false;
@@ -2715,7 +2715,7 @@ function playHls(streamUrl, opts = {}) {
     if (currentPlayback.mediaType === "tv") changeEpisode(1);
   };
 
-  const isM3u8 = streamUrl.toLowerCase().includes(".m3u8")||streamUrl.includes("mpegurl");
+  const isM3u8 = opts.forceHls || streamUrl.toLowerCase().includes(".m3u8") || streamUrl.includes("mpegurl");
   const plyrOpts = {
     controls: ["play-large","play","progress","current-time","mute","volume","captions","settings","pip","airplay","fullscreen"],
     settings: ["captions","quality","speed"],
