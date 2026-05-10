@@ -104,6 +104,20 @@ def remote_forward_headers():
             headers[name] = value
     return headers
 
+def public_base_url():
+    host = request.host
+    scheme = request.headers.get("X-Forwarded-Proto") or (
+        "http" if "localhost" in host or "127.0.0.1" in host else "https"
+    )
+    return f"{scheme}://{host}"
+
+def bayar_gg_error_response(exc):
+    detail = getattr(exc, "detail", None)
+    payload = {"status": "error", "message": str(exc)}
+    if detail:
+        payload["detail"] = detail
+    return jsonify(payload), getattr(exc, "status_code", 500)
+
 def cache_remote_proxy_url(url):
     exp = int(time.time()) + REMOTE_PROXY_TTL
     token = secrets.token_urlsafe(18)
@@ -217,8 +231,115 @@ def subscription_login():
     from lib.subscription import login_subscriber
 
     data = request.get_json(silent=True) or {}
-    body, status_code = login_subscriber(data.get("username", ""), data.get("pin", ""))
+    body, status_code = login_subscriber(data.get("username", ""), data.get("password", data.get("pin", "")))
     return jsonify(body), status_code
+
+@app.route("/api/subscription/register", methods=["POST"])
+def subscription_register():
+    from lib.subscription import register_subscriber
+
+    data = request.get_json(silent=True) or {}
+    body, status_code = register_subscriber(data.get("username", ""), data.get("password", ""))
+    return jsonify(body), status_code
+
+@app.route("/api/subscription/me")
+def subscription_me():
+    from lib.subscription import me
+
+    body, status_code = me(request.headers)
+    return jsonify(body), status_code
+
+@app.route("/api/subscription/plans")
+def subscription_plans():
+    from lib.subscription import SUBSCRIPTION_PLANS
+
+    return jsonify({"status": "success", "plans": list(SUBSCRIPTION_PLANS.values())}), 200
+
+@app.route("/api/subscription/payment/create", methods=["POST"])
+def subscription_payment_create():
+    from lib.subscription import create_subscription_payment
+
+    data = request.get_json(silent=True) or {}
+    body, status_code = create_subscription_payment(
+        request.headers,
+        data.get("plan", ""),
+        public_base_url(),
+        data.get("redirect_url", ""),
+    )
+    return jsonify(body), status_code
+
+@app.route("/api/subscription/payment/verify", methods=["POST"])
+def subscription_payment_verify():
+    from lib.subscription import verify_subscription_payment
+
+    data = request.get_json(silent=True) or {}
+    body, status_code = verify_subscription_payment(
+        request.headers,
+        data.get("invoice", ""),
+        data.get("payment_token", ""),
+    )
+    return jsonify(body), status_code
+
+@app.route("/api/payments/create", methods=["POST"])
+@app.route("/api/payment/create", methods=["POST"])
+@app.route("/api/bayargg/create", methods=["POST"])
+def payment_create():
+    try:
+        from lib.bayar_gg import create_payment
+
+        data, status_code = create_payment(request.get_json(silent=True) or {}, public_base_url())
+        return jsonify(data), status_code
+    except Exception as exc:
+        return bayar_gg_error_response(exc)
+
+@app.route("/api/payments/check")
+@app.route("/api/payment/check")
+@app.route("/api/bayargg/check")
+def payment_check():
+    try:
+        from lib.bayar_gg import check_payment
+
+        data, status_code = check_payment(request.args.get("invoice", ""))
+        return jsonify(data), status_code
+    except Exception as exc:
+        return bayar_gg_error_response(exc)
+
+@app.route("/api/payments/methods")
+@app.route("/api/payment/methods")
+@app.route("/api/bayargg/methods")
+def payment_methods():
+    try:
+        from lib.bayar_gg import payment_methods as get_payment_methods
+
+        data, status_code = get_payment_methods()
+        return jsonify(data), status_code
+    except Exception as exc:
+        return bayar_gg_error_response(exc)
+
+@app.route("/api/payments/webhook", methods=["POST"])
+@app.route("/api/payment/webhook", methods=["POST"])
+@app.route("/api/bayargg/webhook", methods=["POST"])
+def payment_webhook():
+    try:
+        from lib.bayar_gg import verify_webhook
+        from lib.subscription import handle_subscription_webhook
+
+        payload = request.get_json(silent=True) or {}
+        valid, message = verify_webhook(payload, request.headers)
+        if not valid:
+            return jsonify({"status": "error", "message": message}), 401
+        sub_body, sub_code = handle_subscription_webhook(payload)
+        if sub_body.get("status") == "success":
+            return jsonify(sub_body), sub_code
+        return jsonify({
+            "status": "success",
+            "event": payload.get("event"),
+            "invoice_id": payload.get("invoice_id"),
+            "payment_status": payload.get("status"),
+            "subscription": sub_body,
+        }), 200
+    except Exception as exc:
+        return bayar_gg_error_response(exc)
 
 @app.route("/api/proxy/sign")
 def proxy_sign():
@@ -235,11 +356,7 @@ def proxy_sign():
     if remote_api_enabled():
         return remote_api_json("/api/proxy/sign")
 
-    host = request.host
-    scheme = request.headers.get("X-Forwarded-Proto") or (
-        "http" if "localhost" in host or "127.0.0.1" in host else "https"
-    )
-    return jsonify({"status": "success", "url": sign_proxy_url(target_url, f"{scheme}://{host}")})
+    return jsonify({"status": "success", "url": sign_proxy_url(target_url, public_base_url())})
 
 @app.route("/api/remote-proxy")
 def remote_proxy():

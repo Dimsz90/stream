@@ -43,7 +43,40 @@ body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex
 .subauth-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
 .subauth-btn{height:42px;border:0;border-radius:8px;background:var(--accent);color:#061012;font-family:var(--display);font-size:18px;letter-spacing:1px;cursor:pointer}
 .subauth-btn:disabled{opacity:.55;cursor:not-allowed}
+.subauth-link{height:38px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);font:12px var(--mono);cursor:pointer}
+.subauth-link:hover{border-color:var(--accent);color:var(--accent)}
 .subauth-error{display:none;color:#ff9b9b;font-size:12px;line-height:1.4;margin-top:12px}
+.subscription-modal{position:fixed;inset:0;z-index:9998;background:rgba(5,7,10,.72);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:18px}
+.subscription-modal.visible{display:flex}
+.subscription-box{width:min(720px,100%);background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.5);padding:20px;position:relative}
+.subscription-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer}
+.subscription-title{font-family:var(--display);font-size:28px;letter-spacing:1px}
+.subscription-status{margin-top:4px;color:var(--text2);font-size:13px}
+.subscription-plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}
+.subscription-plan{border:1px solid var(--border2);background:rgba(255,255,255,.025);border-radius:8px;padding:14px;text-align:left;color:var(--text);cursor:pointer}
+.subscription-plan:hover{border-color:var(--accent);background:var(--accent-dim)}
+.subscription-plan-name{font-weight:800;font-size:14px}
+.subscription-plan-price{font-family:var(--display);font-size:28px;letter-spacing:1px;margin-top:6px;color:var(--accent)}
+.subscription-plan-days{font-size:12px;color:var(--text2)}
+.subscription-payment{display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px}
+.subscription-payment.visible{display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:start}
+.subscription-qr{width:180px;aspect-ratio:1;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text3);font-size:12px;text-align:center}
+.subscription-qr img{width:100%;height:100%;object-fit:cover}
+.subscription-pay-info{display:flex;flex-direction:column;gap:9px;min-width:0}
+.subscription-pay-link{display:inline-flex;align-items:center;justify-content:center;height:38px;border-radius:8px;background:var(--accent);color:#061012;text-decoration:none;font-weight:800;font-size:12px}
+.subscription-pay-note{font-size:12px;color:var(--text2);line-height:1.45}
+.subscription-pay-state{font-size:12px;color:var(--accent)}
+.nav-subscription-btn{
+  border:1px solid var(--accent);background:transparent;color:var(--accent);
+  height:34px;border-radius:8px;padding:0 12px;font:10px var(--mono);font-weight:bold;cursor:pointer;white-space:nowrap;
+}
+.nav-subscription-btn:hover{background:var(--accent-dim)}
+@media(max-width:640px){
+  .subscription-plans{grid-template-columns:1fr}
+  .subscription-payment.visible{grid-template-columns:1fr}
+  .subscription-qr{width:100%;max-width:220px;margin:auto}
+  .nav-subscription-btn{padding:0 9px;font-size:9px}
+}
 
 /* ── NAV ── */
 nav{
@@ -1128,14 +1161,32 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 
 <div class="subauth-gate" id="subAuthGate">
   <div class="subauth-box">
-    <div class="subauth-title">MASUK LANGGANAN</div>
-    <div class="subauth-text">Masukkan username dan PIN. Setelah masuk, akses akan dicek otomatis selama langganan masih aktif.</div>
+    <div class="subauth-title" id="subAuthTitle">MASUK AKUN</div>
+    <div class="subauth-text" id="subAuthText">Masukkan username dan password. Kalau belum punya akun, daftar dulu di sini.</div>
     <form class="subauth-form" id="subAuthForm">
       <input class="subauth-input" id="subAuthUsername" type="text" placeholder="Username" autocomplete="username">
-      <input class="subauth-input" id="subAuthPin" type="password" placeholder="PIN" autocomplete="current-password">
+      <input class="subauth-input" id="subAuthPin" type="password" placeholder="Password" autocomplete="current-password">
       <button class="subauth-btn" id="subAuthSubmit" type="submit">MASUK</button>
+      <button class="subauth-link" id="subAuthToggle" type="button">REGISTER AKUN BARU</button>
     </form>
     <div class="subauth-error" id="subAuthError"></div>
+  </div>
+</div>
+
+<div class="subscription-modal" id="subscriptionModal">
+  <div class="subscription-box">
+    <button class="subscription-close" type="button" onclick="closeSubscriptionModal()">x</button>
+    <div class="subscription-title">LANGGANAN</div>
+    <div class="subscription-status" id="subscriptionStatusText">Pilih paket untuk membuka akses streaming.</div>
+    <div class="subscription-plans" id="subscriptionPlans"></div>
+    <div class="subscription-payment" id="subscriptionPayment">
+      <div class="subscription-qr" id="subscriptionQr">QRIS akan muncul di sini</div>
+      <div class="subscription-pay-info">
+        <div class="subscription-pay-state" id="subscriptionPayState">Menunggu pembayaran...</div>
+        <a class="subscription-pay-link" id="subscriptionPayLink" href="#" target="_blank" rel="noopener">BUKA HALAMAN BAYAR</a>
+        <div class="subscription-pay-note" id="subscriptionPayNote">Setelah pembayaran berhasil, sistem akan verifikasi otomatis dan menambahkan masa aktif ke akun kamu.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1147,6 +1198,7 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
     <div class="ntab"        id="ntDracin" onclick="switchMainTab('dracin')">DRACIN</div>
   </div>
   <div class="nav-right">
+    <button class="nav-subscription-btn" id="btnSubscription" type="button" onclick="showSubscriptionPlans()">LANGGANAN</button>
     <button id="btnInstallPwa">+ INSTALL</button>
     <a href="/extractor.html" class="nav-extractor-btn">EXTRACTOR</a>
   </div>
@@ -1449,6 +1501,9 @@ const TMDB_IMG   = "https://image.tmdb.org/t/p/w300";
 let subscriptionConfigPromise = null;
 let subscriptionLoginPromise = null;
 const SUBSCRIPTION_SESSION_KEY = "streamvault_subscription_token";
+let subAuthMode = "login";
+let currentSubscriber = null;
+let subscriptionPollTimer = null;
 
 async function getSubscriptionConfig() {
   if (!subscriptionConfigPromise) {
@@ -1469,6 +1524,11 @@ async function requireSubscriptionToken() {
   return showSubscriptionLogin();
 }
 
+function subscriptionHeaders() {
+  const token = localStorage.getItem(SUBSCRIPTION_SESSION_KEY) || "";
+  return token ? { "X-Subscription-Token": token } : {};
+}
+
 function setSubscriptionError(message) {
   const err = document.getElementById("subAuthError");
   if (!err) return;
@@ -1484,40 +1544,69 @@ function showSubscriptionLogin(message = "") {
   const usernameInput = document.getElementById("subAuthUsername");
   const pinInput = document.getElementById("subAuthPin");
   const submit = document.getElementById("subAuthSubmit");
+  const toggle = document.getElementById("subAuthToggle");
+  const title = document.getElementById("subAuthTitle");
+  const text = document.getElementById("subAuthText");
 
-  if (!gate || !form || !usernameInput || !pinInput || !submit) {
-    return Promise.reject(new Error("UI login langganan tidak tersedia."));
+  if (!gate || !form || !usernameInput || !pinInput || !submit || !toggle) {
+    return Promise.reject(new Error("UI login akun tidak tersedia."));
   }
 
+  subAuthMode = "login";
+  updateSubAuthMode();
   setSubscriptionError(message);
   pinInput.value = "";
   gate.classList.add("visible");
   setTimeout(() => usernameInput.focus(), 30);
 
   subscriptionLoginPromise = new Promise((resolve, reject) => {
+    toggle.onclick = () => {
+      subAuthMode = subAuthMode === "login" ? "register" : "login";
+      updateSubAuthMode();
+      setSubscriptionError("");
+    };
+
+    function updateSubAuthMode() {
+      const isRegister = subAuthMode === "register";
+      title.textContent = isRegister ? "REGISTER AKUN" : "MASUK AKUN";
+      text.textContent = isRegister
+        ? "Buat username dan password. Setelah register, kamu bisa pilih paket langganan."
+        : "Masukkan username dan password. Kalau belum punya akun, daftar dulu di sini.";
+      submit.textContent = isRegister ? "REGISTER" : "MASUK";
+      toggle.textContent = isRegister ? "SUDAH PUNYA AKUN? MASUK" : "REGISTER AKUN BARU";
+      pinInput.placeholder = "Password";
+    }
+
     form.onsubmit = async e => {
       e.preventDefault();
       const username = usernameInput.value.trim().toLowerCase();
-      const pin = pinInput.value.trim();
-      if (!username || !pin) {
-        setSubscriptionError("Username dan PIN wajib diisi.");
+      const password = pinInput.value.trim();
+      if (!username || !password) {
+        setSubscriptionError("Username dan password wajib diisi.");
         return;
       }
 
       submit.disabled = true;
-      submit.textContent = "MEMERIKSA...";
+      submit.textContent = subAuthMode === "register" ? "MEMBUAT..." : "MEMERIKSA...";
       setSubscriptionError("");
 
       try {
-        const token = await loginSubscription(username, pin);
-        localStorage.setItem(SUBSCRIPTION_SESSION_KEY, token);
+        const data = subAuthMode === "register"
+          ? await registerSubscription(username, password)
+          : await loginSubscription(username, password);
+        localStorage.setItem(SUBSCRIPTION_SESSION_KEY, data.token);
+        currentSubscriber = data;
+        updateSubscriptionUi(data.subscription);
         gate.classList.remove("visible");
-        resolve(token);
+        if (subAuthMode === "register" || !data.subscription?.active) {
+          setTimeout(() => showSubscriptionPlans("Pilih paket langganan untuk membuka akses streaming."), 80);
+        }
+        resolve(data.token);
       } catch (err) {
-        setSubscriptionError(err.message || "Login langganan gagal.");
+        setSubscriptionError(err.message || "Login gagal.");
       } finally {
         submit.disabled = false;
-        submit.textContent = "MASUK";
+        submit.textContent = subAuthMode === "register" ? "REGISTER" : "MASUK";
       }
     };
   }).finally(() => {
@@ -1527,17 +1616,168 @@ function showSubscriptionLogin(message = "") {
   return subscriptionLoginPromise;
 }
 
-async function loginSubscription(username, pin) {
+async function loginSubscription(username, password) {
   const res = await fetch(`${STREAM_API}/api/subscription/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, pin }),
+    body: JSON.stringify({ username, password }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.status !== "success" || !data.token) {
-    throw new Error(data.message || "Login langganan gagal.");
+    throw new Error(data.message || "Login gagal.");
   }
-  return data.token;
+  return data;
+}
+
+async function registerSubscription(username, password) {
+  const res = await fetch(`${STREAM_API}/api/subscription/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status !== "success" || !data.token) {
+    throw new Error(data.message || "Register gagal.");
+  }
+  return data;
+}
+
+async function refreshSubscriptionMe() {
+  const token = localStorage.getItem(SUBSCRIPTION_SESSION_KEY) || "";
+  if (!token) return null;
+  const res = await fetch(`${STREAM_API}/api/subscription/me`, { headers: subscriptionHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status !== "success") return null;
+  currentSubscriber = data;
+  updateSubscriptionUi(data.subscription);
+  return data;
+}
+
+function updateSubscriptionUi(subscription) {
+  const btn = document.getElementById("btnSubscription");
+  if (!btn) return;
+  if (subscription?.active) {
+    btn.textContent = "AKTIF";
+    btn.title = subscription.valid_until ? `Aktif sampai ${subscription.valid_until}` : "Langganan aktif";
+  } else {
+    btn.textContent = "LANGGANAN";
+    btn.title = "Pilih paket langganan";
+  }
+}
+
+async function showSubscriptionPlans(message = "") {
+  const cfg = await getSubscriptionConfig();
+  if (cfg.enabled && !localStorage.getItem(SUBSCRIPTION_SESSION_KEY)) {
+    await showSubscriptionLogin("Login dulu sebelum memilih langganan.");
+  }
+
+  const modal = document.getElementById("subscriptionModal");
+  const status = document.getElementById("subscriptionStatusText");
+  const plansEl = document.getElementById("subscriptionPlans");
+  const paymentEl = document.getElementById("subscriptionPayment");
+  if (!modal || !status || !plansEl || !paymentEl) return;
+
+  if (subscriptionPollTimer) {
+    clearInterval(subscriptionPollTimer);
+    subscriptionPollTimer = null;
+  }
+  paymentEl.classList.remove("visible");
+  status.textContent = message || "Pilih paket untuk membuka akses streaming.";
+  modal.classList.add("visible");
+
+  plansEl.innerHTML = [
+    { id: "weekly", label: "Mingguan", price: "Rp 7.000", days: "7 hari akses" },
+    { id: "monthly", label: "Bulanan", price: "Rp 20.000", days: "30 hari akses" },
+  ].map(plan => `
+    <button class="subscription-plan" type="button" onclick="createSubscriptionPayment('${plan.id}')">
+      <div class="subscription-plan-name">${plan.label}</div>
+      <div class="subscription-plan-price">${plan.price}</div>
+      <div class="subscription-plan-days">${plan.days}</div>
+    </button>
+  `).join("");
+}
+
+function closeSubscriptionModal() {
+  const modal = document.getElementById("subscriptionModal");
+  if (modal) modal.classList.remove("visible");
+  if (subscriptionPollTimer) {
+    clearInterval(subscriptionPollTimer);
+    subscriptionPollTimer = null;
+  }
+}
+
+function getPaymentData(data) {
+  return data?.payment || data?.raw?.data || data?.data || {};
+}
+
+async function createSubscriptionPayment(plan) {
+  const status = document.getElementById("subscriptionStatusText");
+  const paymentEl = document.getElementById("subscriptionPayment");
+  const qr = document.getElementById("subscriptionQr");
+  const link = document.getElementById("subscriptionPayLink");
+  const state = document.getElementById("subscriptionPayState");
+  if (!status || !paymentEl || !qr || !link || !state) return;
+
+  status.textContent = "Membuat invoice pembayaran...";
+  paymentEl.classList.add("visible");
+  qr.textContent = "Memuat QRIS...";
+  state.textContent = "Menyiapkan pembayaran...";
+  link.style.display = "none";
+
+  try {
+    const res = await fetch(`${STREAM_API}/api/subscription/payment/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...subscriptionHeaders() },
+      body: JSON.stringify({ plan, redirect_url: location.href }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.status !== "success") throw new Error(data.message || "Gagal membuat pembayaran.");
+
+    const payment = getPaymentData(data);
+    const invoice = payment.invoice_id || payment.invoice || payment.id;
+    const payUrl = payment.payment_url || payment.checkout_url || payment.url;
+    const qrUrl = payment.qris_dynamic_image_url || payment.qris_static_image_url || payment.qr_url;
+    if (qrUrl) qr.innerHTML = `<img src="${esc(qrUrl)}" alt="QRIS">`;
+    else qr.textContent = "Buka halaman bayar";
+    if (payUrl) {
+      link.href = payUrl;
+      link.style.display = "inline-flex";
+    }
+    status.textContent = `${data.plan?.label || "Paket"} dibuat. Selesaikan pembayaran lalu tunggu verifikasi otomatis.`;
+    state.textContent = `Invoice ${invoice || ""} menunggu pembayaran...`;
+    if (invoice && data.payment_token) startSubscriptionPolling(invoice, data.payment_token);
+  } catch (err) {
+    status.textContent = err.message || "Gagal membuat pembayaran.";
+    state.textContent = "Gagal";
+    qr.textContent = "Tidak bisa membuat QRIS";
+  }
+}
+
+function startSubscriptionPolling(invoice, paymentToken) {
+  const state = document.getElementById("subscriptionPayState");
+  if (subscriptionPollTimer) clearInterval(subscriptionPollTimer);
+
+  const verify = async () => {
+    const res = await fetch(`${STREAM_API}/api/subscription/payment/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...subscriptionHeaders() },
+      body: JSON.stringify({ invoice, payment_token: paymentToken }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.status === "success") {
+      clearInterval(subscriptionPollTimer);
+      subscriptionPollTimer = null;
+      currentSubscriber = data;
+      updateSubscriptionUi(data.subscription);
+      if (state) state.textContent = "Pembayaran berhasil. Langganan sudah aktif.";
+      setTimeout(closeSubscriptionModal, 1200);
+      return;
+    }
+    if (state) state.textContent = data.payment_status ? `Status: ${data.payment_status}` : "Menunggu pembayaran...";
+  };
+
+  verify();
+  subscriptionPollTimer = setInterval(verify, 5000);
 }
 
 async function appFetch(url, opt = {}) {
@@ -1552,9 +1792,14 @@ async function appFetch(url, opt = {}) {
 
   const body = await res.clone().json().catch(() => ({}));
   if (!body.subscription_required) return res;
-  localStorage.removeItem(SUBSCRIPTION_SESSION_KEY);
-  const freshToken = await showSubscriptionLogin(body.message || "Langganan aktif diperlukan.");
-  reqOpt.headers["X-Subscription-Token"] = freshToken;
+  if (res.status === 401) {
+    localStorage.removeItem(SUBSCRIPTION_SESSION_KEY);
+    const freshToken = await showSubscriptionLogin(body.message || "Login diperlukan.");
+    reqOpt.headers["X-Subscription-Token"] = freshToken;
+  } else {
+    await showSubscriptionPlans(body.message || "Langganan aktif diperlukan.");
+    throw new Error(body.message || "Langganan aktif diperlukan.");
+  }
   return fetch(url, reqOpt);
 }
 
@@ -1562,6 +1807,8 @@ async function initSubscriptionGate() {
   const cfg = await getSubscriptionConfig();
   if (cfg.enabled && !localStorage.getItem(SUBSCRIPTION_SESSION_KEY)) {
     showSubscriptionLogin();
+  } else if (cfg.enabled) {
+    refreshSubscriptionMe();
   }
 }
 

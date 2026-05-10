@@ -45,6 +45,15 @@ class handler(BaseHTTPRequestHandler):
         if path == "/api/subscription/config":
             return self._dispatch_module("subscription", "GET")
 
+        if path in ("/api/subscription/me", "/api/subscription/plans"):
+            return self._dispatch_module("subscription", "GET")
+
+        if path in ("/api/payments/check", "/api/payment/check", "/api/bayargg/check"):
+            return self._dispatch_module("payment", "GET")
+
+        if path in ("/api/payments/methods", "/api/payment/methods", "/api/bayargg/methods"):
+            return self._dispatch_module("payment", "GET")
+
         if path == "/api/proxy/sign":
             return self._dispatch_module("proxy_sign", "GET")
 
@@ -100,8 +109,19 @@ class handler(BaseHTTPRequestHandler):
         if path == "/api/formats":
             return self._dispatch_module("formats", "POST")
 
-        if path == "/api/subscription/login":
+        if path in (
+            "/api/subscription/login",
+            "/api/subscription/register",
+            "/api/subscription/payment/create",
+            "/api/subscription/payment/verify",
+        ):
             return self._dispatch_module("subscription", "POST")
+
+        if path in ("/api/payments/create", "/api/payment/create", "/api/bayargg/create"):
+            return self._dispatch_module("payment", "POST")
+
+        if path in ("/api/payments/webhook", "/api/payment/webhook", "/api/bayargg/webhook"):
+            return self._dispatch_module("payment", "POST")
 
         self._send_json({"error": "Route tidak ditemukan"}, 404)
 
@@ -159,7 +179,7 @@ class handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Subscription-Token, x-api-token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Subscription-Token, x-api-token, X-Webhook-Signature, X-Webhook-Timestamp")
 
     def _send_json(self, data, code=200):
         body = json.dumps(data, ensure_ascii=False).encode()

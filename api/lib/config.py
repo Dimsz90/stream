@@ -51,3 +51,10 @@ VIDEO_SPOOF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
 }
+
+# Bayar.gg payment gateway. Keep API key and webhook secret server-side only.
+BAYAR_GG_API_KEY = os.environ.get("BAYAR_GG_API_KEY", "")
+BAYAR_GG_BASE_URL = os.environ.get("BAYAR_GG_BASE_URL", "https://www.bayar.gg/api").rstrip("/")
+BAYAR_GG_PAYMENT_METHOD = os.environ.get("BAYAR_GG_PAYMENT_METHOD", "qris_bayar_gg")
+BAYAR_GG_WEBHOOK_SECRET = os.environ.get("BAYAR_GG_WEBHOOK_SECRET", "")
+BAYAR_GG_CALLBACK_BASE_URL = os.environ.get("BAYAR_GG_CALLBACK_BASE_URL", "").rstrip("/")
