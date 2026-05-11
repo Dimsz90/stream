@@ -1,6 +1,6 @@
 {
-  "name": "StreamVault",
-  "short_name": "StreamVault",
+  "name": "MasdiFox",
+  "short_name": "MasdiFox",
   "id": "/",
   "description": "Universal stream extractor & player — scan, stream, subtitle.",
   "start_url": "/?tab=film",
