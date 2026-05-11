@@ -868,13 +868,23 @@ def proxy():
 
     try:
         is_playlist_url = target_url.lower().split("?", 1)[0].endswith(".m3u8")
-        resp, attempts, cached_playlist_text = _fetch_video(target_url, is_playlist_url)
+
+        # tmstrd.justhd.tv menyimpan segment .ts dengan extension .html
+        # tandai sebagai segment biasa (bukan playlist) supaya body tidak di-decode sebagai teks
+        clean_target = target_url.split("?")[0]
+        is_disguised_segment = clean_target.endswith(".html")
+
+        resp, attempts, cached_playlist_text = _fetch_video(target_url, is_playlist_url and not is_disguised_segment)
         if resp is None:
             return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 502
+
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
-        clean_target = target_url.split("?")[0]
-        if clean_target.endswith(".html") and "text/html" in content_type:
+
+        # Paksa Content-Type ke video/mp2t untuk segment yang disamarkan sebagai .html
+        # Ini mencegah HLS.js salah decode binary data
+        if is_disguised_segment and "text/html" in content_type:
             content_type = "video/mp2t"
+
         if "mpegurl" in content_type.lower() or is_playlist_url:
             content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(
                 resp,
@@ -905,6 +915,9 @@ def proxy():
                 },
             )
 
+        # Untuk segment binary (termasuk .html yang sebenarnya .ts),
+        # WAJIB pakai iter_content — jangan pernah baca resp.text dulu
+        # karena akan corrupt data binary dan mengosongkan buffer
         def generate():
             for chunk in resp.iter_content(chunk_size=65536):
                 if chunk:
