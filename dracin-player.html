@@ -7,6 +7,7 @@
 <title>Watch - StreamVault Dracin</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script src="/js/orientation-lock.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',sans-serif;background:#0a0a0a;color:#fff;overflow-x:hidden}
@@ -149,6 +150,11 @@ const rewindBtn=document.getElementById('rewindBtn'),forwardBtn=document.getElem
 const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
 const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
 const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
+
+OrientationLock.lockPortrait();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)OrientationLock.lockPortrait()});
+document.addEventListener('fullscreenchange',()=>OrientationLock.lockPortrait());
+document.addEventListener('webkitfullscreenchange',()=>OrientationLock.lockPortrait());
 
 function withSubscriptionHeaders(headers={}){
     const subToken=localStorage.getItem(SUBSCRIPTION_SESSION_KEY)||'';

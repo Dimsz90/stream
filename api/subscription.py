@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from lib.config import REQUIRE_SUBSCRIPTION
 from lib.subscription import (
     SUBSCRIPTION_PLANS,
+    captcha_config,
     create_subscription_payment,
     login_subscriber,
     me,
@@ -24,6 +25,12 @@ def _public_base_url(headers) -> str:
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
+        if path.endswith("/config"):
+            return self._send_json({
+                "status": "success",
+                "enabled": REQUIRE_SUBSCRIPTION,
+                "captcha": captcha_config(),
+            })
         if path.endswith("/me"):
             body, status_code = me(self.headers)
             return self._send_json(body, status_code)
@@ -41,7 +48,11 @@ class handler(BaseHTTPRequestHandler):
             data = {}
 
         if path.endswith("/register"):
-            body, status_code = register_subscriber(data.get("username", ""), data.get("password", ""))
+            body, status_code = register_subscriber(
+                data.get("username", ""),
+                data.get("password", ""),
+                data.get("captcha_token", ""),
+            )
         elif path.endswith("/payment/create"):
             body, status_code = create_subscription_payment(
                 self.headers,
@@ -56,7 +67,11 @@ class handler(BaseHTTPRequestHandler):
                 data.get("payment_token", ""),
             )
         else:
-            body, status_code = login_subscriber(data.get("username", ""), data.get("password", data.get("pin", "")))
+            body, status_code = login_subscriber(
+                data.get("username", ""),
+                data.get("password", data.get("pin", "")),
+                data.get("captcha_token", ""),
+            )
         self._send_json(body, status_code)
 
     def do_OPTIONS(self):

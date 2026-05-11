@@ -15,6 +15,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<script src="https://www.google.com/recaptcha/api.js?render=explicit&hl=id" async defer></script>
+<script src="/js/orientation-lock.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -41,6 +43,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex
 .subauth-form{display:flex;flex-direction:column;gap:10px}
 .subauth-input{width:100%;background:rgba(255,255,255,.035);border:1px solid var(--border2);border-radius:8px;color:var(--text);font:13px var(--mono);padding:12px 13px;outline:none}
 .subauth-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.subauth-captcha{display:none;min-height:78px;padding:2px 0 0}
 .subauth-btn{height:42px;border:0;border-radius:8px;background:var(--accent);color:#061012;font-family:var(--display);font-size:18px;letter-spacing:1px;cursor:pointer}
 .subauth-btn:disabled{opacity:.55;cursor:not-allowed}
 .subauth-link{height:38px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);font:12px var(--mono);cursor:pointer}
@@ -1166,6 +1169,9 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
     <form class="subauth-form" id="subAuthForm">
       <input class="subauth-input" id="subAuthUsername" type="text" placeholder="Username" autocomplete="username">
       <input class="subauth-input" id="subAuthPin" type="password" placeholder="Password" autocomplete="current-password">
+      <div class="subauth-captcha" id="subAuthCaptchaWrap">
+        <div id="subAuthCaptcha"></div>
+      </div>
       <button class="subauth-btn" id="subAuthSubmit" type="submit">MASUK</button>
       <button class="subauth-link" id="subAuthToggle" type="button">REGISTER AKUN BARU</button>
     </form>
@@ -1504,6 +1510,9 @@ const SUBSCRIPTION_SESSION_KEY = "streamvault_subscription_token";
 let subAuthMode = "login";
 let currentSubscriber = null;
 let subscriptionPollTimer = null;
+let subscriptionCaptchaWidgetId = null;
+let subscriptionCaptchaSiteKey = "";
+let subscriptionCaptchaReadyPromise = null;
 
 async function getSubscriptionConfig() {
   if (!subscriptionConfigPromise) {
@@ -1512,6 +1521,69 @@ async function getSubscriptionConfig() {
       .catch(() => ({ enabled: false }));
   }
   return subscriptionConfigPromise;
+}
+
+function getCaptchaConfig(cfg) {
+  return (cfg && cfg.captcha) ? cfg.captcha : { enabled: false, site_key: "" };
+}
+
+async function ensureSubscriptionCaptcha() {
+  const wrap = document.getElementById("subAuthCaptchaWrap");
+  const mount = document.getElementById("subAuthCaptcha");
+  if (!wrap || !mount) return false;
+
+  const cfg = getCaptchaConfig(await getSubscriptionConfig());
+  if (!cfg.enabled || !cfg.site_key) {
+    wrap.style.display = "none";
+    subscriptionCaptchaWidgetId = null;
+    subscriptionCaptchaSiteKey = "";
+    mount.innerHTML = "";
+    return false;
+  }
+
+  wrap.style.display = "block";
+  if (subscriptionCaptchaWidgetId !== null && subscriptionCaptchaSiteKey === cfg.site_key) return true;
+
+  subscriptionCaptchaSiteKey = cfg.site_key;
+  mount.innerHTML = "";
+  const renderCaptcha = () => {
+    if (!window.grecaptcha || !grecaptcha.render) return false;
+    subscriptionCaptchaWidgetId = grecaptcha.render(mount, {
+      sitekey: cfg.site_key,
+      theme: "dark",
+      callback: () => setSubscriptionError(""),
+      "expired-callback": () => setSubscriptionError("Captcha kadaluarsa, ulangi lagi."),
+    });
+    return true;
+  };
+
+  if (renderCaptcha()) return true;
+  if (!subscriptionCaptchaReadyPromise) {
+    subscriptionCaptchaReadyPromise = new Promise(resolve => {
+      const start = Date.now();
+      const timer = setInterval(() => {
+        const ready = renderCaptcha();
+        if (ready || Date.now() - start > 10000) {
+          clearInterval(timer);
+          subscriptionCaptchaReadyPromise = null;
+          resolve(ready);
+        }
+      }, 150);
+    });
+  }
+  return subscriptionCaptchaReadyPromise;
+}
+
+function resetSubscriptionCaptcha() {
+  if (subscriptionCaptchaWidgetId !== null && window.grecaptcha?.reset) {
+    try { grecaptcha.reset(subscriptionCaptchaWidgetId); } catch {}
+  }
+}
+
+function readSubscriptionCaptcha() {
+  if (!subscriptionCaptchaSiteKey) return "";
+  if (subscriptionCaptchaWidgetId === null || !window.grecaptcha?.getResponse) return "";
+  return grecaptcha.getResponse(subscriptionCaptchaWidgetId) || "";
 }
 
 async function requireSubscriptionToken() {
@@ -1552,6 +1624,7 @@ function updateSubAuthMode() {
   submit.textContent = isRegister ? "REGISTER" : "MASUK";
   toggle.textContent = isRegister ? "SUDAH PUNYA AKUN? MASUK" : "REGISTER AKUN BARU";
   pinInput.placeholder = "Password";
+  resetSubscriptionCaptcha();
 }
 
 function showSubscriptionLogin(message = "") {
@@ -1572,8 +1645,12 @@ function showSubscriptionLogin(message = "") {
   updateSubAuthMode();
   setSubscriptionError(message);
   pinInput.value = "";
+  submit.disabled = true;
   gate.classList.add("visible");
   setTimeout(() => usernameInput.focus(), 30);
+  ensureSubscriptionCaptcha().finally(() => {
+    submit.disabled = false;
+  });
 
   subscriptionLoginPromise = new Promise((resolve, reject) => {
     toggle.onclick = () => {
@@ -1590,6 +1667,11 @@ function showSubscriptionLogin(message = "") {
         setSubscriptionError("Username dan password wajib diisi.");
         return;
       }
+      const captchaToken = await ensureSubscriptionCaptcha().then(() => readSubscriptionCaptcha());
+      if (getCaptchaConfig(await getSubscriptionConfig()).enabled && !captchaToken) {
+        setSubscriptionError("Silakan selesaikan captcha terlebih dahulu.");
+        return;
+      }
 
       submit.disabled = true;
       submit.textContent = subAuthMode === "register" ? "MEMBUAT..." : "MEMERIKSA...";
@@ -1597,8 +1679,8 @@ function showSubscriptionLogin(message = "") {
 
       try {
         const data = subAuthMode === "register"
-          ? await registerSubscription(username, password)
-          : await loginSubscription(username, password);
+          ? await registerSubscription(username, password, captchaToken)
+          : await loginSubscription(username, password, captchaToken);
         localStorage.setItem(SUBSCRIPTION_SESSION_KEY, data.token);
         currentSubscriber = data;
         updateSubscriptionUi(data.subscription);
@@ -1609,6 +1691,7 @@ function showSubscriptionLogin(message = "") {
         resolve(data.token);
       } catch (err) {
         setSubscriptionError(err.message || "Login gagal.");
+        resetSubscriptionCaptcha();
       } finally {
         submit.disabled = false;
         submit.textContent = subAuthMode === "register" ? "REGISTER" : "MASUK";
@@ -1621,11 +1704,11 @@ function showSubscriptionLogin(message = "") {
   return subscriptionLoginPromise;
 }
 
-async function loginSubscription(username, password) {
+async function loginSubscription(username, password, captchaToken = "") {
   const res = await fetch(`${STREAM_API}/api/subscription/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, captcha_token: captchaToken }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.status !== "success" || !data.token) {
@@ -1634,11 +1717,11 @@ async function loginSubscription(username, password) {
   return data;
 }
 
-async function registerSubscription(username, password) {
+async function registerSubscription(username, password, captchaToken = "") {
   const res = await fetch(`${STREAM_API}/api/subscription/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, captcha_token: captchaToken }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.status !== "success" || !data.token) {
@@ -1882,7 +1965,7 @@ let barTimer       = null;
 /* ── Rotate Lock State ── */
 let rotateLocked   = false;   // apakah sedang dikunci
 let lockOrientation = null;   // orientasi yang dikunci: 'landscape' | 'portrait'
-let orientationLockSupported = !!screen.orientation?.lock;
+let orientationMode = "browse"; // browse = portrait lock, player = auto-rotate
 
 /* Subtitle */
 const SUB = {
@@ -2567,6 +2650,7 @@ async function startStream() {
   currentPlayback = {mediaType:"movie", tmdbId:selectedItem._tmdb_id || null, season:1, episode:1, totalEpisodes:null, title};
   document.getElementById("episodeNav").style.display = "none";
 
+  enterWatchingOrientationMode();
   closeDetail();
   document.getElementById("playerMode").style.display = "block";
   showPLoading(`Mengambil stream untuk "${title}"...`);
@@ -2604,6 +2688,7 @@ async function startTvEpisodeStream(season, episode) {
   SUB.activeLang   = "en";
   resetSubtitlePanel();
 
+  enterWatchingOrientationMode();
   document.getElementById("playerMode").style.display = "block";
   document.getElementById("episodeNav").style.display = "flex";
   updateEpisodeLabel();
@@ -2782,16 +2867,11 @@ function playHls(streamUrl, opts = {}) {
    FULLSCREEN → AUTO ROTATE LANDSCAPE
 ═══════════════════════════════════════ */
 async function onEnterFullscreen() {
-  /* Jangan override kalau sudah dikunci portrait */
-  if (rotateLocked && lockOrientation === "portrait") return;
-  await requestLandscape();
+  await enterWatchingOrientationMode();
 }
 
 async function onExitFullscreen() {
-  /* Jika tidak dikunci, release rotation lock */
-  if (!rotateLocked) {
-    releaseOrientationLock();
-  }
+  if (orientationMode === "player" && !rotateLocked) OrientationLock.unlock();
 }
 
 function onNativeFullscreenChange() {
@@ -2801,58 +2881,67 @@ function onNativeFullscreenChange() {
     document.mozFullScreenElement
   );
   if (isFs) {
-    if (!rotateLocked || lockOrientation !== "portrait") requestLandscape();
+    enterWatchingOrientationMode();
   } else {
-    if (!rotateLocked) releaseOrientationLock();
+    if (orientationMode === "player" && !rotateLocked) OrientationLock.unlock();
   }
 }
 
 async function requestLandscape() {
   try {
-    if (screen.orientation?.lock) {
-      await screen.orientation.lock("landscape");
-    }
+    await OrientationLock.lockLandscape();
   } catch(e) {
     /* Beberapa browser membutuhkan user gesture atau tidak mendukung */
     console.warn("Orientation lock tidak didukung:", e.message);
   }
 }
 
-function releaseOrientationLock() {
-  try {
-    if (screen.orientation?.unlock) {
-      screen.orientation.unlock();
-    }
-  } catch {}
+function setRotateButtonState(locked, orientation = null) {
+  const btn = document.getElementById("btnRotateLock");
+  if (!btn) return;
+  const label = document.getElementById("rotateLockLabel");
+  const icon = btn.querySelector(".lock-icon");
+  btn.classList.toggle("active", locked);
+  if (icon) icon.textContent = locked ? "🔒" : "🔄";
+  if (label) {
+    label.textContent = locked
+      ? (orientation === "landscape" ? "LANDSCAPE" : "PORTRAIT")
+      : (orientationMode === "player" ? "AUTO" : "ROTATE");
+  }
+}
+
+async function enterBrowseOrientationMode() {
+  orientationMode = "browse";
+  lockOrientation = "portrait";
+  rotateLocked = true;
+  setRotateButtonState(true, "portrait");
+  await OrientationLock.lockPortrait();
+}
+
+async function enterWatchingOrientationMode() {
+  orientationMode = "player";
+  rotateLocked = false;
+  lockOrientation = null;
+  OrientationLock.unlock();
+  setRotateButtonState(false);
 }
 
 /* ═══════════════════════════════════════
    ROTATE LOCK BUTTON
 ═══════════════════════════════════════ */
+/* ── Deteksi orientasi berubah → enforce lock ── */
 function toggleRotateLock() {
-  const btn   = document.getElementById("btnRotateLock");
-  const label = document.getElementById("rotateLockLabel");
-  const icon  = btn.querySelector(".lock-icon");
-
   if (!rotateLocked) {
-    /* Kunci orientasi saat ini */
     const currentOri = window.screen?.orientation?.type || "";
     const isLandscape = currentOri.startsWith("landscape") ||
                         (window.innerWidth > window.innerHeight);
-
     lockOrientation = isLandscape ? "landscape" : "portrait";
-
     try {
-      if (screen.orientation?.lock) {
-        screen.orientation.lock(lockOrientation).then(() => {
+      if (OrientationLock.supported()) {
+        OrientationLock.lock(lockOrientation).then(() => {
           rotateLocked = true;
-          btn.classList.add("active");
-          icon.textContent = "🔒";
-          label.textContent = lockOrientation === "landscape" ? "LANDSCAPE" : "PORTRAIT";
-        }).catch(e => {
-          /* Tidak didukung di desktop — tampilkan pesan */
-          showRotateLockFallback(isLandscape);
-        });
+          setRotateButtonState(true, lockOrientation);
+        }).catch(() => showRotateLockFallback(isLandscape));
       } else {
         showRotateLockFallback(isLandscape);
       }
@@ -2860,38 +2949,25 @@ function toggleRotateLock() {
       showRotateLockFallback(isLandscape);
     }
   } else {
-    /* Lepas lock */
-    rotateLocked    = false;
+    rotateLocked = false;
     lockOrientation = null;
-    releaseOrientationLock();
-    btn.classList.remove("active");
-    icon.textContent  = "🔄";
-    label.textContent = "ROTATE";
+    OrientationLock.unlock();
+    setRotateButtonState(false);
   }
 }
 
-/** Fallback visual jika Screen Orientation API tidak ada */
 function showRotateLockFallback(isLandscape) {
-  /* Di desktop, simulasikan dengan mengubah label saja */
-  rotateLocked    = true;
+  rotateLocked = true;
   lockOrientation = isLandscape ? "landscape" : "portrait";
-  const btn   = document.getElementById("btnRotateLock");
-  const label = document.getElementById("rotateLockLabel");
-  const icon  = btn.querySelector(".lock-icon");
-  btn.classList.add("active");
-  icon.textContent  = "🔒";
-  label.textContent = lockOrientation === "landscape" ? "LANDSCAPE" : "PORTRAIT";
+  setRotateButtonState(true, lockOrientation);
 }
 
-/* ── Deteksi orientasi berubah → enforce lock ── */
 window.addEventListener("orientationchange", () => {
   if (!rotateLocked || !lockOrientation) return;
   /* Re-apply lock jika berubah */
   setTimeout(async () => {
     try {
-      if (screen.orientation?.lock) {
-        await screen.orientation.lock(lockOrientation);
-      }
+      await OrientationLock.lock(lockOrientation);
     } catch {}
   }, 100);
 });
@@ -2947,13 +3023,7 @@ function closePlayer() {
   currentPlayback = {mediaType:"movie", tmdbId:null, season:1, episode:1, totalEpisodes:null, title:""};
 
   /* Reset rotate lock */
-  rotateLocked    = false;
-  lockOrientation = null;
-  releaseOrientationLock();
-  const rotBtn = document.getElementById("btnRotateLock");
-  rotBtn.classList.remove("active");
-  rotBtn.querySelector(".lock-icon").textContent = "🔄";
-  document.getElementById("rotateLockLabel").textContent = "ROTATE";
+  enterBrowseOrientationMode();
 
   /* Lepas event listener native fullscreen */
   document.removeEventListener("fullscreenchange", onNativeFullscreenChange);
@@ -3632,6 +3702,11 @@ async function dracinLoadBrowse(reset = true) {
   }
 }
 renderContinueWatching();
+enterBrowseOrientationMode();
+document.addEventListener("visibilitychange", () => {
+  const playerOpen = document.getElementById("playerMode")?.style.display === "block";
+  if (!document.hidden && !playerOpen) enterBrowseOrientationMode();
+});
 initSubscriptionGate();
 </script>
 <script>

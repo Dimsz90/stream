@@ -22,6 +22,8 @@ import requests
 from .config import (
     BAYAR_GG_CALLBACK_BASE_URL,
     REQUIRE_SUBSCRIPTION,
+    RECAPTCHA_SECRET_KEY,
+    RECAPTCHA_SITE_KEY,
     SUBSCRIPTION_SECRET,
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_URL,
@@ -88,6 +90,43 @@ def _ensure_configured() -> tuple[bool, dict | None, int]:
     return True, None, 200
 
 
+def captcha_enabled() -> bool:
+    return bool(RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY)
+
+
+def captcha_config() -> dict:
+    return {
+        "enabled": captcha_enabled(),
+        "site_key": RECAPTCHA_SITE_KEY if captcha_enabled() else "",
+    }
+
+
+def _verify_captcha(captcha_token: str) -> tuple[bool, str]:
+    if not captcha_enabled():
+        return True, ""
+    captcha_token = str(captcha_token or "").strip()
+    if not captcha_token:
+        return False, "Captcha wajib diverifikasi."
+    try:
+        resp = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={
+                "secret": RECAPTCHA_SECRET_KEY,
+                "response": captcha_token,
+            },
+            timeout=8,
+        )
+    except Exception as exc:
+        return False, f"Captcha gagal diverifikasi: {exc}"
+
+    data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+    if resp.status_code != 200:
+        return False, "Captcha gagal diverifikasi."
+    if not data.get("success"):
+        return False, "Captcha tidak valid. Coba lagi."
+    return True, ""
+
+
 def subscription_enabled() -> bool:
     return REQUIRE_SUBSCRIPTION
 
@@ -119,7 +158,7 @@ def check_subscription(headers) -> tuple[bool, dict, int]:
     }, 200
 
 
-def login_subscriber(username: str, pin: str) -> tuple[dict, int]:
+def login_subscriber(username: str, pin: str, captcha_token: str = "") -> tuple[dict, int]:
     if not REQUIRE_SUBSCRIPTION:
         return {"status": "success", "subscription_required": False}, 200
 
@@ -130,6 +169,11 @@ def login_subscriber(username: str, pin: str) -> tuple[dict, int]:
     username = normalize_username(username)
     if not username or not pin:
         payload, status_code = _account_error("Username dan password wajib diisi.", 400)
+        return payload, status_code
+
+    ok, message = _verify_captcha(captcha_token)
+    if not ok:
+        payload, status_code = _account_error(message, 400)
         return payload, status_code
 
     sub, err = get_subscription(username)
@@ -151,7 +195,7 @@ def login_subscriber(username: str, pin: str) -> tuple[dict, int]:
     }, 200
 
 
-def register_subscriber(username: str, password: str) -> tuple[dict, int]:
+def register_subscriber(username: str, password: str, captcha_token: str = "") -> tuple[dict, int]:
     if not REQUIRE_SUBSCRIPTION:
         return {"status": "success", "subscription_required": False}, 200
 
@@ -164,6 +208,10 @@ def register_subscriber(username: str, password: str) -> tuple[dict, int]:
         return _account_error("Username 3-32 karakter, hanya huruf kecil, angka, titik, underscore, atau minus.", 400)
     if len(str(password or "")) < 6:
         return _account_error("Password minimal 6 karakter.", 400)
+
+    ok, message = _verify_captcha(captcha_token)
+    if not ok:
+        return _account_error(message, 400)
 
     body = {
         "username": username,

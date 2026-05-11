@@ -26,6 +26,10 @@ SUBSCRIPTION_SECRET = (
 # Jika 1/true/yes/on, API premium wajib punya username/PIN dengan subscription aktif.
 REQUIRE_SUBSCRIPTION = os.environ.get("REQUIRE_SUBSCRIPTION", "").lower() in ("1", "true", "yes", "on")
 
+# reCAPTCHA untuk login/register subscription.
+RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "")
+RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY", "")
+
 # Remote stream worker. Dipakai server-side supaya URL remote tidak perlu ada di HTML.
 STREAM_API_REMOTE = os.environ.get("STREAM_API_REMOTE", "").rstrip("/")
 USE_STREAM_API_REMOTE = os.environ.get("USE_STREAM_API_REMOTE", "").lower() in ("1", "true", "yes", "on")

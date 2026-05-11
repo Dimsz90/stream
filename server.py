@@ -221,9 +221,11 @@ def health():
 @app.route("/api/subscription/config")
 def subscription_config():
     from lib.config import REQUIRE_SUBSCRIPTION
+    from lib.subscription import captcha_config
 
     return jsonify({
         "enabled": REQUIRE_SUBSCRIPTION,
+        "captcha": captcha_config(),
     }), 200
 
 @app.route("/api/subscription/login", methods=["POST"])
@@ -231,7 +233,11 @@ def subscription_login():
     from lib.subscription import login_subscriber
 
     data = request.get_json(silent=True) or {}
-    body, status_code = login_subscriber(data.get("username", ""), data.get("password", data.get("pin", "")))
+    body, status_code = login_subscriber(
+        data.get("username", ""),
+        data.get("password", data.get("pin", "")),
+        data.get("captcha_token", ""),
+    )
     return jsonify(body), status_code
 
 @app.route("/api/subscription/register", methods=["POST"])
@@ -239,7 +245,11 @@ def subscription_register():
     from lib.subscription import register_subscriber
 
     data = request.get_json(silent=True) or {}
-    body, status_code = register_subscriber(data.get("username", ""), data.get("password", ""))
+    body, status_code = register_subscriber(
+        data.get("username", ""),
+        data.get("password", ""),
+        data.get("captcha_token", ""),
+    )
     return jsonify(body), status_code
 
 @app.route("/api/subscription/me")

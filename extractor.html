@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<script src="/js/orientation-lock.js"></script>
 <style>
 /* ══════════════════════════════════════════
    DESIGN TOKENS
@@ -1025,6 +1026,12 @@ function setupHideBar(screenId, barId, timerRef, delay = 3500) {
 const cinemaTmr = {}, imdbTmr = {};
 setupHideBar("cinema-mode", "cinemaBar", cinemaTmr, 3500);
 setupHideBar("imdb-mode",   "imdbBar",   imdbTmr,   4000);
+OrientationLock.lockPortrait();
+document.addEventListener("visibilitychange", () => {
+  const cinemaOpen = document.getElementById("cinema-mode").style.display === "block";
+  const imdbOpen = document.getElementById("imdb-mode").style.display === "block";
+  if (!document.hidden && !cinemaOpen && !imdbOpen) OrientationLock.lockPortrait();
+});
 
 /* ════════════════════════════════════════════
    SUBTITLE SYSTEM
@@ -1288,6 +1295,7 @@ async function modeImdb(url) {
   const id = extractImdbId(url);
   if (!id) return showError("IMDB ID tidak valid. Contoh: tt1375666");
 
+  OrientationLock.unlock();
   document.getElementById("imdb-mode").style.display = "block";
   imdbShowLoading("Mengambil info film...");
   setBtnLoading(true);
@@ -1399,6 +1407,7 @@ function playHls(proxiedUrl, embedUrl, imdbId) {
 
 function closeImdb() {
   document.getElementById("imdb-mode").style.display = "none";
+  OrientationLock.lockPortrait();
   const v = document.getElementById("imdbVideo");
   v.pause(); v.src = ""; v.style.display = "none";
   Array.from(v.querySelectorAll("track")).forEach(t => t.remove());
@@ -1426,6 +1435,7 @@ function closeImdb() {
 async function modeVidgf(url) {
   const id = url.split("/").pop().split("?")[0];
 
+  OrientationLock.unlock();
   document.getElementById("cinema-mode").style.display = "block";
   cinemaShowLoading("Mengekstrak link video...");
 
@@ -1491,6 +1501,7 @@ function cinemaShowError(msg) {
 
 function closeCinema() {
   document.getElementById("cinema-mode").style.display = "none";
+  OrientationLock.lockPortrait();
   const v = document.getElementById("cinemaVideo");
   v.pause(); v.src = ""; v.style.display = "none";
   Array.from(v.querySelectorAll("track")).forEach(t => t.remove());
