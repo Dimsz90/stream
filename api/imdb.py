@@ -137,7 +137,7 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
                 streams = data.get("data", {}).get("stream_urls", [])
                 if streams:
                     url = _pick_vaplayer_stream(streams)
-                    imdb_cache.set(cache_key, url, ttl=30)
+                    imdb_cache.set(cache_key, url, ttl=300)
                     return url
     except Exception:
         pass

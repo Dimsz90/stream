@@ -109,7 +109,7 @@ def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
         streams = data.get("data", {}).get("stream_urls", [])
         if ok and streams:
             url = _pick_vaplayer_stream(streams)
-            tmdb_cache.set(cache_key, url, ttl=30)
+            tmdb_cache.set(cache_key, url, ttl=300)
             return url
     except Exception:
         return None
