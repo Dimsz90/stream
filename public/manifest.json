@@ -3,14 +3,36 @@
   "short_name": "StreamVault",
   "id": "/",
   "description": "Universal stream extractor & player — scan, stream, subtitle.",
-  "start_url": "/",
+  "start_url": "/?tab=film",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
   "background_color": "#070709",
   "theme_color": "#ff3c5f",
   "orientation": "any",
+  "scope": "/",
   "categories": ["entertainment", "utilities"],
   "lang": "id",
   "dir": "ltr",
+  "shortcuts": [
+    {
+      "name": "Film",
+      "short_name": "Film",
+      "url": "/?tab=film",
+      "description": "Buka beranda film dan serial."
+    },
+    {
+      "name": "Dracin",
+      "short_name": "Dracin",
+      "url": "/?tab=dracin",
+      "description": "Buka tab drama pendek."
+    },
+    {
+      "name": "Extractor",
+      "short_name": "Extractor",
+      "url": "/extractor.html",
+      "description": "Buka extractor dan subtitle tools."
+    }
+  ],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

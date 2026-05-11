@@ -3248,7 +3248,8 @@ function esc(s) {
 /* ════════════════════════════════════════
    DRACIN TAB HANDLER (FINAL FIX)
 ════════════════════════════════════════ */
-let _mainTab = 'film';
+const _initialMainTab = new URLSearchParams(location.search).get('tab') === 'dracin' ? 'dracin' : 'film';
+let _mainTab = _initialMainTab;
 
 function switchMainTab(tab) {
   _mainTab = tab;
@@ -3683,7 +3684,7 @@ async function dracinLoadBrowse(reset = true) {
     }
   }
 }
-renderContinueWatching();
+switchMainTab(_initialMainTab);
 enterBrowseOrientationMode();
 document.addEventListener("visibilitychange", () => {
   const playerOpen = document.getElementById("playerMode")?.style.display === "block";
