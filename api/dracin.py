@@ -129,6 +129,17 @@ PLATFORMS = {
         "ttl_search":120,
         "ttl_ep":    300,
     },
+    "cubetv": {
+        "label": "CubeTV",
+        "icon":  "📺",
+        "_engine": "cubetv",
+        "ttl_home":  600,
+        "ttl_rank":  1800,
+        "ttl_search":120,
+        "ttl_detail":300,
+        "ttl_ep":    300,
+        "ttl_video": 120,
+    },
     "dramanova": {
         "label": "Dramanova",
         "icon":  "",
@@ -153,7 +164,7 @@ PLATFORMS = {
     },
 }
 
-AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave")
+AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave", "cubetv")
 
 # ── Melolo / Captain v1 config ────────────────────────────────────────────────
 CAPTAIN_BASE  = CAPTAIN_ROOT
@@ -182,6 +193,15 @@ def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int
     except Exception as e:
         print(f"[MELOLO:{platform}] ERROR {path}: {e}")
         return None
+
+
+def _cubetv_fetch(path: str, params: dict | None = None, ttl: int = 300):
+    """Fetch dari Captain API untuk CubeTV."""
+    if params and "lang" in params:
+        params = dict(params)
+        if str(params.get("lang", "")).lower() in ("in", "id"):
+            params["lang"] = "id"
+    return _melolo_fetch("cubetv", path, params=params, ttl=ttl)
 
 
 
@@ -703,6 +723,152 @@ def get_shortwave_video(drama_id: str, chapter_id: str, lang="in") -> dict | Non
         "_raw":      data,
     }
 
+
+def _cubetv_norm_book(raw: dict) -> dict:
+    tags = raw.get("tagInfo") or raw.get("tags") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    return {
+        "bookId":       str(raw.get("videoid") or raw.get("videoId") or raw.get("id") or ""),
+        "bookName":     raw.get("videoName") or raw.get("video_name") or raw.get("title") or "Untitled",
+        "cover":        raw.get("cover") or raw.get("coverUrl") or raw.get("poster") or "",
+        "introduction": raw.get("summary") or raw.get("description") or "",
+        "tags":         [str(t) for t in tags] if isinstance(tags, list) else [],
+        "playCount":    raw.get("hotNum") or raw.get("watchUserNum") or raw.get("playCount") or 0,
+        "chapterCount": raw.get("totalEpisodeNum") or raw.get("episodeCount") or raw.get("chapterCount") or 0,
+        "label":        raw.get("label") or "",
+        "releaseDate":  raw.get("releaseDate") or "",
+        "isFree":       raw.get("isFree"),
+        "isEnd":        raw.get("isEnd"),
+        "latestEpisodeId": raw.get("latestEpisodeid") or "",
+        "firstEpisodeId":  raw.get("firstEpisodeid") or "",
+        "_raw":         raw,
+    }
+
+
+def _cubetv_extract_books(raw: dict) -> list:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    modules = data.get("moduleVideo") or []
+    books = []
+    if isinstance(modules, list):
+        for module in modules:
+            if not isinstance(module, dict):
+                continue
+            for item in module.get("videoList") or []:
+                if isinstance(item, dict):
+                    books.append(item)
+    if books:
+        return books
+    for key in ("list", "videoList", "videos", "items", "records"):
+        val = data.get(key)
+        if isinstance(val, list) and val:
+            return val
+    return []
+
+
+def _cubetv_book_key(raw: dict) -> str:
+    return str(
+        raw.get("videoid")
+        or raw.get("videoId")
+        or raw.get("id")
+        or raw.get("videoName")
+        or raw.get("title")
+        or ""
+    )
+
+
+def _cubetv_merge_books(*groups: list) -> list:
+    merged = []
+    seen = set()
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        for item in group:
+            if not isinstance(item, dict):
+                continue
+            key = _cubetv_book_key(item)
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            merged.append(item)
+    return merged
+
+
+def _cubetv_norm_episode(raw: dict, idx: int) -> dict:
+    ep_num = raw.get("episodeNumber") or raw.get("episode") or idx + 1
+    chapter_id = raw.get("episodeid") or raw.get("episodeId") or raw.get("id") or ""
+    return {
+        "episode":      ep_num,
+        "chapterIndex": idx,
+        "chapterId":    str(chapter_id),
+        "episodeId":    str(chapter_id),
+        "vid":          str(chapter_id),
+        "url":          "",
+        "isPay":        1 if int(raw.get("lockStatus") or 0) else 0,
+        "title":        raw.get("episodeTitle") or f"Episode {ep_num}",
+        "duration":     raw.get("duration") or 0,
+        "commentCount": raw.get("commentCount") or 0,
+        "_raw":         raw,
+    }
+
+
+def _cubetv_pick_video_url(raw: dict) -> str:
+    links = raw.get("linkInfo") or []
+    if not isinstance(links, list) or not links:
+        return ""
+
+    def score(link):
+        rate = str(link.get("codeRate") or "").upper()
+        rate_score = {
+            "4K": 4,
+            "UHD": 4,
+            "FHD": 3,
+            "HD": 2,
+            "SD": 1,
+        }.get(rate, 0)
+        expire = int(link.get("expireTime") or 0)
+        return (rate_score, expire)
+
+    best = sorted(links, key=score, reverse=True)[0]
+    return best.get("linkUrl") or best.get("url") or ""
+
+
+def get_cubetv_video(video_id: str, episode_id: str, lang="in") -> dict | None:
+    if not video_id or not episode_id:
+        return None
+    raw = _cubetv_fetch(
+        f"/stream/{video_id}/{episode_id}",
+        {"lang": lang},
+        ttl=PLATFORMS["cubetv"]["ttl_video"],
+    )
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return None
+    direct_url = _cubetv_pick_video_url(data)
+    subtitles = []
+    for sub in data.get("videoCaption") or []:
+        if isinstance(sub, dict):
+            subtitles.append({
+                "language_code": sub.get("language_code") or "",
+                "url": sub.get("url") or "",
+                "episodeid": sub.get("episodeid"),
+            })
+    return {
+        "vid":         episode_id,
+        "episodeId":   episode_id,
+        "url":         direct_url,
+        "directUrl":   direct_url,
+        "subtitles":   subtitles,
+        "videoCaption": data.get("videoCaption") or [],
+        "linkInfo":    data.get("linkInfo") or [],
+        "_raw":        data,
+    }
+
 _cache = TTLCache(default_ttl=300, max_size=1000)
 
 
@@ -976,6 +1142,36 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             "total": total,
         }
 
+    if cfg.get("_engine") == "cubetv":
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+        raw = _cubetv_fetch(
+            "/shows",
+            {"page": page, "pageSize": size, "lang": lang},
+            ttl=cfg["ttl_home"],
+        )
+        if not raw:
+            return None
+        items = _cubetv_extract_books(raw)
+        books_all = [_cubetv_norm_book(b) for b in items]
+        total = len(books_all)
+        start = (page - 1) * size
+        end = start + size
+        books = books_all[start:end]
+        return {
+            "platform": platform,
+            "page":     page,
+            "sections": [],
+            "books":    books,
+            "hasMore":  end < total,
+            "bannerList": [],
+            "total":    total,
+        }
+
     if cfg.get("_engine") == "dramanova":
         raw = _dramanova_fetch(
             "/api/v1/dramas",
@@ -1190,6 +1386,26 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
             "books":     books,
         }
 
+    if cfg.get("_engine") == "cubetv":
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        raw = _run_parallel({
+            "recommendations": lambda: _cubetv_fetch("/home/recommendations", {"lang": lang}, ttl=cfg["ttl_rank"]),
+            "trending": lambda: _cubetv_fetch("/home/trending", {"lang": lang}, ttl=cfg["ttl_rank"]),
+        }, max_workers=2)
+        books = _cubetv_merge_books(
+            _cubetv_extract_books(raw.get("recommendations") or {}),
+            _cubetv_extract_books(raw.get("trending") or {}),
+        )
+        return {
+            "platform":  platform,
+            "rankType":  rank_type,
+            "rankTypes": [],
+            "books":     [_cubetv_norm_book(b) for b in books[:size]],
+        }
+
     if cfg.get("_engine") == "dramanova":
         raw = _dramanova_fetch(
             "/api/v1/recommend",
@@ -1341,6 +1557,40 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
             "page":     page,
             "books":    books,
             "hasMore":  len(items) >= 20,
+        }
+
+    if cfg.get("_engine") == "cubetv":
+        try:
+            page = int(page or 1)
+        except Exception:
+            page = 1
+        raw = _cubetv_fetch(
+            "/search",
+            {
+                "keyword": keyword,
+                "page": page,
+                "pageSize": 20,
+                "moduleid": "PaEpZ7",
+                "lang": lang,
+            },
+            ttl=cfg["ttl_search"],
+        )
+        if not raw:
+            return None
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if isinstance(data, dict):
+            rows = data.get("list") or []
+            total = int(data.get("total") or len(rows))
+        else:
+            rows = []
+            total = 0
+        return {
+            "platform": platform,
+            "keyword":  keyword,
+            "page":     page,
+            "books":    [_cubetv_norm_book(b) for b in rows],
+            "hasMore":  page * 20 < total,
+            "total":    total,
         }
 
     if cfg.get("_engine") == "dramanova":
@@ -1497,6 +1747,32 @@ def get_detail(drama_id: str, platform="dramabox", lang="en") -> dict | None:
             "freeCount":     len([c for c in chapters if c["isPay"] == 0]),
             "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
             "totalChapters": data.get("total_episodes") or len(chapters),
+            "performers":    [],
+            "rating":        {"show": False, "score": "", "count": ""},
+            "recommends":    [],
+            "downLoadQuality": [],
+        }
+
+    if cfg.get("_engine") == "cubetv":
+        meta_raw = _cubetv_fetch(f"/search/{drama_id}/episodes", {"lang": lang}, ttl=cfg["ttl_detail"])
+        list_raw = _cubetv_fetch(f"/episode/{drama_id}/list", {"lang": lang}, ttl=cfg["ttl_ep"])
+        meta = meta_raw.get("data") if isinstance(meta_raw, dict) else {}
+        episodes_raw = list_raw.get("data") if isinstance(list_raw, dict) else []
+        if not isinstance(meta, dict):
+            return None
+        if not isinstance(episodes_raw, list):
+            episodes_raw = []
+        chapters = [_cubetv_norm_episode(ep, i) for i, ep in enumerate(episodes_raw)]
+        free_eps = [c for c in chapters if c["isPay"] == 0]
+        return {
+            "bookId":        str(meta.get("videoid") or drama_id),
+            "platform":      platform,
+            "bookStatus":    1 if meta.get("isEnd") else 0,
+            "corner":        meta.get("label") or None,
+            "chapters":      chapters,
+            "freeCount":     len(free_eps),
+            "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
+            "totalChapters": len(chapters),
             "performers":    [],
             "rating":        {"show": False, "score": "", "count": ""},
             "recommends":    [],
@@ -1717,6 +1993,29 @@ def get_episodes(drama_id: str, platform="dramabox", lang="in") -> dict | None:
         }
 
     # ── Engine: dracin ────────────────────────────────────────────────────────
+    if cfg.get("_engine") == "cubetv":
+        meta_raw = _cubetv_fetch(f"/search/{drama_id}/episodes", {"lang": lang}, ttl=cfg["ttl_ep"])
+        list_raw = _cubetv_fetch(f"/episode/{drama_id}/list", {"lang": lang}, ttl=cfg["ttl_ep"])
+        meta = meta_raw.get("data") if isinstance(meta_raw, dict) else {}
+        raw_eps = list_raw.get("data") if isinstance(list_raw, dict) else []
+        if not isinstance(meta, dict):
+            return None
+        if not isinstance(raw_eps, list):
+            raw_eps = []
+        episodes = [_cubetv_norm_episode(ep, i) for i, ep in enumerate(raw_eps)]
+        free_eps = [e for e in episodes if e["isPay"] == 0]
+        return {
+            "bookId":        str(meta.get("videoid") or drama_id),
+            "bookName":      meta.get("videoName") or "Drama",
+            "cover":         meta.get("cover") or "",
+            "description":   meta.get("summary") or "",
+            "totalEpisodes": meta.get("totalEpisodeNum") or len(episodes),
+            "quality":       1080,
+            "platform":      platform,
+            "episodes":      episodes,
+            "freeCount":     len(free_eps),
+        }
+
     raw = _fetch(platform, f"/api/drama/{drama_id}/episodes",
                  {"lang": lang},
                  ttl=cfg["ttl_ep"])
@@ -1781,6 +2080,10 @@ def get_languages(platform="dramabox") -> list | None:
         if isinstance(data, dict):
             return data.get("languages") or []
         return None
+
+    if cfg.get("_engine") == "cubetv":
+        raw = _cubetv_fetch("/languages", ttl=86400)
+        return raw.get("data", []) if isinstance(raw, dict) else None
 
     raw = _fetch(platform, "/api/languages", ttl=86400)  # cache 24 jam
     if not raw or raw.get("code", -1) != 0:
@@ -1889,6 +2192,12 @@ def build_response(path: str, params: dict) -> tuple[dict, int]:
         if platform == "shortwave":
             drama_id = p("bookId", p("drama_id", ""))
             data = get_shortwave_video(drama_id, file_id, lang=lang)
+            if data and data.get("url"):
+                return {"status": "success", "data": data, "link": data["url"]}, 200
+            return {"status": "error", "message": "Video tidak ditemukan"}, 404
+        if platform == "cubetv":
+            book_id = p("bookId", p("video_id", p("drama_id", "")))
+            data = get_cubetv_video(book_id, file_id, lang=lang)
             if data and data.get("url"):
                 return {"status": "success", "data": data, "link": data["url"]}, 200
             return {"status": "error", "message": "Video tidak ditemukan"}, 404

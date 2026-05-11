@@ -17,6 +17,45 @@ from lib import vidgf
 import traceback
 
 
+BRIGHTPATH_STREAM_HOSTS = {
+    "leadgenerationblueprint.site",
+    "tmstrd.justhd.tv",
+}
+BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
+VAPLAYER_STREAM_HOSTS = (
+    "leadgenerationblueprint.site",
+    "tmstrd.justhd.tv",
+)
+
+
+def _stream_spoof_origin(target_url: str) -> str:
+    try:
+        host = urlparse(target_url).hostname or ""
+    except Exception:
+        return ""
+    return BRIGHTPATH_ORIGIN if host.lower() in BRIGHTPATH_STREAM_HOSTS else ""
+
+
+def _pick_vaplayer_stream(streams):
+    if not isinstance(streams, list):
+        return None
+
+    def score(url):
+        s = str(url or "").replace("\\/", "/")
+        host_score = 0
+        for i, host in enumerate(VAPLAYER_STREAM_HOSTS, start=1):
+            if host in s:
+                host_score = max(host_score, 100 - i)
+        ext_score = 10 if ".m3u8" in s else 0
+        kind_score = 5 if "/master.m3u8" in s else 0
+        return (host_score, ext_score + kind_score, -len(s))
+
+    urls = [str(u or "").replace("\\/", "/") for u in streams if u]
+    if not urls:
+        return None
+    return sorted(urls, key=score, reverse=True)[0]
+
+
 
 # ═══════════════════════════════════════════════
 #  HELPERS — IMDB
@@ -97,7 +136,7 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
                 data = r.json()
                 streams = data.get("data", {}).get("stream_urls", [])
                 if streams:
-                    url = streams[0].replace("\\/", "/")
+                    url = _pick_vaplayer_stream(streams)
                     imdb_cache.set(cache_key, url, ttl=30)
                     return url
     except Exception:
@@ -153,10 +192,12 @@ def do_GET(self):
                 return self.send_json({"status": "error", "message": "Proxy URL tidak valid"}, 403)
             try:
                 parsed_target = urlparse(target_url)
+                spoof_origin = _stream_spoof_origin(target_url)
+                origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
                 spoof = {
                     **VIDEO_SPOOF_HEADERS,
-                    "Referer": f"{parsed_target.scheme}://{parsed_target.netloc}/",
-                    "Origin":  f"{parsed_target.scheme}://{parsed_target.netloc}",
+                    "Referer": f"{origin_value}/",
+                    "Origin":  origin_value,
                 }
                 resp = requests.get(
                     target_url,

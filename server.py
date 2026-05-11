@@ -25,6 +25,11 @@ CORS(app)
 
 REMOTE_PROXY_CACHE = {}
 REMOTE_PROXY_TTL = 60 * 60 * 4
+BRIGHTPATH_STREAM_HOSTS = {
+    "leadgenerationblueprint.site",
+    "tmstrd.justhd.tv",
+}
+BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
 
 # DRAMANOVA protection: set via environment
 DRAMANOVA_PIN = os.environ.get("DRAMANOVA_PIN")
@@ -110,6 +115,13 @@ def public_base_url():
         "http" if "localhost" in host or "127.0.0.1" in host else "https"
     )
     return f"{scheme}://{host}"
+
+def _stream_spoof_origin(target_url: str) -> str:
+    try:
+        host = urlparse(target_url).hostname or ""
+    except Exception:
+        return ""
+    return BRIGHTPATH_ORIGIN if host.lower() in BRIGHTPATH_STREAM_HOSTS else ""
 
 def bayar_gg_error_response(exc):
     detail = getattr(exc, "detail", None)
@@ -766,6 +778,9 @@ def proxy():
     def _header_variants(url):
         parsed = urlparse(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
+        spoof_origin = _stream_spoof_origin(url)
+        if spoof_origin:
+            origin = spoof_origin
         common = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -781,7 +796,8 @@ def proxy():
         configured = {**common, **VIDEO_SPOOF_HEADERS}
         origin_ref = {**common, "Referer": f"{origin}/", "Origin": origin}
         no_origin = {**common, "Referer": f"{origin}/"}
-        player_ref = {**common, "Referer": "https://streamdata.vaplayer.ru/", "Origin": "https://streamdata.vaplayer.ru"}
+        player_ref_origin = spoof_origin or "https://streamdata.vaplayer.ru"
+        player_ref = {**common, "Referer": f"{player_ref_origin}/", "Origin": player_ref_origin}
 
         variants = []
         for name, headers in (

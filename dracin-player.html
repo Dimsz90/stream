@@ -328,6 +328,14 @@ async function getVideoUrl(ep){
             }
             return '';
         }
+        if(platform === 'cubetv'){
+            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=cubetv&lang=in');
+            if(link){
+                ep.url = link;
+                return link;
+            }
+            return '';
+        }
         if(platform === 'reelshort'){
             const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=reelshort&lang=in');
             if(link){
@@ -457,7 +465,7 @@ async function init(){
             // API sudah menormalisasi: d.episodes, d.bookName, d.cover
             episodes=d.episodes||[];
             document.getElementById('titleEl').textContent=d.bookName||'Drama';
-            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+({'dramabox':'DramaBox','reelshort':'ReelShort','melolo':'Melolo','dramanova':'Dramanova','shortwave':'ShortWave'}[platform]||platform);
+            document.getElementById('metaEl').textContent=(episodes.length||0)+' Episode · '+({'dramabox':'DramaBox','reelshort':'ReelShort','melolo':'Melolo','dramanova':'Dramanova','shortwave':'ShortWave','cubetv':'CubeTV'}[platform]||platform);
             // Update tab title
             document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
             renderEps();
