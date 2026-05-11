@@ -402,6 +402,8 @@ def remote_proxy():
             text = resp.text
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1).strip())
+                if abs_link.split("?")[0].endswith(".html"):
+                    return abs_link
                 return cache_remote_proxy_url(abs_link)
             text = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, text, flags=re.MULTILINE)
             return Response(text.encode(), status=resp.status_code, headers={
@@ -902,6 +904,10 @@ def proxy():
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
+                # segment .html adalah file .ts yang disamarkan oleh tmstrd.justhd.tv
+                # server Railway diblokir host tersebut — biarkan browser fetch langsung
+                if abs_link.split("?")[0].endswith(".html"):
+                    return abs_link
                 return sign_proxy_url(abs_link)
 
             new_content = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, content, flags=re.MULTILINE)
@@ -980,8 +986,9 @@ def proxy_browser():
 
                         def rewrite(m):
                             abs_link = urljoin(m3u8_url, m.group(1))
+                            if abs_link.split("?")[0].endswith(".html"):
+                                return abs_link
                             return sign_proxy_url(abs_link)
-
                         new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
                         browser.close()
                         return Response(
