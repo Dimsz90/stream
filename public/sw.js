@@ -1,4 +1,4 @@
-const CACHE_NAME = "StreamVault-v1.1";
+const CACHE_NAME = "StreamVault-v1.2";
 
 const PRECACHE = [
   "/extractor.html",
