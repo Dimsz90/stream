@@ -107,6 +107,8 @@ def require_proxy_signature(target_url):
 def remote_api_enabled():
     from lib.config import STREAM_API_REMOTE, USE_STREAM_API_REMOTE
 
+    if request.headers.get("X-Stream-Remote-Hop") == "1":
+        return False
     return USE_STREAM_API_REMOTE and bool(STREAM_API_REMOTE)
 
 def remote_base():
@@ -183,7 +185,7 @@ def remote_api_json(path):
     target = f"{remote_base()}{path}"
     if request.query_string:
         target = f"{target}?{request.query_string.decode('utf-8')}"
-    headers = remote_forward_headers()
+    headers = {**remote_forward_headers(), "X-Stream-Remote-Hop": "1"}
     try:
         resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), timeout=25)
         data = resp.json()
@@ -197,7 +199,7 @@ def remote_api_passthrough(path):
     target = f"{remote_base()}{path}"
     if request.query_string:
         target = f"{target}?{request.query_string.decode('utf-8')}"
-    headers = remote_forward_headers()
+    headers = {**remote_forward_headers(), "X-Stream-Remote-Hop": "1"}
     try:
         resp = req.request(request.method, target, headers=headers, json=request.get_json(silent=True), stream=True, timeout=25)
         def generate():
@@ -814,6 +816,9 @@ def proxy():
     denied = require_proxy_signature(target_url)
     if denied:
         return denied
+
+    if remote_api_enabled():
+        return remote_api_passthrough("/api/proxy")
 
     def _playlist_state(resp, body=None):
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
