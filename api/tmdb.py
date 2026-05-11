@@ -21,22 +21,34 @@ VAPLAYER_STREAM_HOSTS = (
     "tmstrd.justhd.tv",
 )
 
+# tmstrd.justhd.tv memakai segment .html (TS yang disamarkan) dan
+# memblokir server-side proxy — hindari kecuali tidak ada pilihan lain
+DEPRIORITIZED_HOSTS = {"tmstrd.justhd.tv"}
+
 
 def _pick_vaplayer_stream(streams):
     if not isinstance(streams, list):
         return None
 
     def score(url):
-        s = str(url or "").replace("\\/", "/")
+        s = str(url or "").replace("\/", "/")
+
+        # Langsung deprioritaskan host yang bermasalah
+        for bad in DEPRIORITIZED_HOSTS:
+            if bad in s:
+                return (-1, 0, 0)
+
         host_score = 0
         for i, host in enumerate(VAPLAYER_STREAM_HOSTS, start=1):
             if host in s:
                 host_score = max(host_score, 100 - i)
+
         ext_score = 10 if ".m3u8" in s else 0
+        # master.m3u8 lebih baik dari list.m3u8 karena punya multi-quality
         kind_score = 5 if "/master.m3u8" in s else 0
         return (host_score, ext_score + kind_score, -len(s))
 
-    urls = [str(u or "").replace("\\/", "/") for u in streams if u]
+    urls = [str(u or "").replace("\/", "/") for u in streams if u]
     if not urls:
         return None
     return sorted(urls, key=score, reverse=True)[0]
@@ -109,7 +121,7 @@ def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
         streams = data.get("data", {}).get("stream_urls", [])
         if ok and streams:
             url = _pick_vaplayer_stream(streams)
-            tmdb_cache.set(cache_key, url, ttl=300)
+            tmdb_cache.set(cache_key, url, ttl=30)
             return url
     except Exception:
         return None
