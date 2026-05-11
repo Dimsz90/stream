@@ -284,7 +284,31 @@ def subscription_me():
 
     body, status_code = me(request.headers)
     return jsonify(body), status_code
-
+@app.route("/api/debug-ip")
+def debug_ip():
+    import requests as req
+    try:
+        # Cek IP server Railway
+        ip = req.get("https://api.ipify.org?format=json", timeout=5).json()
+        
+        # Test akses ke Vaplayer CDN
+        test = req.get(
+            "https://leadgenerationblueprint.site/VmxrmarW5/pl/H4sIAAAAAAAAAwXBWWLCMBAAsBtIPMSg9AIRCLYxkmVL3kLyiVMb7P5B3L67PZxgRqfqRoWIL6_jvBOTCq_k7Ul5HQ3r9xgdZi3b0QKJQMC4AxgGGWlZYYtxqLfCBzSSqxbzaQXMmDI1aMWq1lGMSjopTfT.Mh2HlQZFdHCbQBEAAA--/master.m3u8",
+            headers={
+                "Origin": "https://brightpathsignals.com",
+                "Referer": "https://brightpathsignals.com/",
+                "User-Agent": "Mozilla/5.0 Chrome/147.0.0.0",
+            },
+            timeout=5
+        )
+        return {
+            "server_ip": ip,
+            "vaplayer_status": test.status_code,
+            "vaplayer_reason": test.headers.get("x-deny-reason", "none"),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+        
 @app.route("/api/subscription/plans")
 def subscription_plans():
     from lib.subscription import SUBSCRIPTION_PLANS
