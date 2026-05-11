@@ -872,7 +872,9 @@ def proxy():
         if resp is None:
             return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 502
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
-
+        clean_target = target_url.split("?")[0]
+        if clean_target.endswith(".html") and "text/html" in content_type:
+            content_type = "video/mp2t"
         if "mpegurl" in content_type.lower() or is_playlist_url:
             content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(
                 resp,

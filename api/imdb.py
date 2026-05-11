@@ -56,7 +56,6 @@ def _pick_vaplayer_stream(streams):
     return sorted(urls, key=score, reverse=True)[0]
 
 
-
 # ═══════════════════════════════════════════════
 #  HELPERS — IMDB
 # ═══════════════════════════════════════════════
@@ -69,7 +68,6 @@ def extract_imdb_id(raw: str):
 
 
 def get_movie_info(imdb_id: str) -> dict:
-    # Cek cache dulu
     cached = imdb_cache.get(f"info:{imdb_id}")
     if cached:
         return cached
@@ -99,7 +97,6 @@ def get_movie_info(imdb_id: str) -> dict:
                         "genre":       d.get("Genre", ""),
                         "runtime":     d.get("Runtime", ""),
                     })
-                    # Simpan ke cache (1 jam)
                     imdb_cache.set(f"info:{imdb_id}", info)
                     return info
         except Exception:
@@ -154,133 +151,141 @@ class handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-def do_GET(self):
-    try:
-        parsed = urlparse(self.path)
-        path   = parsed.path
-        params = parse_qs(parsed.query)
+    def do_GET(self):
+        try:
+            parsed = urlparse(self.path)
+            path   = parsed.path
+            params = parse_qs(parsed.query)
 
-        # ── imdb-proxy HARUS duluan ──
-        if "/api/imdb-proxy" in path:
-            endpoint = (params.get("endpoint", [None])[0] or "").strip()
-            if not endpoint or not endpoint.startswith("/"):
-                return self.send_json({"error": "endpoint tidak valid"}, 400)
-            try:
-                target = f"https://imdb.iamidiotareyoutoo.com{endpoint}"
-                r = requests.get(target, headers=HEADERS, timeout=8)
-                body = r.content
-                self.send_response(r.status_code)
-                self._cors()
-                self.send_header("Content-Type", r.headers.get("Content-Type", "application/json"))
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            except Exception as e:
-                self.send_json({"error": str(e)}, 500)
-            return
+            # ── imdb-proxy HARUS duluan ──
+            if "/api/imdb-proxy" in path:
+                endpoint = (params.get("endpoint", [None])[0] or "").strip()
+                if not endpoint or not endpoint.startswith("/"):
+                    return self.send_json({"error": "endpoint tidak valid"}, 400)
+                try:
+                    target = f"https://imdb.iamidiotareyoutoo.com{endpoint}"
+                    r = requests.get(target, headers=HEADERS, timeout=8)
+                    body = r.content
+                    self.send_response(r.status_code)
+                    self._cors()
+                    self.send_header("Content-Type", r.headers.get("Content-Type", "application/json"))
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                except Exception as e:
+                    self.send_json({"error": str(e)}, 500)
+                return
 
-        # ── Proxy video / m3u8 ──
-        if "/api/proxy" in path:
-            target_url = params.get("url", [None])[0]
-            if not target_url:
-                return self.send_error(400)
-            try:
-                from lib.proxy_signing import validate_proxy_signature
-                if not validate_proxy_signature(target_url, params.get("exp", [""])[0], params.get("sig", [""])[0]):
-                    return self.send_json({"status": "error", "message": "Proxy URL tidak valid atau sudah kedaluwarsa"}, 403)
-            except Exception:
-                return self.send_json({"status": "error", "message": "Proxy URL tidak valid"}, 403)
-            try:
-                parsed_target = urlparse(target_url)
-                spoof_origin = _stream_spoof_origin(target_url)
-                origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
-                spoof = {
-                    **VIDEO_SPOOF_HEADERS,
-                    "Referer": f"{origin_value}/",
-                    "Origin":  origin_value,
-                }
-                resp = requests.get(
-                    target_url,
-                    headers=spoof,
-                    stream=True,
-                    timeout=15,
-                )
-                self.send_response(resp.status_code)
-                self._cors()
-                ct = resp.headers.get("Content-Type", "application/octet-stream")
-                self.send_header("Content-Type", ct)
-                self.end_headers()
+            # ── Proxy video / m3u8 ──
+            if "/api/proxy" in path:
+                target_url = params.get("url", [None])[0]
+                if not target_url:
+                    return self.send_error(400)
+                try:
+                    from lib.proxy_signing import validate_proxy_signature
+                    if not validate_proxy_signature(target_url, params.get("exp", [""])[0], params.get("sig", [""])[0]):
+                        return self.send_json({"status": "error", "message": "Proxy URL tidak valid atau sudah kedaluwarsa"}, 403)
+                except Exception:
+                    return self.send_json({"status": "error", "message": "Proxy URL tidak valid"}, 403)
+                try:
+                    parsed_target = urlparse(target_url)
+                    spoof_origin = _stream_spoof_origin(target_url)
+                    origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
+                    spoof = {
+                        **VIDEO_SPOOF_HEADERS,
+                        "Referer": f"{origin_value}/",
+                        "Origin":  origin_value,
+                    }
+                    resp = requests.get(
+                        target_url,
+                        headers=spoof,
+                        stream=True,
+                        timeout=15,
+                    )
+                    self.send_response(resp.status_code)
+                    self._cors()
+                    ct = resp.headers.get("Content-Type", "application/octet-stream")
 
-                if "mpegurl" in ct.lower() or target_url.endswith(".m3u8"):
-                    content = resp.text
-                    def rewrite(m):
-                        abs_link = urljoin(target_url, m.group(1))
+                    # tmstrd.justhd.tv serve file .ts asli pakai extension .html
+                    # dan Content-Type: text/html — paksa ke video/mp2t
+                    # supaya HLS.js bisa decode segment dengan benar
+                    clean_url = target_url.split("?")[0]
+                    if clean_url.endswith(".html") and "text/html" in ct:
+                        ct = "video/mp2t"
+
+                    self.send_header("Content-Type", ct)
+                    self.end_headers()
+
+                    if "mpegurl" in ct.lower() or target_url.endswith(".m3u8"):
+                        content = resp.text
+                        def rewrite(m):
+                            abs_link = urljoin(target_url, m.group(1))
+                            try:
+                                from lib.proxy_signing import sign_proxy_url
+                                return sign_proxy_url(abs_link)
+                            except Exception:
+                                return f"/api/proxy?url={quote(abs_link)}"
+                        new_content = re.sub(
+                            r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE
+                        )
+                        self.wfile.write(new_content.encode())
+                    else:
+                        for chunk in resp.iter_content(chunk_size=65536):
+                            self.wfile.write(chunk)
+                except Exception:
+                    self.send_error(500)
+                return
+
+            # ── IMDB info + stream ──
+            if "/api/imdb" in path:
+                raw_id = (params.get("id",     [None])[0] or "").strip()
+                action = (params.get("action", ["info"])[0] or "info").strip()
+
+                imdb_id = extract_imdb_id(raw_id)
+                if not imdb_id:
+                    return self.send_json({"error": "ID tidak valid"}, 400)
+
+                info = get_movie_info(imdb_id)
+
+                if action == "stream":
+                    m_type  = "tv" if info.get("type") == "series" else "movie"
+                    season = params.get("s", params.get("season", ["1"]))[0]
+                    episode = params.get("e", params.get("episode", ["1"]))[0]
+                    raw_url = get_fast_stream(imdb_id, m_type, season, episode)
+                    if raw_url:
+                        host = self.headers.get("Host", "")
+                        protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
                         try:
                             from lib.proxy_signing import sign_proxy_url
-                            return sign_proxy_url(abs_link)
+                            info["stream_url"] = sign_proxy_url(raw_url, f"{protocol}://{host}")
                         except Exception:
-                            return f"/api/proxy?url={quote(abs_link)}"
-                    new_content = re.sub(
-                        r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE
-                    )
-                    self.wfile.write(new_content.encode())
-                else:
-                    for chunk in resp.iter_content(chunk_size=65536):
-                        self.wfile.write(chunk)
-            except Exception:
-                self.send_error(500)
-            return
+                            info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
+                        info["rawStreamUrl"] = raw_url
+                        info["streamResolver"] = "imdb-vaplayer"
+                        info["season"] = int(season) if str(season).isdigit() else season
+                        info["episode"] = int(episode) if str(episode).isdigit() else episode
+                    info["embed_url"] = f"https://streamimdb.ru/embed/movie/{imdb_id}"
 
-        # ── IMDB info + stream ──
-        if "/api/imdb" in path:
-            raw_id = (params.get("id",     [None])[0] or "").strip()
-            action = (params.get("action", ["info"])[0] or "info").strip()
+                return self.send_json({"status": "success", **info})
 
-            imdb_id = extract_imdb_id(raw_id)
-            if not imdb_id:
-                return self.send_json({"error": "ID tidak valid"}, 400)
+            # ── Vidgf extractor ──
+            if "/api/get-video" in path:
+                video_id = (params.get("id", [None])[0] or "").strip()
+                if not video_id:
+                    return self.send_json({"status": "error", "message": "ID kosong"}, 400)
+                if "/" in video_id:
+                    video_id = video_id.strip("/").split("/")[-1].split("?")[0]
 
-            info = get_movie_info(imdb_id)
+                url = vidgf.extract(video_id)
+                if url:
+                    return self.send_json({"status": "success", "link": url, "id": video_id})
+                return self.send_json({"status": "error", "message": "Link tidak ditemukan"}, 404)
 
-            if action == "stream":
-                m_type  = "tv" if info.get("type") == "series" else "movie"
-                season = params.get("s", params.get("season", ["1"]))[0]
-                episode = params.get("e", params.get("episode", ["1"]))[0]
-                raw_url = get_fast_stream(imdb_id, m_type, season, episode)
-                if raw_url:
-                    host = self.headers.get("Host", "")
-                    protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
-                    try:
-                        from lib.proxy_signing import sign_proxy_url
-                        info["stream_url"] = sign_proxy_url(raw_url, f"{protocol}://{host}")
-                    except Exception:
-                        info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
-                    info["rawStreamUrl"] = raw_url
-                    info["streamResolver"] = "imdb-vaplayer"
-                    info["season"] = int(season) if str(season).isdigit() else season
-                    info["episode"] = int(episode) if str(episode).isdigit() else episode
-                info["embed_url"] = f"https://streamimdb.ru/embed/movie/{imdb_id}"
+            self.send_json({"error": "Route tidak ditemukan"}, 404)
 
-            return self.send_json({"status": "success", **info})
-
-        # ── Vidgf extractor ──
-        if "/api/get-video" in path:
-            video_id = (params.get("id", [None])[0] or "").strip()
-            if not video_id:
-                return self.send_json({"status": "error", "message": "ID kosong"}, 400)
-            if "/" in video_id:
-                video_id = video_id.strip("/").split("/")[-1].split("?")[0]
-
-            url = vidgf.extract(video_id)
-            if url:
-                return self.send_json({"status": "success", "link": url, "id": video_id})
-            return self.send_json({"status": "error", "message": "Link tidak ditemukan"}, 404)
-
-        self.send_json({"error": "Route tidak ditemukan"}, 404)
-
-    except Exception as e:
-        tb = traceback.format_exc()
-        self.send_json({"error": str(e), "traceback": tb}, 500)
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.send_json({"error": str(e), "traceback": tb}, 500)
 
     # ── Utilities ──
     def _cors(self):
