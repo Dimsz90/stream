@@ -25,11 +25,29 @@ CORS(app)
 
 REMOTE_PROXY_CACHE = {}
 REMOTE_PROXY_TTL = 60 * 60 * 4
-BRIGHTPATH_STREAM_HOSTS = {
-    "leadgenerationblueprint.site",
-    "tmstrd.justhd.tv",
-}
+# Hardcoded hosts dihapus — spoof origin sekarang dynamic
+# berdasarkan apakah URL berasal dari Vaplayer CDN
 BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
+
+# Indikator bahwa URL berasal dari Vaplayer CDN dan perlu di-spoof
+# Deteksi via path pattern, bukan whitelist host
+def _is_vaplayer_stream(url: str) -> bool:
+    """
+    Vaplayer CDN selalu punya path pattern:
+    /<token>/pl/<hash>/... atau /<token>/cdnstr/<hash>/...
+    Tidak perlu whitelist host karena CDN mereka ganti domain sewaktu-waktu.
+    """
+    try:
+        from urllib.parse import urlparse as _up
+        path = _up(url).path
+        # Pattern: /XxXxXx/pl/... atau /XxXxXx/cdnstr/... atau /static/df/...
+        import re as _re
+        return bool(
+            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr)/', path)
+            or '/static/df/' in path
+        )
+    except Exception:
+        return False
 
 # DRAMANOVA protection: set via environment
 DRAMANOVA_PIN = os.environ.get("DRAMANOVA_PIN")
@@ -117,11 +135,7 @@ def public_base_url():
     return f"{scheme}://{host}"
 
 def _stream_spoof_origin(target_url: str) -> str:
-    try:
-        host = urlparse(target_url).hostname or ""
-    except Exception:
-        return ""
-    return BRIGHTPATH_ORIGIN if host.lower() in BRIGHTPATH_STREAM_HOSTS else ""
+    return BRIGHTPATH_ORIGIN if _is_vaplayer_stream(target_url) else ""
 
 def bayar_gg_error_response(exc):
     detail = getattr(exc, "detail", None)

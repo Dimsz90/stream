@@ -17,19 +17,24 @@ from lib import vidgf
 import traceback
 
 
-BRIGHTPATH_STREAM_HOSTS = {
-    "leadgenerationblueprint.site",
-    "tmstrd.justhd.tv",
-}
 BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
-VAPLAYER_STREAM_HOSTS = (
-    "leadgenerationblueprint.site",
-    "tmstrd.justhd.tv",
-)
 
-# tmstrd.justhd.tv memakai segment .html (TS yang disamarkan) dan
-# memblokir server-side proxy — hindari kecuali tidak ada pilihan lain
+# tmstrd.justhd.tv memakai segment .html dan memblokir server-side proxy
 DEPRIORITIZED_HOSTS = {"tmstrd.justhd.tv"}
+
+
+def _is_vaplayer_stream(url: str) -> bool:
+    """Deteksi URL Vaplayer CDN secara dynamic via path pattern."""
+    try:
+        from urllib.parse import urlparse as _up
+        import re as _re
+        path = _up(url).path
+        return bool(
+            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr)/', path)
+            or '/static/df/' in path
+        )
+    except Exception:
+        return False
 
 
 def _pick_vaplayer_stream(streams):
@@ -37,23 +42,24 @@ def _pick_vaplayer_stream(streams):
         return None
 
     def score(url):
-        s = str(url or "").replace("\/", "/")
+        s = str(url or "").replace("\\/", "/")
 
-        # Langsung deprioritaskan host yang bermasalah
+        # Deprioritaskan host yang bermasalah (blokir server-side proxy)
         for bad in DEPRIORITIZED_HOSTS:
             if bad in s:
                 return (-1, 0, 0)
 
-        host_score = 0
-        for i, host in enumerate(VAPLAYER_STREAM_HOSTS, start=1):
-            if host in s:
-                host_score = max(host_score, 100 - i)
+        # Semua host Vaplayer CDN dapat base score sama
+        # — tidak perlu whitelist, deteksi via path pattern
+        is_vaplayer = _is_vaplayer_stream(s)
+        host_score = 50 if is_vaplayer else 0
 
         ext_score = 10 if ".m3u8" in s else 0
+        # master.m3u8 lebih baik karena punya multi-quality
         kind_score = 5 if "/master.m3u8" in s else 0
         return (host_score, ext_score + kind_score, -len(s))
 
-    urls = [str(u or "").replace("\/", "/") for u in streams if u]
+    urls = [str(u or "").replace("\\/", "/") for u in streams if u]
     if not urls:
         return None
     return sorted(urls, key=score, reverse=True)[0]
