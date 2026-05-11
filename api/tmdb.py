@@ -35,9 +35,6 @@ def _is_vaplayer_stream(url: str) -> bool:
 
 
 def _pick_vaplayer_stream(streams):
-    if not isinstance(streams, list):
-        return None
-
     def score(url):
         s = str(url or "").replace("\\/", "/")
 
@@ -53,10 +50,35 @@ def _pick_vaplayer_stream(streams):
         kind_score = 5 if "/master.m3u8" in s else 0
         return (host_score, ext_score + kind_score, -len(s))
 
-    urls = [str(u or "").replace("\\/", "/") for u in streams if u]
+    urls = _normalize_vaplayer_streams(streams)
     if not urls:
         return None
     return sorted(urls, key=score, reverse=True)[0]
+
+
+def _normalize_vaplayer_streams(streams):
+    if not isinstance(streams, list):
+        return []
+    urls = []
+    seen = set()
+    for item in streams:
+        url = str(item or "").replace("\\/", "/").strip()
+        if not url or not url.startswith(("http://", "https://")) or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    if not urls:
+        return []
+    def score(url):
+        s = str(url or "").replace("\\/", "/")
+        for bad in DEPRIORITIZED_HOSTS:
+            if bad in s:
+                return (-1, 0, 0)
+        host_score = 50 if _is_vaplayer_stream(s) else 0
+        ext_score = 10 if ".m3u8" in s else 0
+        kind_score = 5 if "/master.m3u8" in s else 0
+        return (host_score, ext_score + kind_score, -len(s))
+    return sorted(urls, key=score, reverse=True)
 
 
 def _get_json(url, params=None, ttl=3600):
@@ -98,9 +120,9 @@ def get_season_info(tmdb_id, season):
     )
 
 
-def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
+def find_streams(tmdb_id, media_type="movie", season=None, episode=None):
     media_type = "tv" if media_type == "tv" else "movie"
-    cache_key = f"stream:{media_type}:{tmdb_id}"
+    cache_key = f"streams:{media_type}:{tmdb_id}"
     params = {"tmdb": tmdb_id, "type": media_type}
 
     if media_type == "tv":
@@ -120,17 +142,22 @@ def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
             timeout=8,
         )
         if r.status_code != 200:
-            return None
+            return []
         data = r.json()
         ok = str(data.get("status_code")) == "200" or data.get("status") == "success"
         streams = data.get("data", {}).get("stream_urls", [])
         if ok and streams:
-            url = _pick_vaplayer_stream(streams)
-            tmdb_cache.set(cache_key, url, ttl=30)
-            return url
+            urls = _normalize_vaplayer_streams(streams)
+            tmdb_cache.set(cache_key, urls, ttl=30)
+            return urls
     except Exception:
-        return None
-    return None
+        return []
+    return []
+
+
+def find_stream(tmdb_id, media_type="movie", season=None, episode=None):
+    streams = find_streams(tmdb_id, media_type, season, episode)
+    return streams[0] if streams else None
 
 
 def _poster(path):
@@ -151,14 +178,16 @@ def build_stream_payload(tmdb_id, media_type="movie", season=1, episode=1, proxy
         episode_info = get_episode_info(tmdb_id, season, episode) or {}
         season_info = get_season_info(tmdb_id, season) or {}
 
-    stream_url = find_stream(tmdb_id, media_type, season, episode)
-    proxied_url = stream_url
-    if proxy_base and stream_url:
+    stream_urls = find_streams(tmdb_id, media_type, season, episode)
+    stream_url = stream_urls[0] if stream_urls else None
+    proxied_urls = list(stream_urls)
+    if proxy_base and stream_urls:
         try:
             from lib.proxy_signing import sign_proxy_url
-            proxied_url = sign_proxy_url(stream_url, proxy_base)
+            proxied_urls = [sign_proxy_url(url, proxy_base) for url in stream_urls]
         except Exception:
-            proxied_url = f"{proxy_base}/api/proxy?url={quote(stream_url)}"
+            proxied_urls = [f"{proxy_base}/api/proxy?url={quote(url)}" for url in stream_urls]
+    proxied_url = proxied_urls[0] if proxied_urls else None
 
     title = media.get("title") or media.get("name") or "Unknown Title"
     ep_title = None
@@ -175,6 +204,9 @@ def build_stream_payload(tmdb_id, media_type="movie", season=1, episode=1, proxy
         "streamUrl": proxied_url,
         "stream_url": proxied_url,
         "rawStreamUrl": stream_url,
+        "streamUrls": proxied_urls,
+        "stream_urls": proxied_urls,
+        "rawStreamUrls": stream_urls,
         "link": proxied_url,
         "tmdbId": str(tmdb_id),
         "season": int(season) if media_type == "tv" else None,
@@ -228,4 +260,4 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, *a):
-        pass    
+        pass

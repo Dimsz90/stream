@@ -440,7 +440,7 @@ def remote_proxy():
             text = resp.text
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1).strip())
-                if abs_link.split("?")[0].endswith(".html"):
+                if urlparse(abs_link).netloc == "tmstrd.justhd.tv" and abs_link.split("?")[0].endswith(".html"):
                     return abs_link
                 return cache_remote_proxy_url(abs_link)
             text = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, text, flags=re.MULTILINE)
@@ -601,10 +601,16 @@ def tmdb_stream():
             episode,
             proxy_base=None,
         )
-        if data.get("rawStreamUrl"):
-            data["streamUrl"] = sign_proxy_url(data["rawStreamUrl"], f"{scheme}://{host}")
-            data["stream_url"] = data["streamUrl"]
-            data["link"] = data["streamUrl"]
+        raw_urls = data.get("rawStreamUrls") or ([data["rawStreamUrl"]] if data.get("rawStreamUrl") else [])
+        if raw_urls:
+            signed_urls = [sign_proxy_url(url, f"{scheme}://{host}") for url in raw_urls]
+            data["streamUrl"] = signed_urls[0]
+            data["stream_url"] = signed_urls[0]
+            data["link"] = signed_urls[0]
+            data["streamUrls"] = signed_urls
+            data["stream_urls"] = signed_urls
+            data["rawStreamUrl"] = raw_urls[0]
+            data["rawStreamUrls"] = raw_urls
         return jsonify(data), 200 if data.get("success") else 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -767,12 +773,22 @@ def imdb_api():
             media_type = "tv" if info.get("type") == "series" else "movie"
             season = request.args.get("s") or request.args.get("season") or "1"
             episode = request.args.get("e") or request.args.get("episode") or "1"
-            raw_url = mod.get_fast_stream(imdb_id, media_type, season, episode)
+            if hasattr(mod, "get_fast_streams"):
+                raw_urls = mod.get_fast_streams(imdb_id, media_type, season, episode)
+            else:
+                raw_url = mod.get_fast_stream(imdb_id, media_type, season, episode)
+                raw_urls = [raw_url] if raw_url else []
+            raw_url = raw_urls[0] if raw_urls else None
             if raw_url:
                 scheme = request.headers.get('X-Forwarded-Proto', 'https')
                 host = request.host
-                info["stream_url"] = sign_proxy_url(raw_url, f"{scheme}://{host}")
+                signed_urls = [sign_proxy_url(url, f"{scheme}://{host}") for url in raw_urls]
+                info["stream_url"] = signed_urls[0]
+                info["streamUrl"] = signed_urls[0]
+                info["streamUrls"] = signed_urls
+                info["stream_urls"] = signed_urls
                 info["rawStreamUrl"] = raw_url
+                info["rawStreamUrls"] = raw_urls
                 info["streamResolver"] = "imdb-vaplayer"
                 info["season"] = int(season) if str(season).isdigit() else season
                 info["episode"] = int(episode) if str(episode).isdigit() else episode
@@ -881,26 +897,27 @@ def proxy():
 
         try:
             from curl_cffi import requests as curl_req
-            for browser in ("chrome124", "chrome120", "chrome101"):
-                resp = curl_req.get(
-                    url,
-                    headers=VIDEO_SPOOF_HEADERS,
-                    impersonate=browser,
-                    proxies=proxy_cfg,
-                    stream=True,
-                    timeout=20,
-                )
-                last_resp = resp
-                attempts.append({"client": "curl_cffi", "headers": "dev", "impersonate": browser, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
-                if not is_playlist:
-                    if resp.ok:
-                        return resp, attempts, None
-                    continue
+            for name, headers in _header_variants(url):
+                for browser in ("chrome124", "chrome120", "chrome101"):
+                    resp = curl_req.get(
+                        url,
+                        headers=headers,
+                        impersonate=browser,
+                        proxies=proxy_cfg,
+                        stream=True,
+                        timeout=20,
+                    )
+                    last_resp = resp
+                    attempts.append({"client": "curl_cffi", "headers": name, "impersonate": browser, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
+                    if not is_playlist:
+                        if resp.ok:
+                            return resp, attempts, None
+                        continue
 
-                content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(resp)
-                last_playlist_text = content
-                if resp.ok and looks_like_playlist and not looks_like_html:
-                    return resp, attempts, content
+                    content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(resp)
+                    last_playlist_text = content
+                    if resp.ok and looks_like_playlist and not looks_like_html:
+                        return resp, attempts, content
         except Exception as err:
             attempts.append({"client": "curl_cffi", "error": str(err)})
 
@@ -922,10 +939,10 @@ def proxy():
 
         # Paksa Content-Type ke video/mp2t untuk segment yang disamarkan sebagai .html
         # Ini mencegah HLS.js salah decode binary data
-        if is_disguised_segment and "text/html" in content_type:
+        if is_disguised_segment and "text/html" in content_type.lower():
             content_type = "video/mp2t"
 
-        if "mpegurl" in content_type.lower() or is_playlist_url:
+        if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
             content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(
                 resp,
                 cached_playlist_text,
@@ -944,7 +961,7 @@ def proxy():
                 abs_link = urljoin(target_url, m.group(1))
                 # segment .html adalah file .ts yang disamarkan oleh tmstrd.justhd.tv
                 # server Railway diblokir host tersebut — biarkan browser fetch langsung
-                if abs_link.split("?")[0].endswith(".html"):
+                if urlparse(abs_link).netloc == "tmstrd.justhd.tv" and abs_link.split("?")[0].endswith(".html"):
                     return abs_link
                 return sign_proxy_url(abs_link)
 

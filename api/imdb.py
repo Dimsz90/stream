@@ -69,6 +69,22 @@ def _pick_vaplayer_stream(streams):
 # ═══════════════════════════════════════════════
 #  HELPERS — IMDB
 # ═══════════════════════════════════════════════
+def _normalize_vaplayer_streams(streams):
+    if not isinstance(streams, list):
+        return []
+
+    urls = []
+    seen = set()
+    for item in streams:
+        url = str(item or "").replace("\\/", "/").strip()
+        if not url or not url.startswith(("http://", "https://")) or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    picked = _pick_vaplayer_stream(urls)
+    return sorted(urls, key=lambda url: (url != picked, url))
+
+
 def extract_imdb_id(raw: str):
     m = re.search(r"(tt\d{5,})", raw, re.I)
     if m: return m.group(1)
@@ -116,8 +132,8 @@ def get_movie_info(imdb_id: str) -> dict:
     return info
 
 
-def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episode=None):
-    cache_key = f"stream:{imdb_id}:{media_type}"
+def get_fast_streams(imdb_id: str, media_type: str = "movie", season=None, episode=None):
+    cache_key = f"streams:{imdb_id}:{media_type}"
     params = {"imdb": imdb_id, "type": media_type}
     if media_type == "tv" and season and episode:
         cache_key += f":s{season}:e{episode}"
@@ -145,12 +161,17 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
                 data = r.json()
                 streams = data.get("data", {}).get("stream_urls", [])
                 if streams:
-                    url = _pick_vaplayer_stream(streams)
-                    imdb_cache.set(cache_key, url, ttl=30)
-                    return url
+                    urls = _normalize_vaplayer_streams(streams)
+                    imdb_cache.set(cache_key, urls, ttl=30)
+                    return urls
     except Exception:
         pass
-    return None
+    return []
+
+
+def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episode=None):
+    streams = get_fast_streams(imdb_id, media_type, season, episode)
+    return streams[0] if streams else None
 
 
 # ═══════════════════════════════════════════════
@@ -201,6 +222,9 @@ def do_GET(self):
                 return self.send_json({"status": "error", "message": "Proxy URL tidak valid"}, 403)
             try:
                 parsed_target = urlparse(target_url)
+                clean_target = target_url.lower().split("?", 1)[0]
+                is_playlist_url = clean_target.endswith(".m3u8")
+                is_disguised_segment = clean_target.endswith(".html")
                 spoof_origin = _stream_spoof_origin(target_url)
                 origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
                 spoof = {
@@ -217,10 +241,12 @@ def do_GET(self):
                 self.send_response(resp.status_code)
                 self._cors()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
+                if is_disguised_segment and "text/html" in ct.lower():
+                    ct = "video/mp2t"
                 self.send_header("Content-Type", ct)
                 self.end_headers()
 
-                if "mpegurl" in ct.lower() or target_url.endswith(".m3u8"):
+                if not is_disguised_segment and ("mpegurl" in ct.lower() or is_playlist_url):
                     content = resp.text
                     def rewrite(m):
                         abs_link = urljoin(target_url, m.group(1))
@@ -230,7 +256,7 @@ def do_GET(self):
                         except Exception:
                             return f"/api/proxy?url={quote(abs_link)}"
                     new_content = re.sub(
-                        r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE
+                        r"^(?!#)(?!\s*$)(.+)$", rewrite, content, flags=re.MULTILINE
                     )
                     self.wfile.write(new_content.encode())
                 else:
@@ -255,16 +281,22 @@ def do_GET(self):
                 m_type  = "tv" if info.get("type") == "series" else "movie"
                 season = params.get("s", params.get("season", ["1"]))[0]
                 episode = params.get("e", params.get("episode", ["1"]))[0]
-                raw_url = get_fast_stream(imdb_id, m_type, season, episode)
+                raw_urls = get_fast_streams(imdb_id, m_type, season, episode)
+                raw_url = raw_urls[0] if raw_urls else None
                 if raw_url:
                     host = self.headers.get("Host", "")
                     protocol = "http" if "localhost" in host or "127.0.0.1" in host else "https"
                     try:
                         from lib.proxy_signing import sign_proxy_url
-                        info["stream_url"] = sign_proxy_url(raw_url, f"{protocol}://{host}")
+                        proxied_urls = [sign_proxy_url(url, f"{protocol}://{host}") for url in raw_urls]
                     except Exception:
-                        info["stream_url"] = f"{protocol}://{host}/api/proxy?url={quote(raw_url)}"
+                        proxied_urls = [f"{protocol}://{host}/api/proxy?url={quote(url)}" for url in raw_urls]
+                    info["stream_url"] = proxied_urls[0]
+                    info["streamUrl"] = proxied_urls[0]
+                    info["streamUrls"] = proxied_urls
+                    info["stream_urls"] = proxied_urls
                     info["rawStreamUrl"] = raw_url
+                    info["rawStreamUrls"] = raw_urls
                     info["streamResolver"] = "imdb-vaplayer"
                     info["season"] = int(season) if str(season).isdigit() else season
                     info["episode"] = int(episode) if str(episode).isdigit() else episode
@@ -308,3 +340,29 @@ def do_GET(self):
 
     def log_message(self, *a):
         pass
+
+
+def _handler_cors(self):
+    self.send_header("Access-Control-Allow-Origin",  "*")
+    self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+
+def _handler_send_json(self, data, code=200):
+    body = json.dumps(data, ensure_ascii=False).encode()
+    self.send_response(code)
+    self._cors()
+    self.send_header("Content-Type", "application/json")
+    self.send_header("Content-Length", str(len(body)))
+    self.end_headers()
+    self.wfile.write(body)
+
+
+def _handler_log_message(self, *a):
+    pass
+
+
+handler.do_GET = do_GET
+handler._cors = _handler_cors
+handler.send_json = _handler_send_json
+handler.log_message = _handler_log_message
