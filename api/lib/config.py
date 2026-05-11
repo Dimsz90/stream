@@ -29,6 +29,7 @@ REQUIRE_SUBSCRIPTION = os.environ.get("REQUIRE_SUBSCRIPTION", "").lower() in ("1
 # reCAPTCHA untuk login/register subscription.
 RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "")
 RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY", "")
+RECAPTCHA_MIN_SCORE = float(os.environ.get("RECAPTCHA_MIN_SCORE", "0.5") or "0.5")
 
 # Remote stream worker. Dipakai server-side supaya URL remote tidak perlu ada di HTML.
 STREAM_API_REMOTE = os.environ.get("STREAM_API_REMOTE", "").rstrip("/")

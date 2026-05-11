@@ -22,6 +22,7 @@ import requests
 from .config import (
     BAYAR_GG_CALLBACK_BASE_URL,
     REQUIRE_SUBSCRIPTION,
+    RECAPTCHA_MIN_SCORE,
     RECAPTCHA_SECRET_KEY,
     RECAPTCHA_SITE_KEY,
     SUBSCRIPTION_SECRET,
@@ -98,10 +99,12 @@ def captcha_config() -> dict:
     return {
         "enabled": captcha_enabled(),
         "site_key": RECAPTCHA_SITE_KEY if captcha_enabled() else "",
+        "version": "v3",
+        "min_score": RECAPTCHA_MIN_SCORE,
     }
 
 
-def _verify_captcha(captcha_token: str) -> tuple[bool, str]:
+def _verify_captcha(captcha_token: str, expected_action: str = "") -> tuple[bool, str]:
     if not captcha_enabled():
         return True, ""
     captcha_token = str(captcha_token or "").strip()
@@ -124,6 +127,16 @@ def _verify_captcha(captcha_token: str) -> tuple[bool, str]:
         return False, "Captcha gagal diverifikasi."
     if not data.get("success"):
         return False, "Captcha tidak valid. Coba lagi."
+    action = str(data.get("action") or "")
+    if expected_action and action != expected_action:
+        return False, "Captcha action tidak cocok."
+    score = data.get("score")
+    if score is not None:
+        try:
+            if float(score) < float(RECAPTCHA_MIN_SCORE):
+                return False, "Captcha score terlalu rendah. Coba lagi."
+        except (TypeError, ValueError):
+            return False, "Captcha score tidak valid."
     return True, ""
 
 
@@ -171,7 +184,7 @@ def login_subscriber(username: str, pin: str, captcha_token: str = "") -> tuple[
         payload, status_code = _account_error("Username dan password wajib diisi.", 400)
         return payload, status_code
 
-    ok, message = _verify_captcha(captcha_token)
+    ok, message = _verify_captcha(captcha_token, "subscription_login")
     if not ok:
         payload, status_code = _account_error(message, 400)
         return payload, status_code
@@ -209,7 +222,7 @@ def register_subscriber(username: str, password: str, captcha_token: str = "") -
     if len(str(password or "")) < 6:
         return _account_error("Password minimal 6 karakter.", 400)
 
-    ok, message = _verify_captcha(captcha_token)
+    ok, message = _verify_captcha(captcha_token, "subscription_register")
     if not ok:
         return _account_error(message, 400)
 

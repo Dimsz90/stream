@@ -15,7 +15,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-<script src="https://www.google.com/recaptcha/api.js?render=explicit&hl=id" async defer></script>
 <script src="/js/orientation-lock.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -43,7 +42,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex
 .subauth-form{display:flex;flex-direction:column;gap:10px}
 .subauth-input{width:100%;background:rgba(255,255,255,.035);border:1px solid var(--border2);border-radius:8px;color:var(--text);font:13px var(--mono);padding:12px 13px;outline:none}
 .subauth-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
-.subauth-captcha{display:none;min-height:78px;padding:2px 0 0}
 .subauth-btn{height:42px;border:0;border-radius:8px;background:var(--accent);color:#061012;font-family:var(--display);font-size:18px;letter-spacing:1px;cursor:pointer}
 .subauth-btn:disabled{opacity:.55;cursor:not-allowed}
 .subauth-link{height:38px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);font:12px var(--mono);cursor:pointer}
@@ -1169,9 +1167,6 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
     <form class="subauth-form" id="subAuthForm">
       <input class="subauth-input" id="subAuthUsername" type="text" placeholder="Username" autocomplete="username">
       <input class="subauth-input" id="subAuthPin" type="password" placeholder="Password" autocomplete="current-password">
-      <div class="subauth-captcha" id="subAuthCaptchaWrap">
-        <div id="subAuthCaptcha"></div>
-      </div>
       <button class="subauth-btn" id="subAuthSubmit" type="submit">MASUK</button>
       <button class="subauth-link" id="subAuthToggle" type="button">REGISTER AKUN BARU</button>
     </form>
@@ -1510,7 +1505,6 @@ const SUBSCRIPTION_SESSION_KEY = "streamvault_subscription_token";
 let subAuthMode = "login";
 let currentSubscriber = null;
 let subscriptionPollTimer = null;
-let subscriptionCaptchaWidgetId = null;
 let subscriptionCaptchaSiteKey = "";
 let subscriptionCaptchaReadyPromise = null;
 
@@ -1528,45 +1522,33 @@ function getCaptchaConfig(cfg) {
 }
 
 async function ensureSubscriptionCaptcha() {
-  const wrap = document.getElementById("subAuthCaptchaWrap");
-  const mount = document.getElementById("subAuthCaptcha");
-  if (!wrap || !mount) return false;
-
   const cfg = getCaptchaConfig(await getSubscriptionConfig());
   if (!cfg.enabled || !cfg.site_key) {
-    wrap.style.display = "none";
-    subscriptionCaptchaWidgetId = null;
     subscriptionCaptchaSiteKey = "";
-    mount.innerHTML = "";
     return false;
   }
 
-  wrap.style.display = "block";
-  if (subscriptionCaptchaWidgetId !== null && subscriptionCaptchaSiteKey === cfg.site_key) return true;
-
+  if (window.grecaptcha?.execute && subscriptionCaptchaSiteKey === cfg.site_key) return true;
   subscriptionCaptchaSiteKey = cfg.site_key;
-  mount.innerHTML = "";
-  const renderCaptcha = () => {
-    if (!window.grecaptcha || !grecaptcha.render) return false;
-    subscriptionCaptchaWidgetId = grecaptcha.render(mount, {
-      sitekey: cfg.site_key,
-      theme: "dark",
-      callback: () => setSubscriptionError(""),
-      "expired-callback": () => setSubscriptionError("Captcha kadaluarsa, ulangi lagi."),
-    });
-    return true;
-  };
-
-  if (renderCaptcha()) return true;
+  if (!document.querySelector(`script[data-recaptcha-site-key="${cfg.site_key}"]`)) {
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(cfg.site_key)}&hl=id`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.recaptchaSiteKey = cfg.site_key;
+    document.head.appendChild(script);
+  }
+  const ready = () => !!window.grecaptcha?.execute;
+  if (ready()) return true;
   if (!subscriptionCaptchaReadyPromise) {
     subscriptionCaptchaReadyPromise = new Promise(resolve => {
       const start = Date.now();
       const timer = setInterval(() => {
-        const ready = renderCaptcha();
-        if (ready || Date.now() - start > 10000) {
+        const isReady = ready();
+        if (isReady || Date.now() - start > 10000) {
           clearInterval(timer);
           subscriptionCaptchaReadyPromise = null;
-          resolve(ready);
+          resolve(isReady);
         }
       }, 150);
     });
@@ -1574,16 +1556,17 @@ async function ensureSubscriptionCaptcha() {
   return subscriptionCaptchaReadyPromise;
 }
 
-function resetSubscriptionCaptcha() {
-  if (subscriptionCaptchaWidgetId !== null && window.grecaptcha?.reset) {
-    try { grecaptcha.reset(subscriptionCaptchaWidgetId); } catch {}
-  }
-}
-
-function readSubscriptionCaptcha() {
+async function executeSubscriptionCaptcha(action) {
+  const ready = await ensureSubscriptionCaptcha();
   if (!subscriptionCaptchaSiteKey) return "";
-  if (subscriptionCaptchaWidgetId === null || !window.grecaptcha?.getResponse) return "";
-  return grecaptcha.getResponse(subscriptionCaptchaWidgetId) || "";
+  if (!ready || !window.grecaptcha?.execute) return "";
+  return new Promise(resolve => {
+    grecaptcha.ready(() => {
+      grecaptcha.execute(subscriptionCaptchaSiteKey, { action })
+        .then(token => resolve(token || ""))
+        .catch(() => resolve(""));
+    });
+  });
 }
 
 async function requireSubscriptionToken() {
@@ -1624,7 +1607,6 @@ function updateSubAuthMode() {
   submit.textContent = isRegister ? "REGISTER" : "MASUK";
   toggle.textContent = isRegister ? "SUDAH PUNYA AKUN? MASUK" : "REGISTER AKUN BARU";
   pinInput.placeholder = "Password";
-  resetSubscriptionCaptcha();
 }
 
 function showSubscriptionLogin(message = "") {
@@ -1667,9 +1649,10 @@ function showSubscriptionLogin(message = "") {
         setSubscriptionError("Username dan password wajib diisi.");
         return;
       }
-      const captchaToken = await ensureSubscriptionCaptcha().then(() => readSubscriptionCaptcha());
+      const captchaAction = subAuthMode === "register" ? "subscription_register" : "subscription_login";
+      const captchaToken = await executeSubscriptionCaptcha(captchaAction);
       if (getCaptchaConfig(await getSubscriptionConfig()).enabled && !captchaToken) {
-        setSubscriptionError("Silakan selesaikan captcha terlebih dahulu.");
+        setSubscriptionError("Captcha gagal dimuat. Coba refresh halaman.");
         return;
       }
 
@@ -1691,7 +1674,6 @@ function showSubscriptionLogin(message = "") {
         resolve(data.token);
       } catch (err) {
         setSubscriptionError(err.message || "Login gagal.");
-        resetSubscriptionCaptcha();
       } finally {
         submit.disabled = false;
         submit.textContent = subAuthMode === "register" ? "REGISTER" : "MASUK";
