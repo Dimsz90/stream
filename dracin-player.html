@@ -10,9 +10,21 @@
 <script src="/js/orientation-lock.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'DM Sans',sans-serif;background:#0a0a0a;color:#fff;overflow-x:hidden}
-.player-wrap{position:relative;width:100%;height:100vh;max-height:100svh;background:#000}
-video{width:100%;height:100%;object-fit:contain;display:block}
+html,body{height:100%}
+body{font-family:'DM Sans',sans-serif;background:#050505;color:#fff;overflow:hidden}
+.watch-feed{height:100svh;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;scroll-behavior:smooth;background:#050505;-webkit-overflow-scrolling:touch}
+.feed-item{position:relative;width:100%;height:100svh;scroll-snap-align:start;scroll-snap-stop:always;background:#050505;overflow:hidden}
+.feed-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:28px;background:radial-gradient(circle at 50% 20%,rgba(229,9,20,.22),transparent 32%),#070707}
+.feed-placeholder::before{content:'';position:absolute;inset:-20px;background:var(--poster-bg,linear-gradient(135deg,#151515,#050505));background-size:cover;background-position:center;filter:blur(26px);opacity:.34;transform:scale(1.08)}
+.feed-placeholder::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.78))}
+.feed-card{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;text-shadow:0 2px 14px rgba(0,0,0,.75)}
+.feed-ep{font-size:44px;font-weight:800;line-height:1}
+.feed-title{font-size:15px;color:rgba(255,255,255,.74);max-width:320px}
+.feed-hint{margin-top:8px;font-size:12px;color:rgba(255,255,255,.52)}
+.feed-item.active .feed-placeholder{display:none}
+.player-wrap{position:relative;width:100%;height:100%;background:#000}
+video{width:100%;height:100%;object-fit:cover;display:block}
+@media(min-aspect-ratio:1/1){video{object-fit:contain}}
 /* Top bar */
 .top-bar{position:absolute;top:0;left:0;right:0;padding:14px 16px;display:flex;align-items:center;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.85),transparent);z-index:20;opacity:1;transition:opacity .3s}
 .top-bar.hidden{opacity:0;pointer-events:none}
@@ -59,19 +71,22 @@ video{width:100%;height:100%;object-fit:contain;display:block}
 .next-toast{position:absolute;bottom:90px;right:16px;background:rgba(229,9,20,.9);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;z-index:25;display:none;animation:slideIn .3s ease}
 .next-toast.show{display:flex;align-items:center;gap:8px}
 @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-/* Episode list below */
-.info-box{padding:20px 16px;max-width:900px;margin:0 auto}
-.drama-title{font-size:22px;font-weight:700;margin-bottom:6px}
-.drama-meta{color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px}
-.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
-.ep-btn{background:#1a1a1a;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px 0;color:#fff;font-weight:600;font-size:13px;cursor:pointer;text-align:center;transition:all .15s}
-.ep-btn:hover{background:#333}
+/* Episode tray */
+.info-box{position:fixed;left:16px;right:16px;bottom:92px;z-index:22;max-width:560px;padding:0;pointer-events:none;text-shadow:0 2px 14px rgba(0,0,0,.7)}
+.drama-title{font-size:20px;font-weight:800;margin-bottom:5px;line-height:1.15}
+.drama-meta{color:rgba(255,255,255,.66);font-size:13px;margin-bottom:12px}
+.ep-grid{display:flex;gap:7px;overflow-x:auto;max-width:100%;padding-bottom:3px;pointer-events:auto;scrollbar-width:none}
+.ep-grid::-webkit-scrollbar{display:none}
+.ep-btn{flex:0 0 auto;min-width:44px;background:rgba(26,26,26,.82);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:9px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;text-align:center;transition:all .15s}
+.ep-btn:hover{background:rgba(255,255,255,.16)}
 .ep-btn.active{background:#e50914;border-color:#e50914}
 .ep-btn.locked{opacity:.35;cursor:not-allowed}
-@media(max-width:600px){.vol-wrap{display:none}.side-nav{width:40px;height:40px}}
+@media(max-width:600px){.vol-wrap{display:none}.side-nav{display:none}.info-box{bottom:88px;left:14px;right:14px}.drama-title{font-size:17px}.ep-grid{max-width:calc(100vw - 28px)}}
 </style>
 </head>
 <body>
+<main class="watch-feed" id="watchFeed">
+<section class="feed-item active" id="feed-0" data-idx="0">
 <div class="player-wrap" id="playerWrap">
   <video id="vid" playsinline></video>
   <div class="spinner" id="spinner"></div>
@@ -111,6 +126,8 @@ video{width:100%;height:100%;object-fit:contain;display:block}
     </div>
   </div>
 </div>
+</section>
+</main>
 
 <div class="info-box">
   <h1 class="drama-title" id="titleEl">Memuat...</h1>
@@ -140,8 +157,9 @@ const startEp=parseInt(P.get('ep'))||0;
 const coverUrl=P.get('cover')||'';
 const SUBSCRIPTION_SESSION_KEY='streamvault_subscription_token';
 
-let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,preloadedIdx=-1,spinnerTimer=null,playSeq=0;
+let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,preloadedUrl=null,preloadedIdx=-1,spinnerTimer=null,playSeq=0,feedObserver=null,feedLock=false;
 const videoUrlCache=new Map(),videoUrlInflight=new Map();
+const watchFeed=document.getElementById('watchFeed'),playerWrap=document.getElementById('playerWrap');
 const vid=document.getElementById('vid'),spinner=document.getElementById('spinner'),centerPlay=document.getElementById('centerPlay');
 const progBar=document.getElementById('progBar'),bufBar=document.getElementById('bufBar'),progThumb=document.getElementById('progThumb');
 const timeDisp=document.getElementById('timeDisp'),playBtn=document.getElementById('playBtn'),playIcon=document.getElementById('playIcon');
@@ -179,8 +197,8 @@ function fmt(s){if(!s||!isFinite(s))return'0:00';const m=Math.floor(s/60),sec=Ma
 // Show/hide controls
 function showUI(){topBar.classList.remove('hidden');controls.classList.remove('hidden');clearTimeout(hideTimer);hideTimer=setTimeout(hideUI,3500)}
 function hideUI(){if(vid.paused)return;topBar.classList.add('hidden');controls.classList.add('hidden')}
-document.getElementById('playerWrap').addEventListener('mousemove',showUI);
-document.getElementById('playerWrap').addEventListener('click',e=>{if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play'))return;togglePlay()});
+playerWrap.addEventListener('mousemove',showUI);
+playerWrap.addEventListener('click',e=>{if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play'))return;togglePlay()});
 document.addEventListener('touchstart',showUI,{passive:true});
 
 // Play/pause
@@ -225,7 +243,7 @@ volSlider.oninput=()=>{vid.volume=volSlider.value;vid.muted=false};
 document.getElementById('muteBtn').onclick=()=>{vid.muted=!vid.muted;volSlider.value=vid.muted?0:vid.volume};
 
 // Fullscreen
-document.getElementById('fsBtn').onclick=()=>{const w=document.getElementById('playerWrap');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen().catch(()=>{})};
+document.getElementById('fsBtn').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else playerWrap.requestFullscreen().catch(()=>{})};
 
 // Loading state
 vid.onwaiting=()=>showSpinner();
@@ -247,11 +265,66 @@ if(e.key==='f')document.getElementById('fsBtn').click();
 if(e.key==='n'&&!nextBtn.disabled)goNext();
 if(e.key==='p'&&!prevBtn.disabled)goPrev()};
 
+function epNumber(idx){
+  const ep=episodes[idx];
+  return ep?.episode || ep?.chapterIndex+1 || (idx+1);
+}
+
+function escapeHtml(value){
+  return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderFeed(){
+  if(!watchFeed)return;
+  if(!episodes.length)return;
+  watchFeed.innerHTML='';
+  const title=document.getElementById('titleEl').textContent || 'Drama';
+  episodes.forEach((ep,i)=>{
+    const item=document.createElement('section');
+    item.className='feed-item';
+    item.id='feed-'+i;
+    item.dataset.idx=i;
+    if(coverUrl)item.style.setProperty('--poster-bg',`url("${coverUrl.replace(/"/g,'%22')}")`);
+    const num=epNumber(i);
+    item.innerHTML='<div class="feed-placeholder"><div class="feed-card"><div class="feed-ep">Ep '+escapeHtml(num)+'</div><div class="feed-title">'+escapeHtml(title)+'</div><div class="feed-hint">Scroll untuk episode berikutnya</div></div></div>';
+    item.addEventListener('click',()=>{if(curIdx!==i)playEp(i)});
+    watchFeed.appendChild(item);
+  });
+  movePlayerToFeed(curIdx);
+  setupFeedObserver();
+}
+
+function movePlayerToFeed(idx){
+  const item=document.getElementById('feed-'+idx) || watchFeed.firstElementChild;
+  if(item && !item.contains(playerWrap))item.appendChild(playerWrap);
+  document.querySelectorAll('.feed-item').forEach((el,i)=>el.classList.toggle('active',i===idx));
+}
+
+function scrollFeedTo(idx){
+  const item=document.getElementById('feed-'+idx);
+  if(!item)return;
+  feedLock=true;
+  item.scrollIntoView({block:'start',behavior:'smooth'});
+  setTimeout(()=>{feedLock=false},520);
+}
+
+function setupFeedObserver(){
+  if(feedObserver)feedObserver.disconnect();
+  feedObserver=new IntersectionObserver(entries=>{
+    if(feedLock || !episodes.length)return;
+    const best=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+    if(!best || best.intersectionRatio<0.72)return;
+    const idx=Number(best.target.dataset.idx);
+    if(Number.isInteger(idx) && idx!==curIdx)playEp(idx,{scroll:false});
+  },{root:watchFeed,threshold:[0.55,0.72,0.9]});
+  document.querySelectorAll('.feed-item').forEach(item=>feedObserver.observe(item));
+}
+
 // Nav buttons
 function updateNav(){const hasPrev=curIdx>0,hasNext=curIdx<episodes.length-1;
 prevBtn.disabled=prevSide.disabled=!hasPrev;nextBtn.disabled=nextSide.disabled=!hasNext;
 document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
-const a=document.getElementById('ep-'+curIdx);if(a)a.classList.add('active');
+const a=document.getElementById('ep-'+curIdx);if(a){a.classList.add('active');a.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'})}
 const ep=episodes[curIdx];const num=ep?.episode||ep?.chapterIndex+1||(curIdx+1);
 document.getElementById('epLabel').textContent='Episode '+num}
 
@@ -357,9 +430,9 @@ async function getVideoUrl(ep){
 function destroyHLS(){if(hls){hls.destroy();hls=null}}
 
 // Play episode
-async function playEp(idx){
+async function playEp(idx,opts={}){
 const seq=++playSeq;
-curIdx=idx;updateNav();destroyHLS();
+curIdx=idx;updateNav();movePlayerToFeed(idx);if(opts.scroll!==false)scrollFeedTo(idx);destroyHLS();
 clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
 showSpinner();centerPlay.classList.remove('show');
 vid.pause();
@@ -469,6 +542,7 @@ async function init(){
             // Update tab title
             document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
             renderEps();
+            renderFeed();
             if(episodes.length>0)playEp(startEp<episodes.length?startEp:0);
         } else {
             document.getElementById('titleEl').textContent = "Error: " + (j.message || "Unknown");
