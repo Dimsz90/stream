@@ -34,16 +34,17 @@ BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
 def _is_vaplayer_stream(url: str) -> bool:
     """
     Vaplayer CDN selalu punya path pattern:
-    /<token>/pl/<hash>/... atau /<token>/cdnstr/<hash>/...
+    /<token>/pl/<hash>/..., /<token>/cdnstr/<hash>/...,
+    atau /<token>/content/<hash>/...
     Tidak perlu whitelist host karena CDN mereka ganti domain sewaktu-waktu.
     """
     try:
         from urllib.parse import urlparse as _up
         path = _up(url).path
-        # Pattern: /XxXxXx/pl/... atau /XxXxXx/cdnstr/... atau /static/df/...
+        # Pattern: /XxXxXx/pl|cdnstr|content/... atau /static/df/...
         import re as _re
         return bool(
-            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr)/', path)
+            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr|content)/', path)
             or '/static/df/' in path
         )
     except Exception:
@@ -853,6 +854,15 @@ def proxy():
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
 
             if is_disguised_segment and "text/html" in content_type.lower():
+                if not resp.ok:
+                    sample = resp.text[:2000].lower()
+                    return jsonify({
+                        "status": "error",
+                        "message": "Upstream segment blocked or invalid",
+                        "upstream_status": resp.status_code,
+                        "content_type": content_type,
+                        "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
+                    }), 502
                 content_type = "video/mp2t"
 
             if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
@@ -1082,6 +1092,16 @@ def proxy():
         # Paksa Content-Type ke video/mp2t untuk segment yang disamarkan sebagai .html
         # Ini mencegah HLS.js salah decode binary data
         if is_disguised_segment and "text/html" in content_type.lower():
+            if not resp.ok:
+                sample = resp.text[:2000].lower()
+                return jsonify({
+                    "status": "error",
+                    "message": "Upstream segment blocked or invalid",
+                    "upstream_status": resp.status_code,
+                    "content_type": content_type,
+                    "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
+                    "attempts": attempts,
+                }), 502
             content_type = "video/mp2t"
 
         if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
