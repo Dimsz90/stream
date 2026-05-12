@@ -3308,6 +3308,7 @@ const DR = {
   initialized: false,
   fetchCache: new Map(),
   inflight: new Map(),
+  seenBookKeys: new Set(),
   browseController: null,
   browseSeq: 0,
   rankSeq: 0,
@@ -3361,6 +3362,24 @@ function dracinMakeCard(book, rank = 0, forScroll = false) {
     </div>
   `;
   return a;
+}
+
+function dracinBookKey(book, fallbackPlatform = DR.platform) {
+  if (!book || typeof book !== 'object') return '';
+  const platform = String(book.platform || fallbackPlatform || '').trim().toLowerCase();
+  const id = book.bookId || book.id || book.videoid || book.videoId || book.bookName || book.title || '';
+  return `${platform}:${String(id).trim().toLowerCase()}`;
+}
+
+function dracinDedupeBooks(books, seen = new Set()) {
+  const out = [];
+  (books || []).forEach(book => {
+    const key = dracinBookKey(book);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(book);
+  });
+  return out;
 }
 
 function getContinueItems() {
@@ -3542,6 +3561,7 @@ async function dracinSwitchPlatform(btn) {
   DR.platform = plat;
   DR.browseMode = 'home';
   DR.page = 1;
+  DR.seenBookKeys.clear();
   DR.fetchCache.clear();
   DR.inflight.clear();
   if (DR.browseController) DR.browseController.abort();
@@ -3608,6 +3628,7 @@ function dracinSearch() {
     document.getElementById('dracinBrowseTitle').textContent = `HASIL: "${esc(q)}"`;
   }
   DR.page = 1;
+  DR.seenBookKeys.clear();
   dracinLoadBrowse(true);
 }
 
@@ -3676,10 +3697,15 @@ async function dracinLoadBrowse(reset = true) {
     });
     if (seq !== DR.browseSeq) return;
 
-    if (reset) grid.innerHTML = '';
+    if (reset) {
+      grid.innerHTML = '';
+      DR.seenBookKeys.clear();
+    }
 
-    const books = payload?.books || [];
-    DR.hasMore = payload?.hasMore === true || books.length >= DR.pageSize;
+    const rawBooks = payload?.books || [];
+    const books = dracinDedupeBooks(rawBooks, DR.seenBookKeys);
+    DR.hasMore = payload?.hasMore === true || rawBooks.length >= DR.pageSize;
+    if (!reset && rawBooks.length > 0 && books.length === 0) DR.hasMore = false;
 
     if (books.length === 0 && reset) {
       grid.innerHTML = `<div class="dr-empty"><h3>TIDAK ADA DATA</h3><p>Coba ganti platform atau kata kunci</p></div>`;
