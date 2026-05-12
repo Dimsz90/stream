@@ -5,12 +5,7 @@ Fallback ke default HANYA untuk development lokal.
 import os
 
 # ── OpenSubtitles ─────────────────────────────────────────────────────────────
-OS_API_KEY = (
-    os.environ.get("OS_API_KEY")
-    or os.environ.get("OPENSUBTITLES_API_KEY")
-    or os.environ.get("OPENSUBTITLES_KEY")
-    or ""
-)
+OS_API_KEY = os.environ.get("OS_API_KEY") or os.environ.get("OPENSUBTITLES_API_KEY", "")
 OS_BASE    = "https://api.opensubtitles.com/api/v1"
 OS_HEADERS = {
     "Api-Key":      OS_API_KEY,

@@ -23,8 +23,6 @@ env/
 # Downloads folder (hasil download video)
 downloads/
 
-REMOTE_STREAM_CODE/
-
 # OS
 .DS_Store
 Thumbs.db

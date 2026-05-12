@@ -1344,7 +1344,7 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
         "page":         page,
         "sections":     sections,
         "books":        classify_books,     # grid flat
-        "hasMore":      classify.get("isMore", 0) == 1 or len(classify_books) >= int(size or 20),
+        "hasMore":      classify.get("isMore", 0) == 1,
         "bannerList":   inner.get("bannerList", []),
     }
 
