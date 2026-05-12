@@ -139,6 +139,28 @@ def public_base_url():
 def _stream_spoof_origin(target_url: str) -> str:
     return BRIGHTPATH_ORIGIN if _is_vaplayer_stream(target_url) else ""
 
+def _forward_video_request_headers():
+    headers = {}
+    for name in ("Range", "If-Range", "If-None-Match", "If-Modified-Since"):
+        value = request.headers.get(name)
+        if value:
+            headers[name] = value
+    return headers
+
+def _video_response_headers(resp, content_type, include_length=True):
+    headers = {
+        "Content-Type":                content_type,
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+        "Cache-Control":               "no-store",
+    }
+    passthrough = ("Content-Length", "Content-Range", "Accept-Ranges") if include_length else ("Content-Range", "Accept-Ranges")
+    for name in passthrough:
+        value = resp.headers.get(name)
+        if value:
+            headers[name] = value
+    return headers
+
 def bayar_gg_error_response(exc):
     detail = getattr(exc, "detail", None)
     payload = {"status": "error", "message": str(exc)}
@@ -434,7 +456,7 @@ def remote_proxy():
         return jsonify({"status": "error", "message": "Remote proxy URL tidak valid atau sudah kedaluwarsa"}), 403
 
     try:
-        resp = req.get(target_url, stream=True, timeout=25)
+        resp = req.get(target_url, headers=_forward_video_request_headers(), stream=True, timeout=25)
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
         is_playlist = "mpegurl" in content_type.lower() or target_url.lower().split("?", 1)[0].endswith(".m3u8")
 
@@ -446,22 +468,14 @@ def remote_proxy():
                     return abs_link
                 return cache_remote_proxy_url(abs_link)
             text = re.sub(r"^(?!#)(?!\s*$)(.+)$", rewrite, text, flags=re.MULTILINE)
-            return Response(text.encode(), status=resp.status_code, headers={
-                "Content-Type": content_type,
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "no-store",
-            })
+            return Response(text.encode(), status=resp.status_code, headers=_video_response_headers(resp, content_type, include_length=False))
 
         def generate():
             for chunk in resp.iter_content(chunk_size=65536):
                 if chunk:
                     yield chunk
 
-        return Response(generate(), status=resp.status_code, headers={
-            "Content-Type": content_type,
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-store",
-        })
+        return Response(generate(), status=resp.status_code, headers=_video_response_headers(resp, content_type))
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 502
 
@@ -842,6 +856,7 @@ def proxy():
         spoof_origin = _stream_spoof_origin(url)
         if spoof_origin:
             origin = spoof_origin
+        forwarded = _forward_video_request_headers()
         common = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -854,15 +869,15 @@ def proxy():
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "cross-site",
         }
-        configured = {**common, **VIDEO_SPOOF_HEADERS}
-        origin_ref = {**common, "Referer": f"{origin}/", "Origin": origin}
-        no_origin = {**common, "Referer": f"{origin}/"}
+        configured = {**common, **VIDEO_SPOOF_HEADERS, **forwarded}
+        origin_ref = {**common, "Referer": f"{origin}/", "Origin": origin, **forwarded}
+        no_origin = {**common, "Referer": f"{origin}/", **forwarded}
         player_ref_origin = spoof_origin or "https://streamdata.vaplayer.ru"
-        player_ref = {**common, "Referer": f"{player_ref_origin}/", "Origin": player_ref_origin}
+        player_ref = {**common, "Referer": f"{player_ref_origin}/", "Origin": player_ref_origin, **forwarded}
 
         variants = []
         for name, headers in (
-            ("dev", VIDEO_SPOOF_HEADERS),
+            ("dev", {**VIDEO_SPOOF_HEADERS, **forwarded}),
             ("configured", configured),
             ("origin", origin_ref),
             ("no_origin", no_origin),
@@ -974,11 +989,7 @@ def proxy():
             return Response(
                 new_content.encode(),
                 status=resp.status_code,
-                headers={
-                    "Content-Type":                content_type,
-                    "Access-Control-Allow-Origin": "*",
-                    "Cache-Control":               "no-store",
-                },
+                headers=_video_response_headers(resp, content_type, include_length=False),
             )
 
         # Untuk segment binary (termasuk .html yang sebenarnya .ts),
@@ -992,11 +1003,7 @@ def proxy():
         return Response(
             generate(),
             status=resp.status_code,
-            headers={
-                "Content-Type":                content_type,
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control":               "no-store",
-            },
+            headers=_video_response_headers(resp, content_type),
         )
 
     except Exception as e:
