@@ -30,7 +30,7 @@ def _is_vaplayer_stream(url: str) -> bool:
         import re as _re
         path = _up(url).path
         return bool(
-            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr)/', path)
+            _re.search(r'/[A-Za-z0-9]{5,}/(?:pl|cdnstr|content)/', path)
             or '/static/df/' in path
         )
     except Exception:
@@ -238,11 +238,20 @@ def do_GET(self):
                     stream=True,
                     timeout=15,
                 )
-                self.send_response(resp.status_code)
-                self._cors()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
                 if is_disguised_segment and "text/html" in ct.lower():
+                    if not resp.ok:
+                        sample = resp.text[:2000].lower()
+                        return self.send_json({
+                            "status": "error",
+                            "message": "Upstream segment blocked or invalid",
+                            "upstream_status": resp.status_code,
+                            "content_type": ct,
+                            "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
+                        }, 502)
                     ct = "video/mp2t"
+                self.send_response(resp.status_code)
+                self._cors()
                 self.send_header("Content-Type", ct)
                 self.end_headers()
 
