@@ -834,6 +834,57 @@ def proxy():
     if remote_api_enabled():
         return remote_api_passthrough("/api/proxy")
 
+    use_advanced_fetch = os.environ.get("PROXY_USE_ADVANCED_FETCH", "").lower() in ("1", "true", "yes", "on")
+    if not use_advanced_fetch:
+        try:
+            is_playlist_url = target_url.lower().split("?", 1)[0].endswith(".m3u8")
+            clean_target = target_url.split("?", 1)[0]
+            is_disguised_segment = clean_target.endswith(".html")
+            parsed_target = urlparse(target_url)
+            spoof_origin = _stream_spoof_origin(target_url)
+            origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
+            headers = {
+                **VIDEO_SPOOF_HEADERS,
+                "Referer": f"{origin_value}/",
+                "Origin": origin_value,
+                **_forward_video_request_headers(),
+            }
+            resp = req.get(target_url, headers=headers, stream=True, timeout=15)
+            content_type = resp.headers.get("Content-Type", "application/octet-stream")
+
+            if is_disguised_segment and "text/html" in content_type.lower():
+                content_type = "video/mp2t"
+
+            if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
+                content = resp.text
+
+                def rewrite(m):
+                    abs_link = urljoin(target_url, m.group(1))
+                    if urlparse(abs_link).netloc == "tmstrd.justhd.tv" and abs_link.split("?")[0].endswith(".html"):
+                        return abs_link
+                    return sign_proxy_url(abs_link)
+
+                new_content = re.sub(r"^(?!#)(.+)$", rewrite, content, flags=re.MULTILINE)
+                return Response(
+                    new_content.encode(),
+                    status=resp.status_code,
+                    headers=_video_response_headers(resp, content_type, include_length=False),
+                )
+
+            def generate():
+                for chunk in resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        yield chunk
+
+            return Response(
+                generate(),
+                status=resp.status_code,
+                headers=_video_response_headers(resp, content_type),
+            )
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     def _playlist_state(resp, body=None):
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
         text = body if body is not None else resp.text
