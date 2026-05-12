@@ -770,6 +770,27 @@ def _cubetv_extract_books(raw: dict) -> list:
     return []
 
 
+def _cubetv_extract_page_info(raw: dict) -> dict:
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    info = {"total": 0, "totalPage": 0, "page": 1}
+    if not isinstance(data, dict):
+        return info
+
+    modules = data.get("moduleVideo") or []
+    if isinstance(modules, list) and modules:
+        first = next((m for m in modules if isinstance(m, dict)), None)
+        if first:
+            info["total"] = int(first.get("total") or 0)
+            info["totalPage"] = int(first.get("totalPage") or 0)
+            info["page"] = int(first.get("page") or 1)
+            return info
+
+    info["total"] = int(data.get("total") or data.get("count") or 0)
+    info["totalPage"] = int(data.get("totalPage") or data.get("pages") or 0)
+    info["page"] = int(data.get("page") or 1)
+    return info
+
+
 def _cubetv_book_key(raw: dict) -> str:
     return str(
         raw.get("videoid")
@@ -1149,25 +1170,23 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
         except Exception:
             page = 1
             size = 20
-        raw = _cubetv_fetch(
-            "/shows",
-            {"page": page, "pageSize": size, "lang": lang},
-            ttl=cfg["ttl_home"],
-        )
+        params = {"page": page, "pageSize": size, "lang": lang}
+        raw = _cubetv_fetch("/home/romance", params, ttl=cfg["ttl_home"])
+        if not _cubetv_extract_books(raw or {}):
+            raw = _cubetv_fetch("/shows", params, ttl=cfg["ttl_home"])
         if not raw:
             return None
         items = _cubetv_extract_books(raw)
+        page_info = _cubetv_extract_page_info(raw)
         books_all = [_cubetv_norm_book(b) for b in items]
-        total = len(books_all)
-        start = (page - 1) * size
-        end = start + size
-        books = books_all[start:end]
+        total = page_info.get("total") or len(books_all)
+        total_page = page_info.get("totalPage") or 0
         return {
             "platform": platform,
             "page":     page,
             "sections": [],
-            "books":    books,
-            "hasMore":  end < total,
+            "books":    books_all,
+            "hasMore":  (page < total_page) if total_page else (len(books_all) >= size),
             "bannerList": [],
             "total":    total,
         }
