@@ -3302,6 +3302,7 @@ const DR = {
   browseMode: 'home',
   searchQuery: '',
   page: 1,
+  pageSize: 10,
   hasMore: false,
   loading: false,
   initialized: false,
@@ -3688,7 +3689,7 @@ async function dracinLoadBrowse(reset = true) {
   try {
     const url = DR.browseMode === 'search' 
       ? `/api/dracin/search?platform=${DR.platform}&keyword=${encodeURIComponent(DR.searchQuery)}&page=${DR.page}&lang=in`
-      : `/api/dracin/home?platform=${DR.platform}&page=${DR.page}&size=24&lang=in`;
+      : `/api/dracin/home?platform=${DR.platform}&page=${DR.page}&size=${DR.pageSize}&lang=in`;
 
     const payload = await dracinFetchPayload(url, {
       signal: controller.signal,
@@ -3703,7 +3704,8 @@ async function dracinLoadBrowse(reset = true) {
 
     const rawBooks = payload?.books || [];
     const books = dracinDedupeBooks(rawBooks, DR.seenBookKeys);
-    DR.hasMore = rawBooks.length >= 20 || payload?.hasMore === true;
+    DR.hasMore = payload?.hasMore === true || rawBooks.length >= DR.pageSize;
+    if (!reset && rawBooks.length > 0 && books.length === 0) DR.hasMore = false;
 
     if (books.length === 0 && reset) {
       grid.innerHTML = `<div class="dr-empty"><h3>TIDAK ADA DATA</h3><p>Coba ganti platform atau kata kunci</p></div>`;
