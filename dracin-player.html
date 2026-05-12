@@ -26,10 +26,15 @@ body{font-family:'DM Sans',sans-serif;background:#050505;color:#fff;overflow:hid
 video{width:100%;height:100%;object-fit:cover;display:block}
 @media(min-aspect-ratio:1/1){video{object-fit:contain}}
 /* Top bar */
-.top-bar{position:absolute;top:0;left:0;right:0;padding:14px 16px;display:flex;align-items:center;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.85),transparent);z-index:20;opacity:1;transition:opacity .3s}
+.top-bar{position:absolute;top:0;left:0;right:0;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 58px;display:flex;align-items:flex-start;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.88),rgba(0,0,0,.36) 56%,transparent);z-index:20;opacity:1;transition:opacity .3s}
 .top-bar.hidden{opacity:0;pointer-events:none}
-.back-btn{background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;font-family:inherit;text-decoration:none}
-.ep-label{font-size:13px;color:rgba(255,255,255,.7);margin-left:auto}
+.back-btn{flex:0 0 auto;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;font-family:inherit;text-decoration:none;border-radius:999px;padding:8px 10px;backdrop-filter:blur(12px)}
+.top-copy{flex:1;min-width:0;padding-top:2px;text-shadow:0 2px 14px rgba(0,0,0,.75)}
+.drama-title{font-size:16px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drama-meta{margin-top:3px;color:rgba(255,255,255,.72);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.episode-toggle{flex:0 0 auto;background:rgba(229,9,20,.92);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:999px;padding:8px 11px;font-family:inherit;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.3)}
+.episode-toggle svg{width:15px;height:15px}
+.ep-label{font-variant-numeric:tabular-nums}
 /* Custom controls */
 .controls{position:absolute;bottom:0;left:0;right:0;padding:0 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.9));z-index:20;opacity:1;transition:opacity .3s}
 .controls.hidden{opacity:0;pointer-events:none}
@@ -71,17 +76,22 @@ video{width:100%;height:100%;object-fit:cover;display:block}
 .next-toast{position:absolute;bottom:90px;right:16px;background:rgba(229,9,20,.9);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;z-index:25;display:none;animation:slideIn .3s ease}
 .next-toast.show{display:flex;align-items:center;gap:8px}
 @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-/* Episode tray */
-.info-box{position:fixed;left:16px;right:16px;bottom:92px;z-index:22;max-width:560px;padding:0;pointer-events:none;text-shadow:0 2px 14px rgba(0,0,0,.7)}
-.drama-title{font-size:20px;font-weight:800;margin-bottom:5px;line-height:1.15}
-.drama-meta{color:rgba(255,255,255,.66);font-size:13px;margin-bottom:12px}
-.ep-grid{display:flex;gap:7px;overflow-x:auto;max-width:100%;padding-bottom:3px;pointer-events:auto;scrollbar-width:none}
+/* Episode drawer */
+.episode-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:31;opacity:0;pointer-events:none;transition:opacity .22s}
+.episode-backdrop.open{opacity:1;pointer-events:auto}
+.episode-sheet{position:fixed;left:0;right:0;bottom:0;z-index:32;max-height:min(54svh,440px);padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(12,12,12,.96);border:1px solid rgba(255,255,255,.1);border-width:1px 0 0;border-radius:24px 24px 0 0;box-shadow:0 -24px 70px rgba(0,0,0,.55);transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1);backdrop-filter:blur(18px)}
+.episode-sheet.open{transform:translateY(0)}
+.episode-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+.episode-sheet-title{font-size:16px;font-weight:800}
+.episode-sheet-meta{display:block;margin-top:2px;font-size:12px;color:rgba(255,255,255,.58)}
+.episode-close{width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#fff;font-size:20px;line-height:1;cursor:pointer}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:8px;overflow-y:auto;max-height:calc(min(54svh,440px) - 76px);padding:2px 1px 6px;scrollbar-width:none}
 .ep-grid::-webkit-scrollbar{display:none}
-.ep-btn{flex:0 0 auto;min-width:44px;background:rgba(26,26,26,.82);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:9px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;text-align:center;transition:all .15s}
+.ep-btn{min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px 0;color:#fff;font-weight:800;font-size:13px;cursor:pointer;text-align:center;transition:all .15s}
 .ep-btn:hover{background:rgba(255,255,255,.16)}
 .ep-btn.active{background:#e50914;border-color:#e50914}
 .ep-btn.locked{opacity:.35;cursor:not-allowed}
-@media(max-width:600px){.vol-wrap{display:none}.side-nav{display:none}.info-box{bottom:88px;left:14px;right:14px}.drama-title{font-size:17px}.ep-grid{max-width:calc(100vw - 28px)}}
+@media(max-width:600px){.vol-wrap{display:none}.side-nav{display:none}.top-bar{padding-left:10px;padding-right:10px}.back-btn span{display:none}.drama-title{font-size:14px}.drama-meta{font-size:11px}.episode-toggle{padding:8px 10px}.episode-toggle .toggle-text{display:none}}
 </style>
 </head>
 <body>
@@ -96,8 +106,16 @@ video{width:100%;height:100%;object-fit:cover;display:block}
   <button class="side-nav right" id="nextSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
 
   <div class="top-bar" id="topBar">
-    <a href="/" class="back-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Kembali</a>
-    <span class="ep-label" id="epLabel"></span>
+    <a href="/" class="back-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Kembali</span></a>
+    <div class="top-copy">
+      <h1 class="drama-title" id="titleEl">Memuat...</h1>
+      <div class="drama-meta" id="metaEl"></div>
+    </div>
+    <button class="episode-toggle" id="episodeToggle" type="button" aria-label="Buka daftar episode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      <span class="ep-label" id="epLabel">Ep</span>
+      <span class="toggle-text">Episode</span>
+    </button>
   </div>
 
   <div class="next-toast" id="nextToast">Episode selanjutnya <span id="nextCountdown">5</span>s ▸</div>
@@ -129,11 +147,17 @@ video{width:100%;height:100%;object-fit:cover;display:block}
 </section>
 </main>
 
-<div class="info-box">
-  <h1 class="drama-title" id="titleEl">Memuat...</h1>
-  <div class="drama-meta" id="metaEl"></div>
+<div class="episode-backdrop" id="episodeBackdrop"></div>
+<section class="episode-sheet" id="episodeSheet" aria-hidden="true">
+  <div class="episode-sheet-head">
+    <div>
+      <div class="episode-sheet-title">Daftar Episode</div>
+      <span class="episode-sheet-meta" id="episodeSheetMeta">Pilih episode untuk lompat</span>
+    </div>
+    <button class="episode-close" id="episodeClose" type="button" aria-label="Tutup daftar episode">&times;</button>
+  </div>
   <div class="ep-grid" id="epGrid"></div>
-</div>
+</section>
 
 <!-- PIN Modal for Dramanova (player) -->
 <div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center"> 
@@ -168,6 +192,8 @@ const rewindBtn=document.getElementById('rewindBtn'),forwardBtn=document.getElem
 const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
 const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
 const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
+const episodeToggle=document.getElementById('episodeToggle'),episodeSheet=document.getElementById('episodeSheet');
+const episodeBackdrop=document.getElementById('episodeBackdrop'),episodeClose=document.getElementById('episodeClose'),episodeSheetMeta=document.getElementById('episodeSheetMeta');
 
 OrientationLock.lockPortrait();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)OrientationLock.lockPortrait()});
@@ -200,6 +226,20 @@ function hideUI(){if(vid.paused)return;topBar.classList.add('hidden');controls.c
 playerWrap.addEventListener('mousemove',showUI);
 playerWrap.addEventListener('click',e=>{if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play'))return;togglePlay()});
 document.addEventListener('touchstart',showUI,{passive:true});
+
+function setEpisodeSheet(open){
+  episodeSheet.classList.toggle('open',open);
+  episodeBackdrop.classList.toggle('open',open);
+  episodeSheet.setAttribute('aria-hidden',open?'false':'true');
+  if(open){
+    showUI();
+    const active=document.getElementById('ep-'+curIdx);
+    if(active)setTimeout(()=>active.scrollIntoView({block:'nearest'}),80);
+  }
+}
+episodeToggle.onclick=()=>setEpisodeSheet(!episodeSheet.classList.contains('open'));
+episodeClose.onclick=()=>setEpisodeSheet(false);
+episodeBackdrop.onclick=()=>setEpisodeSheet(false);
 
 // Play/pause
 function hideSpinner(){clearTimeout(spinnerTimer);spinner.classList.remove('show')}
@@ -257,6 +297,7 @@ vid.onerror=()=>{hideSpinner();centerPlay.classList.add('show');console.error('[
 
 // Keyboard
 document.onkeydown=e=>{if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
+if(e.key==='Escape'&&episodeSheet.classList.contains('open')){setEpisodeSheet(false);return}
 if(e.key==='ArrowRight')skipSeconds(10);
 if(e.key==='ArrowLeft')skipSeconds(-10);
 if(e.key==='ArrowUp'){e.preventDefault();vid.volume=Math.min(1,vid.volume+.1);volSlider.value=vid.volume}
@@ -324,9 +365,10 @@ function setupFeedObserver(){
 function updateNav(){const hasPrev=curIdx>0,hasNext=curIdx<episodes.length-1;
 prevBtn.disabled=prevSide.disabled=!hasPrev;nextBtn.disabled=nextSide.disabled=!hasNext;
 document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
-const a=document.getElementById('ep-'+curIdx);if(a){a.classList.add('active');a.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'})}
+const a=document.getElementById('ep-'+curIdx);if(a){a.classList.add('active');if(episodeSheet.classList.contains('open'))a.scrollIntoView({block:'nearest',behavior:'smooth'})}
 const ep=episodes[curIdx];const num=ep?.episode||ep?.chapterIndex+1||(curIdx+1);
-document.getElementById('epLabel').textContent='Episode '+num}
+document.getElementById('epLabel').textContent='Ep '+num;
+episodeSheetMeta.textContent='Sedang di episode '+num+' dari '+episodes.length}
 
 function goNext(){if(curIdx<episodes.length-1)playEp(curIdx+1)}
 function goPrev(){if(curIdx>0)playEp(curIdx-1)}
@@ -495,7 +537,7 @@ episodes.forEach((ep,i)=>{const btn=document.createElement('button');btn.classNa
 const epNum = ep.episode || ep.chapterIndex+1 || (i+1);
 btn.textContent = epNum;
 // Semua episode dibuat bisa diklik; resolver video akan menangani jika upstream menolak.
-btn.onclick=()=>playEp(i);grid.appendChild(btn)})}
+btn.onclick=()=>{setEpisodeSheet(false);playEp(i)};grid.appendChild(btn)})}
 // Fetch all episodes from OUR API
 async function init(){
     if(!bookId) return;
