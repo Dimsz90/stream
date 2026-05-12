@@ -857,6 +857,25 @@ def proxy():
 
             if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
                 content = resp.text
+                sample = content[:3000].lower()
+                looks_like_playlist = "#extm3u" in sample or "#ext-x-" in sample
+                looks_like_html = (
+                    "<!doctype html" in sample
+                    or "<html" in sample
+                    or "<head" in sample
+                    or "cloudflare" in sample
+                    or "attention required" in sample
+                    or "you have been blocked" in sample
+                    or "cf-error" in sample
+                )
+                if not resp.ok or looks_like_html or not looks_like_playlist:
+                    return jsonify({
+                        "status": "error",
+                        "message": "Upstream playlist blocked or invalid",
+                        "upstream_status": resp.status_code,
+                        "content_type": content_type,
+                        "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
+                    }), 502
 
                 def rewrite(m):
                     abs_link = urljoin(target_url, m.group(1))
