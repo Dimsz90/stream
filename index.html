@@ -1948,7 +1948,7 @@ let barTimer       = null;
 /* ── Rotate Lock State ── */
 let rotateLocked   = false;   // apakah sedang dikunci
 let lockOrientation = null;   // orientasi yang dikunci: 'landscape' | 'portrait'
-let orientationMode = "browse"; // browse = portrait lock, player = auto-rotate
+let orientationMode = "browse"; // browse = portrait lock, player = fullscreen rotate
 
 /* Subtitle */
 const SUB = {
@@ -2633,7 +2633,7 @@ async function startStream() {
   currentPlayback = {mediaType:"movie", tmdbId:selectedItem._tmdb_id || null, season:1, episode:1, totalEpisodes:null, title};
   document.getElementById("episodeNav").style.display = "none";
 
-  enterWatchingOrientationMode();
+  enterBrowseOrientationMode();
   closeDetail();
   document.getElementById("playerMode").style.display = "block";
   showPLoading(`Mengambil stream untuk "${title}"...`);
@@ -2671,7 +2671,7 @@ async function startTvEpisodeStream(season, episode) {
   SUB.activeLang   = "en";
   resetSubtitlePanel();
 
-  enterWatchingOrientationMode();
+  enterBrowseOrientationMode();
   document.getElementById("playerMode").style.display = "block";
   document.getElementById("episodeNav").style.display = "flex";
   updateEpisodeLabel();
@@ -2869,7 +2869,7 @@ async function onEnterFullscreen() {
 }
 
 async function onExitFullscreen() {
-  if (orientationMode === "player" && !rotateLocked) OrientationLock.unlock();
+  await enterBrowseOrientationMode();
 }
 
 function onNativeFullscreenChange() {
@@ -2881,7 +2881,7 @@ function onNativeFullscreenChange() {
   if (isFs) {
     enterWatchingOrientationMode();
   } else {
-    if (orientationMode === "player" && !rotateLocked) OrientationLock.unlock();
+    enterBrowseOrientationMode();
   }
 }
 
@@ -2918,10 +2918,10 @@ async function enterBrowseOrientationMode() {
 
 async function enterWatchingOrientationMode() {
   orientationMode = "player";
-  rotateLocked = false;
-  lockOrientation = null;
-  OrientationLock.unlock();
-  setRotateButtonState(false);
+  rotateLocked = true;
+  lockOrientation = "landscape";
+  setRotateButtonState(true, "landscape");
+  await OrientationLock.lockLandscape();
 }
 
 /* ═══════════════════════════════════════
@@ -2929,6 +2929,10 @@ async function enterWatchingOrientationMode() {
 ═══════════════════════════════════════ */
 /* ── Deteksi orientasi berubah → enforce lock ── */
 function toggleRotateLock() {
+  if (orientationMode === "browse") {
+    enterBrowseOrientationMode();
+    return;
+  }
   if (!rotateLocked) {
     const currentOri = window.screen?.orientation?.type || "";
     const isLandscape = currentOri.startsWith("landscape") ||
