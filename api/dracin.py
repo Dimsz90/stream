@@ -171,11 +171,11 @@ CAPTAIN_BASE  = CAPTAIN_ROOT
 CAPTAIN_TOKEN = os.environ.get("CAPTAIN_TOKEN", DRACIN_TOKEN)  # fallback ke token dracin
 
 def _melolo_headers() -> dict:
-    return {
-        "Authorization": f"Bearer {CAPTAIN_TOKEN}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    h = HEADERS.copy()
+    h["Authorization"] = f"Bearer {CAPTAIN_TOKEN}"
+    h["Content-Type"] = "application/json"
+    h["Accept"] = "application/json"
+    return h
 
 def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int = 300):
     """Fetch dari Captain API v1 (melolo, dll) dengan cache."""

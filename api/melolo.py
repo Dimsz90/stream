@@ -25,6 +25,7 @@ TIMEOUT       = 15
 
 def _headers():
     return {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
         "Authorization": f"Bearer {CAPTAIN_TOKEN}",
         "Content-Type": "application/json",
         "Accept": "application/json",
