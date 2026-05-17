@@ -36,6 +36,9 @@ def _is_vaplayer_stream(url: str) -> bool:
     except Exception:
         return False
 
+def _stream_spoof_origin(target_url: str) -> str:
+    return BRIGHTPATH_ORIGIN if _is_vaplayer_stream(target_url) else ""
+
 
 def _pick_vaplayer_stream(streams):
     if not isinstance(streams, list):
