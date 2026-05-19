@@ -13,8 +13,11 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:'DM Sans',sans-serif;background:#050505;color:#fff;overflow:hidden}
-.watch-feed{height:100svh;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;scroll-behavior:smooth;background:#050505;-webkit-overflow-scrolling:touch}
-.feed-item{position:relative;width:100%;height:100svh;scroll-snap-align:start;scroll-snap-stop:always;background:#050505;overflow:hidden}
+
+/* ── Layout utama: video area + bottom nav ── */
+.app-shell{display:flex;flex-direction:column;height:100svh;background:#050505}
+.watch-feed{flex:1;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;scroll-behavior:smooth;background:#050505;-webkit-overflow-scrolling:touch;min-height:0}
+.feed-item{position:relative;width:100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always;background:#050505;overflow:hidden}
 .feed-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:28px;background:radial-gradient(circle at 50% 20%,rgba(229,9,20,.22),transparent 32%),#070707}
 .feed-placeholder::before{content:'';position:absolute;inset:-20px;background:var(--poster-bg,linear-gradient(135deg,#151515,#050505));background-size:cover;background-position:center;filter:blur(26px);opacity:.34;transform:scale(1.08)}
 .feed-placeholder::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.78))}
@@ -23,22 +26,52 @@ body{font-family:'DM Sans',sans-serif;background:#050505;color:#fff;overflow:hid
 .feed-title{font-size:15px;color:rgba(255,255,255,.74);max-width:320px}
 .feed-hint{margin-top:8px;font-size:12px;color:rgba(255,255,255,.52)}
 .feed-item.active .feed-placeholder{display:none}
-.player-wrap{position:relative;width:100%;height:100%;background:#070707;overflow:hidden}
-.player-wrap::before{content:'';position:absolute;inset:-34px;background:var(--poster-bg,linear-gradient(145deg,#191919,#050505));background-size:cover;background-position:center;filter:blur(30px) saturate(1.08);opacity:.46;transform:scale(1.08);z-index:0}
-.player-wrap::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 72% 18%,rgba(229,9,20,.18),transparent 24%),linear-gradient(180deg,rgba(0,0,0,.24),transparent 34%,rgba(0,0,0,.42));pointer-events:none;z-index:2}
-video{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;display:block}
-@media(min-aspect-ratio:1/1){video{object-fit:contain}}
-/* Top bar */
+
+/* ── Player wrap: contain mode ── */
+.player-wrap{position:relative;width:100%;height:100%;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.player-wrap::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 72% 18%,rgba(229,9,20,.12),transparent 24%);pointer-events:none;z-index:2}
+
+/* Poster blur hanya di area letterbox (behind video) */
+.poster-bg{position:absolute;inset:-34px;background:var(--poster-bg,linear-gradient(145deg,#191919,#050505));background-size:cover;background-position:center;filter:blur(30px) saturate(1.08);opacity:.3;transform:scale(1.08);z-index:0}
+
+video{
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100%;
+  object-fit:contain; /* <-- contain: tidak distorsi */
+  display:block;
+  background:#000
+}
+
+/* ── Progress bar kiri — selalu visible ── */
+.side-progress-track{position:absolute;left:0;top:0;bottom:0;width:3px;background:rgba(255,255,255,.1);z-index:30;pointer-events:none}
+.side-progress-fill{position:absolute;left:0;top:0;width:3px;background:#e50914;border-radius:0 2px 2px 0;z-index:31;transition:height .3s linear;pointer-events:none}
+
+/* ── Subtle meta — muncul saat UI hilang ── */
+.subtle-meta{
+  position:absolute;
+  bottom:12px;
+  left:10px;
+  right:10px;
+  z-index:25;
+  opacity:0;
+  transition:opacity .4s;
+  pointer-events:none
+}
+.subtle-meta.show{opacity:1}
+.subtle-ep-lbl{font-size:9px;color:rgba(255,255,255,.38);font-family:'DM Sans',sans-serif;text-transform:uppercase;letter-spacing:.5px;line-height:1}
+.subtle-title-lbl{font-size:11px;color:rgba(255,255,255,.6);font-family:'DM Sans',sans-serif;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Top bar ── */
 .top-bar{position:absolute;top:0;left:0;right:0;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 58px;display:flex;align-items:flex-start;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.88),rgba(0,0,0,.36) 56%,transparent);z-index:20;opacity:1;transition:opacity .3s}
 .top-bar.hidden{opacity:0;pointer-events:none}
 .back-btn{flex:0 0 auto;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.12);color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;font-family:inherit;text-decoration:none;border-radius:999px;padding:8px 10px;backdrop-filter:blur(12px)}
 .top-copy{flex:1;min-width:0;padding-top:2px;text-shadow:0 2px 14px rgba(0,0,0,.75)}
 .drama-title{font-size:16px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .drama-meta{margin-top:3px;color:rgba(255,255,255,.72);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.episode-toggle{flex:0 0 auto;background:rgba(229,9,20,.92);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:999px;padding:8px 11px;font-family:inherit;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.3)}
-.episode-toggle svg{width:15px;height:15px}
-.ep-label{font-variant-numeric:tabular-nums}
-/* Custom controls */
+
+/* ── Custom controls ── */
 .controls{position:absolute;bottom:0;left:0;right:0;padding:0 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.9));z-index:20;opacity:1;transition:opacity .3s}
 .controls.hidden{opacity:0;pointer-events:none}
 .progress-wrap{width:100%;height:20px;display:flex;align-items:center;cursor:pointer;position:relative}
@@ -58,11 +91,13 @@ video{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;displa
 .vol-wrap{display:flex;align-items:center;gap:6px}
 .vol-slider{width:70px;height:3px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.3);border-radius:2px;outline:none;cursor:pointer}
 .vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#fff;border-radius:50%;cursor:pointer}
-/* Center play overlay */
+
+/* ── Center play overlay ── */
 .center-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:15;width:64px;height:64px;background:rgba(229,9,20,.85);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s}
 .center-play.show{opacity:1;pointer-events:auto}
 .center-play svg{width:32px;height:32px;fill:#fff;margin-left:3px}
-/* Nav buttons on sides */
+
+/* ── Side nav (desktop) ── */
 .side-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:18;width:48px;height:48px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;transition:all .2s;opacity:0}
 .player-wrap:hover .side-nav{opacity:1}
 .side-nav:hover{background:rgba(229,9,20,.8);border-color:rgba(229,9,20,.8)}
@@ -70,102 +105,206 @@ video{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;displa
 .side-nav.left{left:12px}
 .side-nav.right{right:12px}
 .side-nav svg{width:24px;height:24px}
-/* Loading spinner */
+
+/* ── Loading spinner ── */
 .spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:16;pointer-events:none;display:none}
 .spinner.show{display:block}
 .spinner::after{content:'';display:block;width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#e50914;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* Next ep toast */
+
+/* ── Next ep toast ── */
 .next-toast{position:absolute;bottom:90px;right:16px;background:rgba(229,9,20,.9);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;z-index:25;display:none;animation:slideIn .3s ease}
 .next-toast.show{display:flex;align-items:center;gap:8px}
 @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-.watch-card{position:absolute;left:16px;right:16px;bottom:92px;z-index:19;display:grid;gap:7px;padding:12px 13px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:linear-gradient(135deg,rgba(18,18,18,.76),rgba(6,6,6,.42));box-shadow:0 18px 46px rgba(0,0,0,.36);backdrop-filter:blur(16px);transition:opacity .25s,transform .25s;pointer-events:none}
+
+/* ── Watch card (disembunyikan saat clean mode) ── */
+.watch-card{position:absolute;left:16px;right:16px;bottom:56px;z-index:19;display:grid;gap:7px;padding:12px 13px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:linear-gradient(135deg,rgba(18,18,18,.76),rgba(6,6,6,.42));box-shadow:0 18px 46px rgba(0,0,0,.36);backdrop-filter:blur(16px);transition:opacity .25s,transform .25s;pointer-events:none}
 .watch-card.hidden{opacity:0;transform:translateY(14px)}
 .watch-kicker{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.76)}
 .watch-kicker span{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1)}
 .watch-kicker span:first-child{background:rgba(229,9,20,.88);border-color:rgba(255,255,255,.16);color:#fff}
 .watch-name{font-size:15px;font-weight:900;line-height:1.18;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 12px rgba(0,0,0,.8)}
 .watch-subline{font-size:12px;color:rgba(255,255,255,.64);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Episode drawer */
-.episode-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:31;opacity:0;pointer-events:none;transition:opacity .22s}
+
+/* ── Bottom navigation bar ── */
+.bottom-nav{
+  height:calc(56px + env(safe-area-inset-bottom,0px));
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  background:#0a0a0a;
+  border-top:0.5px solid rgba(255,255,255,.08);
+  display:flex;
+  align-items:center;
+  justify-content:space-around;
+  flex-shrink:0;
+  z-index:50;
+  transition:opacity .4s,transform .4s
+}
+.bottom-nav.hidden{opacity:0;transform:translateY(100%)}
+.nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;flex:1;padding:6px 0;-webkit-tap-highlight-color:transparent}
+.nav-item svg{width:22px;height:22px;stroke:rgba(255,255,255,.45);fill:none;stroke-width:1.8;transition:stroke .2s}
+.nav-item span{font-size:9px;color:rgba(255,255,255,.4);font-family:'DM Sans',sans-serif;transition:color .2s}
+.nav-item.active svg{stroke:#fff}
+.nav-item.active span{color:rgba(255,255,255,.9)}
+
+/* Tombol tengah eps */
+.nav-center{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;flex:1;padding:4px 0;-webkit-tap-highlight-color:transparent}
+.nav-center-ring{width:44px;height:44px;background:#e50914;border-radius:12px;display:flex;align-items:center;justify-content:center;transition:transform .15s,background .2s}
+.nav-center-ring:active{transform:scale(.92)}
+.nav-center-ring svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.nav-center span{font-size:9px;color:rgba(255,255,255,.5);font-family:'DM Sans',sans-serif}
+
+/* ── Episode sheet — naik dari bottom nav ── */
+.episode-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:60;opacity:0;pointer-events:none;transition:opacity .22s}
 .episode-backdrop.open{opacity:1;pointer-events:auto}
-.episode-sheet{position:fixed;left:0;right:0;bottom:0;z-index:32;max-height:min(54svh,440px);padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(12,12,12,.96);border:1px solid rgba(255,255,255,.1);border-width:1px 0 0;border-radius:24px 24px 0 0;box-shadow:0 -24px 70px rgba(0,0,0,.55);transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1);backdrop-filter:blur(18px)}
+.episode-sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-height:min(60svh,480px);padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(10,10,10,.97);border:1px solid rgba(255,255,255,.1);border-width:1px 0 0;border-radius:24px 24px 0 0;box-shadow:0 -24px 70px rgba(0,0,0,.55);transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1);backdrop-filter:blur(18px)}
 .episode-sheet.open{transform:translateY(0)}
 .episode-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
 .episode-sheet-title{font-size:16px;font-weight:800}
 .episode-sheet-meta{display:block;margin-top:2px;font-size:12px;color:rgba(255,255,255,.58)}
 .episode-close{width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#fff;font-size:20px;line-height:1;cursor:pointer}
-.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:8px;overflow-y:auto;max-height:calc(min(54svh,440px) - 76px);padding:2px 1px 6px;scrollbar-width:none}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:8px;overflow-y:auto;max-height:calc(min(60svh,480px) - 80px);padding:2px 1px 6px;scrollbar-width:none}
 .ep-grid::-webkit-scrollbar{display:none}
-.ep-btn{min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px 0;color:#fff;font-weight:800;font-size:13px;cursor:pointer;text-align:center;transition:all .15s}
+.ep-btn{min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px 0;color:#fff;font-weight:800;font-size:13px;cursor:pointer;text-align:center;transition:all .15s;font-family:'DM Sans',sans-serif}
 .ep-btn:hover{background:rgba(255,255,255,.16)}
 .ep-btn.active{background:#e50914;border-color:#e50914}
 .ep-btn.locked{opacity:.35;cursor:not-allowed}
-@media(max-width:600px){.vol-wrap{display:none}.side-nav{display:none}.top-bar{padding-left:10px;padding-right:10px}.back-btn span{display:none}.drama-title{font-size:14px}.drama-meta{font-size:11px}.episode-toggle{padding:8px 10px}.episode-toggle .toggle-text{display:none}.watch-card{left:12px;right:12px;bottom:86px}}
+
+@media(max-width:600px){
+  .vol-wrap{display:none}
+  .side-nav{display:none}
+  .top-bar{padding-left:10px;padding-right:10px}
+  .back-btn span{display:none}
+  .drama-title{font-size:14px}
+  .drama-meta{font-size:11px}
+  .watch-card{left:12px;right:12px;bottom:60px}
+}
 </style>
 </head>
 <body>
-<main class="watch-feed" id="watchFeed">
-<section class="feed-item active" id="feed-0" data-idx="0">
-<div class="player-wrap" id="playerWrap">
-  <video id="vid" playsinline></video>
-  <div class="spinner" id="spinner"></div>
-  <div class="center-play" id="centerPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
 
-  <button class="side-nav left" id="prevSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
-  <button class="side-nav right" id="nextSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+<div class="app-shell">
 
-  <div class="top-bar" id="topBar">
-    <a href="/" class="back-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Kembali</span></a>
-    <div class="top-copy">
-      <h1 class="drama-title" id="titleEl">Memuat...</h1>
-      <div class="drama-meta" id="metaEl"></div>
-    </div>
-    <button class="episode-toggle" id="episodeToggle" type="button" aria-label="Buka daftar episode">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-      <span class="ep-label" id="epLabel">Ep</span>
-      <span class="toggle-text">Episode</span>
-    </button>
-  </div>
+  <!-- ── Video Feed ── -->
+  <main class="watch-feed" id="watchFeed">
+    <section class="feed-item active" id="feed-0" data-idx="0">
+      <div class="player-wrap" id="playerWrap">
 
-  <div class="next-toast" id="nextToast">Episode selanjutnya <span id="nextCountdown">5</span>s ▸</div>
+        <!-- Poster blur background (letterbox area) -->
+        <div class="poster-bg" id="posterBg"></div>
 
-  <div class="watch-card" id="watchCard">
-    <div class="watch-kicker">
-      <span id="watchPlatform">DRACIN</span>
-      <span id="watchEpisode">EP</span>
-    </div>
-    <div class="watch-name" id="watchName">Memuat...</div>
-    <div class="watch-subline" id="watchSubline">Portrait mode aktif</div>
-  </div>
+        <video id="vid" playsinline></video>
+        <div class="spinner" id="spinner"></div>
+        <div class="center-play" id="centerPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
 
-  <div class="controls" id="controls">
-    <div class="progress-wrap" id="progressWrap">
-      <div class="progress-bg">
-        <div class="progress-buf" id="bufBar"></div>
-        <div class="progress-fill" id="progBar"></div>
-        <div class="progress-thumb" id="progThumb"></div>
+        <!-- Side progress bar — selalu visible -->
+        <div class="side-progress-track"></div>
+        <div class="side-progress-fill" id="sideProgFill"></div>
+
+        <!-- Subtle meta — muncul saat UI hilang -->
+        <div class="subtle-meta" id="subtleMeta">
+          <div class="subtle-ep-lbl" id="subtleEpLbl">EP 1 · DRACIN</div>
+          <div class="subtle-title-lbl" id="subtleTitleLbl">Memuat...</div>
+        </div>
+
+        <button class="side-nav left" id="prevSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="side-nav right" id="nextSide" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+
+        <!-- Top bar -->
+        <div class="top-bar" id="topBar">
+          <a href="/" class="back-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <span>Kembali</span>
+          </a>
+          <div class="top-copy">
+            <h1 class="drama-title" id="titleEl">Memuat...</h1>
+            <div class="drama-meta" id="metaEl"></div>
+          </div>
+        </div>
+
+        <!-- Next toast -->
+        <div class="next-toast" id="nextToast">Episode selanjutnya <span id="nextCountdown">5</span>s ▸</div>
+
+        <!-- Watch card -->
+        <div class="watch-card" id="watchCard">
+          <div class="watch-kicker">
+            <span id="watchPlatform">DRACIN</span>
+            <span id="watchEpisode">EP</span>
+          </div>
+          <div class="watch-name" id="watchName">Memuat...</div>
+          <div class="watch-subline" id="watchSubline">Portrait mode aktif</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls" id="controls">
+          <div class="progress-wrap" id="progressWrap">
+            <div class="progress-bg">
+              <div class="progress-buf" id="bufBar"></div>
+              <div class="progress-fill" id="progBar"></div>
+              <div class="progress-thumb" id="progThumb"></div>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <button class="ctrl-btn" id="playBtn" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            <button class="ctrl-btn" id="rewindBtn" title="Mundur 10 detik">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 7H5V1"/><path d="M5.64 15a8 8 0 102.2-8.2L5 9"/><text x="9" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg>
+            </button>
+            <button class="ctrl-btn" id="prevBtn" title="Prev" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8zM5 19V5"/></svg>
+            </button>
+            <button class="ctrl-btn" id="nextBtn" title="Next" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8zM19 5v14"/></svg>
+            </button>
+            <button class="ctrl-btn" id="forwardBtn" title="Maju 10 detik">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 7h6V1"/><path d="M18.36 15a8 8 0 11-2.2-8.2L19 9"/><text x="8" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg>
+            </button>
+            <span class="time-display" id="timeDisp">0:00 / 0:00</span>
+            <div class="spacer"></div>
+            <div class="vol-wrap">
+              <button class="ctrl-btn" id="muteBtn" title="Mute">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+              </button>
+              <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.05" value="1">
+            </div>
+            <button class="ctrl-btn" id="fsBtn" title="Fullscreen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            </button>
+          </div>
+        </div>
+
       </div>
-    </div>
-    <div class="ctrl-row">
-      <button class="ctrl-btn" id="playBtn" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
-      <button class="ctrl-btn" id="rewindBtn" title="Mundur 10 detik" aria-label="Mundur 10 detik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 7H5V1"/><path d="M5.64 15a8 8 0 102.2-8.2L5 9"/><text x="9" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg></button>
-      <button class="ctrl-btn" id="prevBtn" title="Prev" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8zM5 19V5"/></svg></button>
-      <button class="ctrl-btn" id="nextBtn" title="Next" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8zM19 5v14"/></svg></button>
-      <button class="ctrl-btn" id="forwardBtn" title="Maju 10 detik" aria-label="Maju 10 detik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 7h6V1"/><path d="M18.36 15a8 8 0 11-2.2-8.2L19 9"/><text x="8" y="16" fill="currentColor" stroke="none" font-size="7" font-weight="700">10</text></svg></button>
-      <span class="time-display" id="timeDisp">0:00 / 0:00</span>
-      <div class="spacer"></div>
-      <div class="vol-wrap">
-        <button class="ctrl-btn" id="muteBtn" title="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg></button>
-        <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.05" value="1">
-      </div>
-      <button class="ctrl-btn" id="fsBtn" title="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
-    </div>
-  </div>
-</div>
-</section>
-</main>
+    </section>
+  </main>
 
+  <!-- ── Bottom Navigation Bar ── -->
+  <nav class="bottom-nav" id="bottomNav">
+    <div class="nav-item active" id="navHome">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </div>
+    <div class="nav-item" id="navDiscover">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Cari</span>
+    </div>
+    <!-- Tombol tengah: Pilih Episode -->
+    <div class="nav-center" id="navEps" onclick="setEpisodeSheet(!episodeSheet.classList.contains('open'))">
+      <div class="nav-center-ring">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </div>
+      <span id="navEpLabel">Ep 1</span>
+    </div>
+    <div class="nav-item" id="navNotif">
+      <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span>Notif</span>
+    </div>
+    <div class="nav-item" id="navProfile">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profil</span>
+    </div>
+  </nav>
+
+</div><!-- /app-shell -->
+
+<!-- Episode sheet & backdrop -->
 <div class="episode-backdrop" id="episodeBackdrop"></div>
 <section class="episode-sheet" id="episodeSheet" aria-hidden="true">
   <div class="episode-sheet-head">
@@ -173,13 +312,13 @@ video{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;displa
       <div class="episode-sheet-title">Daftar Episode</div>
       <span class="episode-sheet-meta" id="episodeSheetMeta">Pilih episode untuk lompat</span>
     </div>
-    <button class="episode-close" id="episodeClose" type="button" aria-label="Tutup daftar episode">&times;</button>
+    <button class="episode-close" id="episodeClose" type="button" aria-label="Tutup">&times;</button>
   </div>
   <div class="ep-grid" id="epGrid"></div>
 </section>
 
-<!-- PIN Modal for Dramanova (player) -->
-<div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center"> 
+<!-- PIN Modal -->
+<div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
   <div style="width:320px;background:#0f1113;border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,.06);box-shadow:0 10px 40px rgba(0,0,0,.6);">
     <h3 style="margin:0 0 8px;font-family:'DM Sans',sans-serif;color:#fff">Masukkan PIN</h3>
     <p style="margin:0 0 12px;color:#b8b4aa;font-size:13px">PIN diperlukan untuk mengakses Dramanova.</p>
@@ -205,36 +344,63 @@ let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,spinnerTimer=nul
 const videoUrlCache=new Map(),videoUrlInflight=new Map();
 const preparedUrls=new Map(),prewarmUrls=new Set(),prewarmInflight=new Set();
 const PREFETCH_AHEAD=3,PREFETCH_BEHIND=1;
-const watchFeed=document.getElementById('watchFeed'),playerWrap=document.getElementById('playerWrap');
-const vid=document.getElementById('vid'),spinner=document.getElementById('spinner'),centerPlay=document.getElementById('centerPlay');
-const progBar=document.getElementById('progBar'),bufBar=document.getElementById('bufBar'),progThumb=document.getElementById('progThumb');
-const timeDisp=document.getElementById('timeDisp'),playBtn=document.getElementById('playBtn'),playIcon=document.getElementById('playIcon');
-const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
-const rewindBtn=document.getElementById('rewindBtn'),forwardBtn=document.getElementById('forwardBtn');
-const prevSide=document.getElementById('prevSide'),nextSide=document.getElementById('nextSide');
-const topBar=document.getElementById('topBar'),controls=document.getElementById('controls');
-const nextToast=document.getElementById('nextToast'),nextCountdown=document.getElementById('nextCountdown');
-const episodeToggle=document.getElementById('episodeToggle'),episodeSheet=document.getElementById('episodeSheet');
-const episodeBackdrop=document.getElementById('episodeBackdrop'),episodeClose=document.getElementById('episodeClose'),episodeSheetMeta=document.getElementById('episodeSheetMeta');
-const titleEl=document.getElementById('titleEl'),metaEl=document.getElementById('metaEl'),epLabel=document.getElementById('epLabel');
-const watchCard=document.getElementById('watchCard'),watchPlatform=document.getElementById('watchPlatform'),watchEpisode=document.getElementById('watchEpisode');
-const watchName=document.getElementById('watchName'),watchSubline=document.getElementById('watchSubline');
 
-if(coverUrl)playerWrap.style.setProperty('--poster-bg',`url("${coverUrl.replace(/"/g,'%22')}")`);
+const watchFeed=document.getElementById('watchFeed');
+const playerWrap=document.getElementById('playerWrap');
+const vid=document.getElementById('vid');
+const spinner=document.getElementById('spinner');
+const centerPlay=document.getElementById('centerPlay');
+const progBar=document.getElementById('progBar');
+const bufBar=document.getElementById('bufBar');
+const progThumb=document.getElementById('progThumb');
+const timeDisp=document.getElementById('timeDisp');
+const playBtn=document.getElementById('playBtn');
+const playIcon=document.getElementById('playIcon');
+const prevBtn=document.getElementById('prevBtn');
+const nextBtn=document.getElementById('nextBtn');
+const rewindBtn=document.getElementById('rewindBtn');
+const forwardBtn=document.getElementById('forwardBtn');
+const prevSide=document.getElementById('prevSide');
+const nextSide=document.getElementById('nextSide');
+const topBar=document.getElementById('topBar');
+const controls=document.getElementById('controls');
+const nextToast=document.getElementById('nextToast');
+const nextCountdown=document.getElementById('nextCountdown');
+const episodeSheet=document.getElementById('episodeSheet');
+const episodeBackdrop=document.getElementById('episodeBackdrop');
+const episodeClose=document.getElementById('episodeClose');
+const episodeSheetMeta=document.getElementById('episodeSheetMeta');
+const titleEl=document.getElementById('titleEl');
+const metaEl=document.getElementById('metaEl');
+const watchCard=document.getElementById('watchCard');
+const watchPlatform=document.getElementById('watchPlatform');
+const watchEpisode=document.getElementById('watchEpisode');
+const watchName=document.getElementById('watchName');
+const watchSubline=document.getElementById('watchSubline');
+const sideProgFill=document.getElementById('sideProgFill');
+const subtleMeta=document.getElementById('subtleMeta');
+const subtleEpLbl=document.getElementById('subtleEpLbl');
+const subtleTitleLbl=document.getElementById('subtleTitleLbl');
+const bottomNav=document.getElementById('bottomNav');
+const navEpLabel=document.getElementById('navEpLabel');
 
-function isPlayerFullscreen(){
-  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+/* ── Poster background ── */
+if(coverUrl){
+  const posterBg=document.getElementById('posterBg');
+  if(posterBg)posterBg.style.background=`url("${coverUrl.replace(/"/g,'%22')}")`;
+  posterBg.style.backgroundSize='cover';
+  posterBg.style.backgroundPosition='center';
 }
 
+/* ── Orientation lock ── */
+function isPlayerFullscreen(){
+  return !!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement);
+}
 async function lockDracinPortrait(){
   const locked=await OrientationLock.lockPortrait();
   if(!locked)await OrientationLock.lock('portrait-primary');
 }
-
-async function applyDracinOrientation(){
-  await lockDracinPortrait();
-}
-
+async function applyDracinOrientation(){await lockDracinPortrait()}
 lockDracinPortrait();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)applyDracinOrientation()});
 window.addEventListener('pageshow',applyDracinOrientation);
@@ -243,33 +409,55 @@ window.addEventListener('resize',()=>{if(!document.hidden)applyDracinOrientation
 document.addEventListener('fullscreenchange',applyDracinOrientation);
 document.addEventListener('webkitfullscreenchange',applyDracinOrientation);
 
+/* ── Subscription headers ── */
 function withSubscriptionHeaders(headers={}){
-    const subToken=localStorage.getItem(SUBSCRIPTION_SESSION_KEY)||'';
-    return subToken ? {...headers,'X-Subscription-Token':subToken} : headers;
+  const subToken=localStorage.getItem(SUBSCRIPTION_SESSION_KEY)||'';
+  return subToken?{...headers,'X-Subscription-Token':subToken}:headers;
+}
+async function appFetch(url,options={}){
+  options={...options,headers:withSubscriptionHeaders(options.headers||{})};
+  const res=await fetch(url,options);
+  if(res.status===401||res.status===403){
+    const body=await res.clone().json().catch(()=>({}));
+    if(body.subscription_required&&titleEl)titleEl.textContent=body.message||'Login langganan diperlukan';
+  }
+  return res;
 }
 
-async function appFetch(url, options={}){
-    options={...options,headers:withSubscriptionHeaders(options.headers||{})};
-    const res=await fetch(url,options);
-    if(res.status===401||res.status===403){
-        const body=await res.clone().json().catch(()=>({}));
-        if(body.subscription_required){
-            if(titleEl)titleEl.textContent=body.message||'Login langganan diperlukan';
-        }
-    }
-    return res;
-}
-
-// Format time
+/* ── Format time ── */
 function fmt(s){if(!s||!isFinite(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec}
 
-// Show/hide controls
-function showUI(){topBar.classList.remove('hidden');controls.classList.remove('hidden');if(watchCard)watchCard.classList.remove('hidden');clearTimeout(hideTimer);hideTimer=setTimeout(hideUI,3500)}
-function hideUI(){if(vid.paused)return;topBar.classList.add('hidden');controls.classList.add('hidden');if(watchCard)watchCard.classList.add('hidden')}
+/* ── Show / hide UI ──
+   Side progress bar & subtle meta TIDAK ikut hilang */
+function showUI(){
+  topBar.classList.remove('hidden');
+  controls.classList.remove('hidden');
+  if(watchCard)watchCard.classList.remove('hidden');
+  subtleMeta.classList.remove('show');
+  clearTimeout(hideTimer);
+  hideTimer=setTimeout(hideUI,3500);
+}
+function hideUI(){
+  if(vid.paused)return;
+  topBar.classList.add('hidden');
+  controls.classList.add('hidden');
+  if(watchCard)watchCard.classList.add('hidden');
+  subtleMeta.classList.add('show');
+}
+
 playerWrap.addEventListener('mousemove',showUI);
-playerWrap.addEventListener('click',e=>{if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play,.watch-card'))return;togglePlay()});
+playerWrap.addEventListener('click',e=>{
+  if(e.target.closest('.controls,.top-bar,.side-nav,.next-toast,.center-play,.watch-card'))return;
+  togglePlay();
+});
 document.addEventListener('touchstart',showUI,{passive:true});
 
+/* ── Side progress bar update ── */
+function updateSideProgress(pct){
+  if(sideProgFill)sideProgFill.style.height=pct+'%';
+}
+
+/* ── Episode sheet ── */
 function setEpisodeSheet(open){
   episodeSheet.classList.toggle('open',open);
   episodeBackdrop.classList.toggle('open',open);
@@ -280,104 +468,99 @@ function setEpisodeSheet(open){
     if(active)setTimeout(()=>active.scrollIntoView({block:'nearest'}),80);
   }
 }
-episodeToggle.onclick=()=>setEpisodeSheet(!episodeSheet.classList.contains('open'));
 episodeClose.onclick=()=>setEpisodeSheet(false);
 episodeBackdrop.onclick=()=>setEpisodeSheet(false);
 
-// Play/pause
+/* ── Play / pause ── */
 function hideSpinner(){clearTimeout(spinnerTimer);spinner.classList.remove('show')}
 function showSpinner(){clearTimeout(spinnerTimer);spinner.classList.add('show');spinnerTimer=setTimeout(()=>{if(vid.readyState>=2||vid.currentTime>0)hideSpinner()},3500)}
 function playSafely(){
   const p=vid.play();
-  if(p&&typeof p.catch==='function'){
-    p.catch(()=>{hideSpinner();centerPlay.classList.add('show')});
-  }
+  if(p&&typeof p.catch==='function')p.catch(()=>{hideSpinner();centerPlay.classList.add('show')});
 }
-function togglePlay(){if(vid.paused){playSafely();centerPlay.classList.remove('show')}else{vid.pause();centerPlay.classList.add('show')}}
+function togglePlay(){
+  if(vid.paused){playSafely();centerPlay.classList.remove('show')}
+  else{vid.pause();centerPlay.classList.add('show')}
+}
 playBtn.onclick=togglePlay;
 centerPlay.onclick=()=>{playSafely();centerPlay.classList.remove('show')};
 vid.onplay=()=>{playIcon.innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';centerPlay.classList.remove('show');showUI()};
 vid.onpause=()=>{playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';centerPlay.classList.add('show')};
 
-function skipSeconds(delta){
-  if(!isFinite(vid.duration))return;
-  vid.currentTime=Math.max(0,Math.min(vid.duration,vid.currentTime+delta));
-  showUI();
-}
+function skipSeconds(delta){if(!isFinite(vid.duration))return;vid.currentTime=Math.max(0,Math.min(vid.duration,vid.currentTime+delta));showUI()}
 rewindBtn.onclick=()=>skipSeconds(-10);
 forwardBtn.onclick=()=>skipSeconds(10);
 
-// Progress
-vid.onprogress=()=>{if(vid.buffered.length>0){const b=vid.buffered.end(vid.buffered.length-1)/vid.duration*100;bufBar.style.width=b+'%'}};
+/* ── Progress ── */
+vid.onprogress=()=>{
+  if(vid.buffered.length>0){
+    const b=vid.buffered.end(vid.buffered.length-1)/vid.duration*100;
+    bufBar.style.width=b+'%';
+  }
+};
 
-// Seek
+/* ── Seek ── */
 const pw=document.getElementById('progressWrap');
 function seekTo(e){const r=pw.getBoundingClientRect(),p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));vid.currentTime=p*vid.duration}
 let seeking=false;
 pw.onmousedown=e=>{seeking=true;seekTo(e)};
 document.onmousemove=e=>{if(seeking)seekTo(e)};
 document.onmouseup=()=>{seeking=false};
-pw.ontouchstart=e=>{const t=e.touches[0];seekTo(t)};
-pw.ontouchmove=e=>{const t=e.touches[0];seekTo(t)};
+pw.ontouchstart=e=>{seekTo(e.touches[0])};
+pw.ontouchmove=e=>{seekTo(e.touches[0])};
 
-// Volume
+/* ── Volume ── */
 const volSlider=document.getElementById('volSlider');
 volSlider.oninput=()=>{vid.volume=volSlider.value;vid.muted=false};
 document.getElementById('muteBtn').onclick=()=>{vid.muted=!vid.muted;volSlider.value=vid.muted?0:vid.volume};
 
-// Fullscreen
+/* ── Fullscreen ── */
 document.getElementById('fsBtn').onclick=async()=>{
   if(isPlayerFullscreen()){
     const exit=document.exitFullscreen||document.webkitExitFullscreen;
-    if(exit){
-      try{
-        const done=exit.call(document);
-        if(done&&typeof done.catch==='function')await done.catch(()=>{});
-      }catch(e){}
-    }
-    await lockDracinPortrait();
-    return;
+    if(exit){try{const d=exit.call(document);if(d&&typeof d.catch==='function')await d.catch(()=>{})}catch(e){}}
+    await lockDracinPortrait();return;
   }
   const request=playerWrap.requestFullscreen||playerWrap.webkitRequestFullscreen;
-  if(request){
-    try{
-      await request.call(playerWrap);
-      await lockDracinPortrait();
-    }catch(e){
-      await lockDracinPortrait();
-    }
-  }
+  if(request){try{await request.call(playerWrap);await lockDracinPortrait()}catch(e){await lockDracinPortrait()}}
 };
 
-// Loading state
+/* ── Loading state ── */
 vid.onwaiting=()=>showSpinner();
 vid.onstalled=()=>showSpinner();
 vid.onloadedmetadata=()=>hideSpinner();
 vid.onloadeddata=()=>hideSpinner();
 vid.oncanplay=()=>hideSpinner();
 vid.onplaying=()=>hideSpinner();
-vid.ontimeupdate=()=>{hideSpinner();if(!vid.duration)return;const p=vid.currentTime/vid.duration*100;progBar.style.width=p+'%';progThumb.style.left=p+'%';timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);checkAutoNext()};
+
+vid.ontimeupdate=()=>{
+  hideSpinner();
+  if(!vid.duration)return;
+  const pct=vid.currentTime/vid.duration*100;
+  progBar.style.width=pct+'%';
+  progThumb.style.left=pct+'%';
+  timeDisp.textContent=fmt(vid.currentTime)+' / '+fmt(vid.duration);
+  updateSideProgress(pct); /* ← side progress selalu update */
+  checkAutoNext();
+};
 vid.onerror=()=>{hideSpinner();centerPlay.classList.add('show');console.error('[VIDEO] error',vid.error)};
 
-// Keyboard
-document.onkeydown=e=>{if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
-if(e.key==='Escape'&&episodeSheet.classList.contains('open')){setEpisodeSheet(false);return}
-if(e.key==='ArrowRight')skipSeconds(10);
-if(e.key==='ArrowLeft')skipSeconds(-10);
-if(e.key==='ArrowUp'){e.preventDefault();vid.volume=Math.min(1,vid.volume+.1);volSlider.value=vid.volume}
-if(e.key==='ArrowDown'){e.preventDefault();vid.volume=Math.max(0,vid.volume-.1);volSlider.value=vid.volume}
-if(e.key==='f')document.getElementById('fsBtn').click();
-if(e.key==='n'&&!nextBtn.disabled)goNext();
-if(e.key==='p'&&!prevBtn.disabled)goPrev()};
+/* ── Keyboard ── */
+document.onkeydown=e=>{
+  if(e.key===' '||e.key==='k'){e.preventDefault();togglePlay()}
+  if(e.key==='Escape'&&episodeSheet.classList.contains('open')){setEpisodeSheet(false);return}
+  if(e.key==='ArrowRight')skipSeconds(10);
+  if(e.key==='ArrowLeft')skipSeconds(-10);
+  if(e.key==='ArrowUp'){e.preventDefault();vid.volume=Math.min(1,vid.volume+.1);volSlider.value=vid.volume}
+  if(e.key==='ArrowDown'){e.preventDefault();vid.volume=Math.max(0,vid.volume-.1);volSlider.value=vid.volume}
+  if(e.key==='f')document.getElementById('fsBtn').click();
+  if(e.key==='n'&&!nextBtn.disabled)goNext();
+  if(e.key==='p'&&!prevBtn.disabled)goPrev();
+};
 
-function epNumber(idx){
-  const ep=episodes[idx];
-  return ep?.episode || ep?.chapterIndex+1 || (idx+1);
-}
-
-function platformName(){
-  return PLATFORM_LABELS[platform]||String(platform||'dracin').toUpperCase();
-}
+/* ── Helpers ── */
+function epNumber(idx){const ep=episodes[idx];return ep?.episode||ep?.chapterIndex+1||(idx+1)}
+function platformName(){return PLATFORM_LABELS[platform]||String(platform||'dracin').toUpperCase()}
 
 function updateWatchCard(){
   const num=epNumber(curIdx);
@@ -387,14 +570,21 @@ function updateWatchCard(){
   if(watchSubline)watchSubline.textContent=(episodes.length?((curIdx+1)+' dari '+episodes.length+' episode'):'Memuat episode')+' · Portrait mode';
 }
 
+function updateSubtleMeta(){
+  const num=epNumber(curIdx);
+  if(subtleEpLbl)subtleEpLbl.textContent='EP '+num+' · '+platformName();
+  if(subtleTitleLbl)subtleTitleLbl.textContent=(titleEl&&titleEl.textContent)||'Drama';
+  if(navEpLabel)navEpLabel.textContent='Ep '+num;
+}
+
 function escapeHtml(value){
   return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* ── Feed ── */
 function renderFeed(){
-  if(!watchFeed)return;
-  if(!episodes.length)return;
-  const title=(titleEl&&titleEl.textContent) || 'Drama';
+  if(!watchFeed||!episodes.length)return;
+  const title=(titleEl&&titleEl.textContent)||'Drama';
   watchFeed.innerHTML='';
   episodes.forEach((ep,i)=>{
     const item=document.createElement('section');
@@ -412,8 +602,8 @@ function renderFeed(){
 }
 
 function movePlayerToFeed(idx){
-  const item=document.getElementById('feed-'+idx) || watchFeed.firstElementChild;
-  if(item && !item.contains(playerWrap))item.appendChild(playerWrap);
+  const item=document.getElementById('feed-'+idx)||watchFeed.firstElementChild;
+  if(item&&!item.contains(playerWrap))item.appendChild(playerWrap);
   document.querySelectorAll('.feed-item').forEach((el,i)=>el.classList.toggle('active',i===idx));
 }
 
@@ -428,47 +618,53 @@ function scrollFeedTo(idx){
 function setupFeedObserver(){
   if(feedObserver)feedObserver.disconnect();
   feedObserver=new IntersectionObserver(entries=>{
-    if(feedLock || !episodes.length)return;
-    entries.forEach(entry=>{
-      if(!entry.isIntersecting)return;
-      const nearIdx=Number(entry.target.dataset.idx);
-      if(Number.isInteger(nearIdx))preloadAround(nearIdx);
-    });
+    if(feedLock||!episodes.length)return;
+    entries.forEach(entry=>{if(!entry.isIntersecting)return;const nearIdx=Number(entry.target.dataset.idx);if(Number.isInteger(nearIdx))preloadAround(nearIdx)});
     const best=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
-    if(!best || best.intersectionRatio<0.72)return;
+    if(!best||best.intersectionRatio<0.72)return;
     const idx=Number(best.target.dataset.idx);
-    if(Number.isInteger(idx) && idx!==curIdx)playEp(idx,{scroll:false});
+    if(Number.isInteger(idx)&&idx!==curIdx)playEp(idx,{scroll:false});
   },{root:watchFeed,threshold:[0.2,0.45,0.72,0.9]});
   document.querySelectorAll('.feed-item').forEach(item=>feedObserver.observe(item));
 }
 
-// Nav buttons
-function updateNav(){const hasPrev=curIdx>0,hasNext=curIdx<episodes.length-1;
-prevBtn.disabled=prevSide.disabled=!hasPrev;nextBtn.disabled=nextSide.disabled=!hasNext;
-document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
-const a=document.getElementById('ep-'+curIdx);if(a){a.classList.add('active');if(episodeSheet.classList.contains('open'))a.scrollIntoView({block:'nearest',behavior:'smooth'})}
-const ep=episodes[curIdx];const num=ep?.episode||ep?.chapterIndex+1||(curIdx+1);
-if(epLabel)epLabel.textContent='Ep '+num;
-episodeSheetMeta.textContent='Sedang di episode '+num+' dari '+episodes.length;
-updateWatchCard()}
+/* ── Nav ── */
+function updateNav(){
+  const hasPrev=curIdx>0,hasNext=curIdx<episodes.length-1;
+  prevBtn.disabled=prevSide.disabled=!hasPrev;
+  nextBtn.disabled=nextSide.disabled=!hasNext;
+  document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
+  const a=document.getElementById('ep-'+curIdx);
+  if(a){a.classList.add('active');if(episodeSheet.classList.contains('open'))a.scrollIntoView({block:'nearest',behavior:'smooth'})}
+  const ep=episodes[curIdx];
+  const num=ep?.episode||ep?.chapterIndex+1||(curIdx+1);
+  episodeSheetMeta.textContent='Sedang di episode '+num+' dari '+episodes.length;
+  updateWatchCard();
+  updateSubtleMeta();
+}
 
 function goNext(){if(curIdx<episodes.length-1)playEp(curIdx+1)}
 function goPrev(){if(curIdx>0)playEp(curIdx-1)}
 prevBtn.onclick=goPrev;nextBtn.onclick=goNext;prevSide.onclick=goPrev;nextSide.onclick=goNext;
 
-// Auto next episode
-function checkAutoNext(){if(!vid.duration||vid.duration<5)return;
-const remaining=vid.duration-vid.currentTime;
-if(remaining<=6&&curIdx<episodes.length-1){nextToast.classList.add('show');nextCountdown.textContent=Math.ceil(remaining);
-if(!nextTimer){preloadNext();nextTimer=setTimeout(()=>{nextToast.classList.remove('show');goNext()},remaining*1000)}}
-else{nextToast.classList.remove('show');if(nextTimer){clearTimeout(nextTimer);nextTimer=null}}}
+/* ── Auto next ── */
+function checkAutoNext(){
+  if(!vid.duration||vid.duration<5)return;
+  const remaining=vid.duration-vid.currentTime;
+  if(remaining<=6&&curIdx<episodes.length-1){
+    nextToast.classList.add('show');
+    nextCountdown.textContent=Math.ceil(remaining);
+    if(!nextTimer){preloadNext();nextTimer=setTimeout(()=>{nextToast.classList.remove('show');goNext()},remaining*1000)}
+  }else{
+    nextToast.classList.remove('show');
+    if(nextTimer){clearTimeout(nextTimer);nextTimer=null}
+  }
+}
 vid.onended=()=>{if(curIdx<episodes.length-1)goNext();else centerPlay.classList.add('show')};
 nextToast.onclick=()=>{clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');goNext()};
 
-// Preload next episode URL
-async function preloadNext(){
-if(curIdx>=episodes.length-1)return;
-preloadEpisodeUrl(curIdx+1)}
+/* ── Preload ── */
+async function preloadNext(){if(curIdx>=episodes.length-1)return;preloadEpisodeUrl(curIdx+1)}
 
 function isHlsUrl(url){return /\.m3u8(?:[?#]|$)/i.test(String(url||''))}
 
@@ -477,65 +673,33 @@ async function prewarmUrl(url){
   prewarmInflight.add(url);
   try{
     if(isHlsUrl(url)){
-      const u=new URL(url,location.href);
-      const sameOrigin=u.origin===location.origin;
+      const u=new URL(url,location.href);const sameOrigin=u.origin===location.origin;
       const opts={cache:'force-cache',credentials:sameOrigin?'same-origin':'omit'};
       if(sameOrigin)opts.headers=withSubscriptionHeaders();
-      try{
-        const r=await fetch(url,opts);
-        if(r.ok)await r.text();
-      }catch(e){
-        if(!sameOrigin)await fetch(url,{cache:'force-cache',mode:'no-cors',credentials:'omit'}).catch(()=>{});
-      }
+      try{const r=await fetch(url,opts);if(r.ok)await r.text()}catch(e){if(!sameOrigin)await fetch(url,{cache:'force-cache',mode:'no-cors',credentials:'omit'}).catch(()=>{})}
     }else{
-      const preview=document.createElement('video');
-      preview.preload='metadata';
-      preview.muted=true;
-      preview.playsInline=true;
-      preview.style.display='none';
-      preview.src=url;
-      document.body.appendChild(preview);
-      await new Promise(resolve=>{
-        const done=()=>{preview.removeAttribute('src');preview.load();preview.remove();resolve()};
-        preview.onloadedmetadata=done;
-        preview.onerror=done;
-        setTimeout(done,3500);
-      });
+      const preview=document.createElement('video');preview.preload='metadata';preview.muted=true;preview.playsInline=true;preview.style.display='none';preview.src=url;document.body.appendChild(preview);
+      await new Promise(resolve=>{const done=()=>{preview.removeAttribute('src');preview.load();preview.remove();resolve()};preview.onloadedmetadata=done;preview.onerror=done;setTimeout(done,3500)});
     }
     prewarmUrls.add(url);
-  }catch(e){
-    console.warn('[prewarm] gagal:',e);
-  }finally{
-    prewarmInflight.delete(url);
-  }
+  }catch(e){console.warn('[prewarm] gagal:',e)}finally{prewarmInflight.delete(url)}
 }
 
 async function preloadEpisodeUrl(idx){
-  if(idx<0||idx>=episodes.length)return '';
+  if(idx<0||idx>=episodes.length)return'';
   const cached=preparedUrls.get(idx);
-  if(cached)return cached instanceof Promise ? cached : cached;
+  if(cached)return cached instanceof Promise?cached:cached;
   const promise=getVideoUrl(episodes[idx]).then(url=>{
-    if(url){
-      preparedUrls.set(idx,url);
-      prewarmUrl(url);
-    }else{
-      preparedUrls.delete(idx);
-    }
+    if(url){preparedUrls.set(idx,url);prewarmUrl(url)}else{preparedUrls.delete(idx)}
     return url||'';
-  }).catch(e=>{
-    preparedUrls.delete(idx);
-    console.warn('[preload] episode '+(idx+1)+' gagal:',e);
-    return '';
-  });
+  }).catch(e=>{preparedUrls.delete(idx);console.warn('[preload] episode '+(idx+1)+' gagal:',e);return''});
   preparedUrls.set(idx,promise);
   return promise;
 }
 
 function trimPreparedUrls(centerIdx){
   const maxDistance=PREFETCH_AHEAD+PREFETCH_BEHIND+2;
-  for(const idx of preparedUrls.keys()){
-    if(Math.abs(idx-centerIdx)>maxDistance)preparedUrls.delete(idx);
-  }
+  for(const idx of preparedUrls.keys()){if(Math.abs(idx-centerIdx)>maxDistance)preparedUrls.delete(idx)}
 }
 
 function preloadAround(idx){
@@ -544,214 +708,158 @@ function preloadAround(idx){
   const targets=[];
   for(let i=1;i<=PREFETCH_AHEAD;i++)targets.push(idx+i);
   for(let i=1;i<=PREFETCH_BEHIND;i++)targets.push(idx-i);
-  targets.filter(i=>i>=0&&i<episodes.length).forEach((target,order)=>{
-    setTimeout(()=>preloadEpisodeUrl(target),order*180);
-  });
+  targets.filter(i=>i>=0&&i<episodes.length).forEach((target,order)=>{setTimeout(()=>preloadEpisodeUrl(target),order*180)});
 }
 
-// Get video URL for an episode
-// Priority: ep.url (normalized) → _raw.stream_url → /api/get-video fallback (melolo)
-async function fetchVideoLink(reqUrl, options={}){
-    const key=reqUrl+'|'+JSON.stringify(options.headers||{});
-    const cached=videoUrlCache.get(key);
-    if(cached&&cached.expires>Date.now())return cached.link;
-    if(videoUrlInflight.has(key))return videoUrlInflight.get(key);
-    const promise=appFetch(reqUrl,options).then(r=>r.json()).then(j=>{
-        const link=j.link||(j.data&&j.data.url)||'';
-        if(j.status==='success'&&link)videoUrlCache.set(key,{link,expires:Date.now()+120000});
-        return link;
-    }).finally(()=>videoUrlInflight.delete(key));
-    videoUrlInflight.set(key,promise);
-    return promise;
+/* ── Get video URL ── */
+async function fetchVideoLink(reqUrl,options={}){
+  const key=reqUrl+'|'+JSON.stringify(options.headers||{});
+  const cached=videoUrlCache.get(key);
+  if(cached&&cached.expires>Date.now())return cached.link;
+  if(videoUrlInflight.has(key))return videoUrlInflight.get(key);
+  const promise=appFetch(reqUrl,options).then(r=>r.json()).then(j=>{
+    const link=j.link||(j.data&&j.data.url)||'';
+    if(j.status==='success'&&link)videoUrlCache.set(key,{link,expires:Date.now()+120000});
+    return link;
+  }).finally(()=>videoUrlInflight.delete(key));
+  videoUrlInflight.set(key,promise);
+  return promise;
 }
 
 async function getVideoUrl(ep){
-    // 1. URL sudah di-resolve saat fetch episodes (dari multi-video stream_url)
-    const direct = ep.url
-        || (ep._raw && (ep._raw.stream_url || ep._raw.url || ep._raw.videoUrl))
-        || '';
-    if(direct) return direct;
-
-    // 2. Fallback on-demand via platform resolver.
-    const epVid = ep.vid || (ep._raw && ep._raw.vid) || '';
-    if(!epVid) return '';
-    try{
-      if(platform === 'dramanova'){
-        const token = sessionStorage.getItem('dramanova_token');
-        const headers = token ? { 'X-Dramanova-Token': token } : {};
-        let reqUrl = '/api/dracin/video?id=' + encodeURIComponent(epVid) + '&platform=dramanova';
-        try {
-          if (token) {
-            const u = new URL(reqUrl, location.origin);
-            if (!u.searchParams.get('dramanova_token')) u.searchParams.set('dramanova_token', token);
-            reqUrl = u.pathname + u.search + u.hash;
-          }
-        } catch (e) {}
-            const link = await fetchVideoLink(reqUrl, { headers });
-            if(link){
-                ep.url = link;
-                return link;
-            }
-            return '';
-        }
-        if(platform === 'shortwave'){
-            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=shortwave&lang=in');
-            if(link){
-                ep.url = link;
-                return link;
-            }
-            return '';
-        }
-        if(platform === 'cubetv'){
-            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=cubetv&lang=in');
-            if(link){
-                ep.url = link;
-                return link;
-            }
-            return '';
-        }
-        if(platform === 'reelshort'){
-            const link = await fetchVideoLink('/api/dracin/video?id=' + encodeURIComponent(epVid) + '&bookId=' + encodeURIComponent(bookId) + '&platform=reelshort&lang=in');
-            if(link){
-                ep.url = link;
-                return link;
-            }
-            return '';
-        }
-        const link = await fetchVideoLink('/api/get-video?id=' + encodeURIComponent(epVid));
-        if(link){
-            ep.url = link; // cache
-            return link;
-        }
-    }catch(e){ console.warn('[getVideoUrl] fallback error:', e); }
-    return '';
+  const direct=ep.url||(ep._raw&&(ep._raw.stream_url||ep._raw.url||ep._raw.videoUrl))||'';
+  if(direct)return direct;
+  const epVid=ep.vid||(ep._raw&&ep._raw.vid)||'';
+  if(!epVid)return'';
+  try{
+    if(platform==='dramanova'){
+      const token=sessionStorage.getItem('dramanova_token');
+      const headers=token?{'X-Dramanova-Token':token}:{};
+      let reqUrl='/api/dracin/video?id='+encodeURIComponent(epVid)+'&platform=dramanova';
+      try{if(token){const u=new URL(reqUrl,location.origin);if(!u.searchParams.get('dramanova_token'))u.searchParams.set('dramanova_token',token);reqUrl=u.pathname+u.search+u.hash}}catch(e){}
+      const link=await fetchVideoLink(reqUrl,{headers});if(link){ep.url=link;return link}return'';
+    }
+    if(platform==='shortwave'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang=in');if(link){ep.url=link;return link}return''}
+    if(platform==='cubetv'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang=in');if(link){ep.url=link;return link}return''}
+    if(platform==='reelshort'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang=in');if(link){ep.url=link;return link}return''}
+    const link=await fetchVideoLink('/api/get-video?id='+encodeURIComponent(epVid));if(link){ep.url=link;return link}
+  }catch(e){console.warn('[getVideoUrl] fallback error:',e)}
+  return'';
 }
 
-// Destroy HLS
+/* ── HLS ── */
 function destroyHLS(){if(hls){hls.destroy();hls=null}}
 
-// Play episode
-async function playEp(idx,opts={}){
-const seq=++playSeq;
-curIdx=idx;updateNav();movePlayerToFeed(idx);if(opts.scroll!==false)scrollFeedTo(idx);destroyHLS();
-applyDracinOrientation();
-clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
-showSpinner();centerPlay.classList.remove('show');
-vid.pause();
-vid.removeAttribute('src');
-vid.load();
-try{
-let url=await preloadEpisodeUrl(idx);
-if(seq!==playSeq)return;
-if(url.includes('.m3u8')){
-  loadHlsChain(url);
-}
-else if(url){vid.src=url;playSafely()}
-preloadAround(idx);
-setTimeout(()=>preloadAround(idx),1400);
-saveCW(idx);
-}catch(e){console.error(e);hideSpinner()}}
-
-// HLS with multi-fallback chain: direct -> Render proxy (if needed)
-function loadHlsChain(rawUrl, index = 0) {
-  // Untuk Dracin, biasanya link langsung bisa diputar. 
-  // Jika perlu proxy, tambahkan logic di sini.
-  if(hls) hls.destroy();
+function loadHlsChain(rawUrl){
+  if(hls)hls.destroy();
   showSpinner();
-
   if(Hls.isSupported()){
-    hls = new Hls({maxBufferLength:30,maxMaxBufferLength:60,startLevel:-1,capLevelToPlayerSize:true});
-    hls.loadSource(rawUrl);
-    hls.attachMedia(vid);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>{playSafely()});
+    hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,startLevel:-1,capLevelToPlayerSize:true});
+    hls.loadSource(rawUrl);hls.attachMedia(vid);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>playSafely());
     hls.on(Hls.Events.FRAG_BUFFERED,()=>hideSpinner());
-    hls.on(Hls.Events.ERROR,(_,d)=>{
-      if(d.fatal) {
-        hideSpinner();
-        console.error("[HLS] Fatal Error", d);
-      }
-    });
-  } else {
-    vid.src = rawUrl;
-    playSafely();
-  }
+    hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){hideSpinner();console.error('[HLS] Fatal Error',d)}});
+  }else{vid.src=rawUrl;playSafely()}
 }
 
-// Continue watching save
-function saveCW(idx){try{const ep=episodes[idx];const num=ep?.episode||ep?.chapterIndex+1||(idx+1);
-const all=JSON.parse(localStorage.getItem('cw_progress')||'[]');
-const id='dracin_'+platform+'_'+bookId;const existing=all.findIndex(x=>x.id===id);
-const entry={id,mediaType:'dracin',platform,bookId,title:(titleEl&&titleEl.textContent)||'Drama',poster:coverUrl,epIdx:idx,epNum:num,epTitle:'Ep '+num,pct:0};
-if(existing>=0)all[existing]=entry;else all.unshift(entry);
-if(all.length>20)all.length=20;localStorage.setItem('cw_progress',JSON.stringify(all))}catch(e){}}
-
-// Render episode grid
-function renderEps(){const grid=document.getElementById('epGrid');grid.innerHTML='';
-episodes.forEach((ep,i)=>{const btn=document.createElement('button');btn.className='ep-btn';btn.id='ep-'+i;
-// Gunakan field 'episode' yang sudah dinormalisasi oleh API
-const epNum = ep.episode || ep.chapterIndex+1 || (i+1);
-btn.textContent = epNum;
-// Semua episode dibuat bisa diklik; resolver video akan menangani jika upstream menolak.
-btn.onclick=()=>{setEpisodeSheet(false);playEp(i)};grid.appendChild(btn)})}
-// Fetch all episodes from OUR API
-async function init(){
-    if(!bookId) return;
+/* ── Play episode ── */
+async function playEp(idx,opts={}){
+  const seq=++playSeq;
+  curIdx=idx;updateNav();movePlayerToFeed(idx);
+  if(opts.scroll!==false)scrollFeedTo(idx);
+  destroyHLS();applyDracinOrientation();
+  clearTimeout(nextTimer);nextTimer=null;nextToast.classList.remove('show');
+  showSpinner();centerPlay.classList.remove('show');
+  vid.pause();vid.removeAttribute('src');vid.load();
+  updateSideProgress(0);
   try{
-    if(platform === 'dramanova'){
-      const token = sessionStorage.getItem('dramanova_token');
+    let url=await preloadEpisodeUrl(idx);
+    if(seq!==playSeq)return;
+    if(url.includes('.m3u8'))loadHlsChain(url);
+    else if(url){vid.src=url;playSafely()}
+    preloadAround(idx);
+    setTimeout(()=>preloadAround(idx),1400);
+    saveCW(idx);
+  }catch(e){console.error(e);hideSpinner()}
+}
+
+/* ── Continue watching ── */
+function saveCW(idx){
+  try{
+    const ep=episodes[idx];const num=ep?.episode||ep?.chapterIndex+1||(idx+1);
+    const all=JSON.parse(localStorage.getItem('cw_progress')||'[]');
+    const id='dracin_'+platform+'_'+bookId;const existing=all.findIndex(x=>x.id===id);
+    const entry={id,mediaType:'dracin',platform,bookId,title:(titleEl&&titleEl.textContent)||'Drama',poster:coverUrl,epIdx:idx,epNum:num,epTitle:'Ep '+num,pct:0};
+    if(existing>=0)all[existing]=entry;else all.unshift(entry);
+    if(all.length>20)all.length=20;
+    localStorage.setItem('cw_progress',JSON.stringify(all));
+  }catch(e){}
+}
+
+/* ── Render episode grid ── */
+function renderEps(){
+  const grid=document.getElementById('epGrid');grid.innerHTML='';
+  episodes.forEach((ep,i)=>{
+    const btn=document.createElement('button');btn.className='ep-btn';btn.id='ep-'+i;
+    const epNum=ep.episode||ep.chapterIndex+1||(i+1);
+    btn.textContent=epNum;
+    btn.onclick=()=>{setEpisodeSheet(false);playEp(i)};
+    grid.appendChild(btn);
+  });
+}
+
+/* ── Init ── */
+async function init(){
+  if(!bookId)return;
+  try{
+    if(platform==='dramanova'){
+      const token=sessionStorage.getItem('dramanova_token');
       if(!token){
-        const ok = await new Promise(resolve => {
-          document.getElementById('pinErr').style.display = 'none';
-          document.getElementById('pinInput').value = '';
-          document.getElementById('pinModal').style.display = 'flex';
-          document.getElementById('pinCancel').onclick = () => { document.getElementById('pinModal').style.display='none'; resolve(false); };
-          document.getElementById('pinSubmit').onclick = async () => {
-            const pin = document.getElementById('pinInput').value || '';
+        const ok=await new Promise(resolve=>{
+          document.getElementById('pinErr').style.display='none';
+          document.getElementById('pinInput').value='';
+          document.getElementById('pinModal').style.display='flex';
+          document.getElementById('pinCancel').onclick=()=>{document.getElementById('pinModal').style.display='none';resolve(false)};
+          document.getElementById('pinSubmit').onclick=async()=>{
+            const pin=document.getElementById('pinInput').value||'';
             try{
-              const res = await fetch('/api/dracin/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pin}) });
-              const j = await res.json();
-              if(j.status === 'success' && j.token){ sessionStorage.setItem('dramanova_token', j.token); document.getElementById('pinModal').style.display='none'; resolve(true); }
-              else { document.getElementById('pinErr').textContent = j.message || 'PIN salah'; document.getElementById('pinErr').style.display='block'; }
-            }catch(e){ document.getElementById('pinErr').textContent = 'Gagal memvalidasi PIN'; document.getElementById('pinErr').style.display='block'; }
+              const res=await fetch('/api/dracin/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+              const j=await res.json();
+              if(j.status==='success'&&j.token){sessionStorage.setItem('dramanova_token',j.token);document.getElementById('pinModal').style.display='none';resolve(true)}
+              else{document.getElementById('pinErr').textContent=j.message||'PIN salah';document.getElementById('pinErr').style.display='block'}
+            }catch(e){document.getElementById('pinErr').textContent='Gagal memvalidasi PIN';document.getElementById('pinErr').style.display='block'}
           };
         });
-        if(!ok) return;
+        if(!ok)return;
       }
     }
-    const token = sessionStorage.getItem('dramanova_token');
-    const headers = token ? { 'X-Dramanova-Token': token } : {};
-    let reqUrl = '/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform);
-    try {
-      if (token) {
-        const u = new URL(reqUrl, location.origin);
-        if (!u.searchParams.get('dramanova_token')) u.searchParams.set('dramanova_token', token);
-        reqUrl = u.pathname + u.search + u.hash;
-      }
-    } catch (e) {}
-    const r=await appFetch(reqUrl, { headers });
+    const token=sessionStorage.getItem('dramanova_token');
+    const headers=token?{'X-Dramanova-Token':token}:{};
+    let reqUrl='/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform);
+    try{if(token){const u=new URL(reqUrl,location.origin);if(!u.searchParams.get('dramanova_token'))u.searchParams.set('dramanova_token',token);reqUrl=u.pathname+u.search+u.hash}}catch(e){}
+    const r=await appFetch(reqUrl,{headers});
     const j=await r.json();
-        if(j.status === 'success'){
-            const d=j.data;
-            // API sudah menormalisasi: d.episodes, d.bookName, d.cover
-            episodes=d.episodes||[];
-            if(d.cover)playerWrap.style.setProperty('--poster-bg',`url("${String(d.cover).replace(/"/g,'%22')}")`);
-            if(titleEl)titleEl.textContent=d.bookName||'Drama';
-            updateWatchCard();
-            if(metaEl)metaEl.textContent=(episodes.length||0)+' Episode · '+platformName();
-            // Update tab title
-            document.title = (d.bookName||'Drama') + ' — StreamVault Dracin';
-            renderEps();
-            renderFeed();
-            if(episodes.length>0)playEp(startEp<episodes.length?startEp:0);
-        } else {
-            if(titleEl)titleEl.textContent = "Error: " + (j.message || "Unknown");
-        }
-    }catch(e){console.error(e);if(titleEl)titleEl.textContent="Gagal memuat data"}
+    if(j.status==='success'){
+      const d=j.data;
+      episodes=d.episodes||[];
+      if(d.cover){
+        const posterBg=document.getElementById('posterBg');
+        if(posterBg){posterBg.style.background=`url("${String(d.cover).replace(/"/g,'%22')}")`;posterBg.style.backgroundSize='cover';posterBg.style.backgroundPosition='center'}
+      }
+      if(titleEl)titleEl.textContent=d.bookName||'Drama';
+      updateWatchCard();updateSubtleMeta();
+      if(metaEl)metaEl.textContent=(episodes.length||0)+' Episode · '+platformName();
+      document.title=(d.bookName||'Drama')+' — StreamVault Dracin';
+      renderEps();renderFeed();
+      if(episodes.length>0)playEp(startEp<episodes.length?startEp:0);
+    }else{
+      if(titleEl)titleEl.textContent='Error: '+(j.message||'Unknown');
+    }
+  }catch(e){console.error(e);if(titleEl)titleEl.textContent='Gagal memuat data'}
 }
 
 if(bookId)init();
 showUI();
-
 </script>
 </body>
 </html>
