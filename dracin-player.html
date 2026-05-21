@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="referrer" content="no-referrer">
 <title>Watch - StreamVault Dracin</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <script src="/js/orientation-lock.js"></script>
 <link rel="manifest" href="/manifest.json">
@@ -171,7 +171,7 @@ video{
 /* ── Subtitle overlay — gaya modern chat bubble, bukan TV tradisional ── */
 .sub-overlay{
   position:absolute;
-  bottom:80px;
+  bottom:110px;
   left:50%;
   transform:translateX(-50%);
   z-index:24;
@@ -187,17 +187,16 @@ video{
 .sub-overlay.hidden{opacity:0}
 .sub-line{
   display:inline-block;
-  background:rgba(0,0,0,.65);
-  backdrop-filter:blur(6px);
+  background:none;
   color:#fff;
-  font-family:'DM Sans',sans-serif;
-  font-size:14px;
-  font-weight:500;
-  line-height:1.5;
-  padding:5px 14px;
-  border-radius:8px;
+  font-family:'Montserrat',sans-serif;
+  font-size:20px;
+  font-weight:800;
+  line-height:1.45;
+  padding:2px 0;
   letter-spacing:.01em;
-  word-break:break-word
+  word-break:break-word;
+  text-shadow:0 0 4px rgba(0,0,0,.9),0 1px 6px rgba(0,0,0,.8),1px 1px 2px rgba(0,0,0,.7),-1px -1px 2px rgba(0,0,0,.7)
 }
 .sub-toggle{
   width:36px;
