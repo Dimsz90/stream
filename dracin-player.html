@@ -168,6 +168,57 @@ video{
 .ep-btn.active{background:#e50914;border-color:#e50914}
 .ep-btn.locked{opacity:.35;cursor:not-allowed}
 
+/* ── Subtitle overlay — gaya modern chat bubble, bukan TV tradisional ── */
+.sub-overlay{
+  position:absolute;
+  bottom:80px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:24;
+  max-width:88%;
+  text-align:center;
+  pointer-events:none;
+  transition:opacity .18s;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px
+}
+.sub-overlay.hidden{opacity:0}
+.sub-line{
+  display:inline-block;
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(6px);
+  color:#fff;
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  font-weight:500;
+  line-height:1.5;
+  padding:5px 14px;
+  border-radius:8px;
+  letter-spacing:.01em;
+  word-break:break-word
+}
+.sub-toggle{
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(0,0,0,.4);
+  backdrop-filter:blur(8px);
+  color:rgba(255,255,255,.5);
+  font-size:11px;
+  font-weight:900;
+  font-family:'DM Sans',sans-serif;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:all .2s;
+  letter-spacing:-.5px
+}
+.sub-toggle.active{color:#fff;background:rgba(229,9,20,.7);border-color:rgba(229,9,20,.9)}
+
 @media(max-width:600px){
   .side-nav{display:none}
   .top-bar{padding-left:10px;padding-right:10px}
@@ -191,6 +242,7 @@ video{
         <div class="poster-bg" id="posterBg"></div>
 
         <video id="vid" playsinline></video>
+        <div class="sub-overlay hidden" id="subOverlay"></div>
         <div class="spinner" id="spinner"></div>
         <div class="center-play" id="centerPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
 
@@ -224,6 +276,7 @@ video{
             <h1 class="drama-title" id="titleEl">Memuat...</h1>
             <div class="drama-meta" id="metaEl"></div>
           </div>
+          <button class="sub-toggle" id="ccToggle" title="Subtitle" aria-label="Toggle subtitle">CC</button>
         </div>
 
         <!-- Next toast -->
@@ -352,6 +405,12 @@ const subtleMeta=document.getElementById('subtleMeta');
 const subtleEpLbl=document.getElementById('subtleEpLbl');
 const subtleTitleLbl=document.getElementById('subtleTitleLbl');
 const bottomNav=document.getElementById('bottomNav');
+
+/* ── Subtitle state ── */
+const subOverlay=document.getElementById('subOverlay');
+const ccToggle=document.getElementById('ccToggle');
+let subCues=[],subOn=localStorage.getItem('dracin_cc')!=='off',subDataCache=new Map();
+if(subOn&&ccToggle)ccToggle.classList.add('active');
 
 
 /* ── Poster background ── */
@@ -697,7 +756,7 @@ function preloadAround(idx){
   targets.filter(i=>i>=0&&i<episodes.length).forEach((target,order)=>{setTimeout(()=>preloadEpisodeUrl(target),order*180)});
 }
 
-/* ── Get video URL ── */
+/* ── Get video URL (+ capture subtitle data) ── */
 async function fetchVideoLink(reqUrl,options={}){
   const key=reqUrl+'|'+JSON.stringify(options.headers||{});
   const cached=videoUrlCache.get(key);
@@ -706,10 +765,24 @@ async function fetchVideoLink(reqUrl,options={}){
   const promise=appFetch(reqUrl,options).then(r=>r.json()).then(j=>{
     const link=j.link||(j.data&&j.data.url)||'';
     if(j.status==='success'&&link)videoUrlCache.set(key,{link,expires:Date.now()+120000});
+    /* Capture subtitle data from API response */
+    if(j.data){
+      const subs=j.data.subtitles||j.data.videoCaption||[];
+      if(subs.length)subDataCache.set(key,subs);
+    }
     return link;
   }).finally(()=>videoUrlInflight.delete(key));
   videoUrlInflight.set(key,promise);
   return promise;
+}
+
+/* Build the video API request URL for current platform */
+function _videoReqUrl(epVid){
+  if(platform==='cubetv')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang=in';
+  if(platform==='shortwave')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang=in';
+  if(platform==='pinedrama')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=pinedrama&lang=in';
+  if(platform==='reelshort')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang=in';
+  return null;
 }
 
 async function getVideoUrl(ep){
@@ -725,10 +798,8 @@ async function getVideoUrl(ep){
       try{if(token){const u=new URL(reqUrl,location.origin);if(!u.searchParams.get('dramanova_token'))u.searchParams.set('dramanova_token',token);reqUrl=u.pathname+u.search+u.hash}}catch(e){}
       const link=await fetchVideoLink(reqUrl,{headers});if(link){ep.url=link;return link}return'';
     }
-    if(platform==='shortwave'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang=in');if(link){ep.url=link;return link}return''}
-    if(platform==='cubetv'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang=in');if(link){ep.url=link;return link}return''}
-    if(platform==='pinedrama'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=pinedrama&lang=in');if(link){ep.url=link;return link}return''}
-    if(platform==='reelshort'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang=in');if(link){ep.url=link;return link}return''}
+    const pUrl=_videoReqUrl(epVid);
+    if(pUrl){const link=await fetchVideoLink(pUrl);if(link){ep.url=link;return link}return''}
     const link=await fetchVideoLink('/api/get-video?id='+encodeURIComponent(epVid));if(link){ep.url=link;return link}
   }catch(e){console.warn('[getVideoUrl] fallback error:',e)}
   return'';
@@ -759,6 +830,7 @@ async function playEp(idx,opts={}){
   showSpinner();centerPlay.classList.remove('show');
   vid.pause();vid.removeAttribute('src');vid.load();
   updateProgress(0);
+  clearSubtitles();
   try{
     let url=await preloadEpisodeUrl(idx);
     if(seq!==playSeq)return;
@@ -767,6 +839,8 @@ async function playEp(idx,opts={}){
     preloadAround(idx);
     setTimeout(()=>preloadAround(idx),1400);
     saveCW(idx);
+    /* Auto-load subtitle for this episode */
+    loadSubtitleForEp(idx);
   }catch(e){console.error(e);hideSpinner()}
 }
 
@@ -793,6 +867,126 @@ function renderEps(){
     btn.onclick=()=>{setEpisodeSheet(false);playEp(i)};
     grid.appendChild(btn);
   });
+}
+
+/* ── Subtitle Engine ── */
+
+/* Parse SRT text → [{start, end, text}] */
+function parseSRT(srt){
+  const cues=[];
+  const blocks=srt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim().split(/\n\n+/);
+  for(const block of blocks){
+    const lines=block.split('\n');
+    if(lines.length<2)continue;
+    /* Find the timecode line (may be line 0 or line 1) */
+    let tIdx=lines.findIndex(l=>/-->/.test(l));
+    if(tIdx<0)continue;
+    const tc=lines[tIdx];
+    const m=tc.match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})/);
+    if(!m)continue;
+    const start=+m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000;
+    const end=+m[5]*3600 + +m[6]*60 + +m[7] + +m[8]/1000;
+    const text=lines.slice(tIdx+1).join('\n').replace(/<[^>]+>/g,'').trim();
+    if(text)cues.push({start,end,text});
+  }
+  return cues;
+}
+
+/* Clear current subtitles */
+function clearSubtitles(){
+  subCues=[];
+  if(subOverlay){subOverlay.innerHTML='';subOverlay.classList.add('hidden')}
+}
+
+/* Render subtitle cue based on currentTime */
+let _lastSubText='';
+function renderSubtitleCue(){
+  if(!subOn||!subCues.length||!subOverlay)return;
+  const t=vid.currentTime;
+  const cue=subCues.find(c=>t>=c.start&&t<=c.end);
+  const text=cue?cue.text:'';
+  if(text===_lastSubText)return;
+  _lastSubText=text;
+  if(!text){subOverlay.classList.add('hidden');return}
+  /* Split multi-line cues */
+  const html=text.split('\n').map(l=>'<span class="sub-line">'+l.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span>').join('');
+  subOverlay.innerHTML=html;
+  subOverlay.classList.remove('hidden');
+}
+
+vid.addEventListener('timeupdate',renderSubtitleCue);
+
+/* Fetch SRT text from URL (through proxy to bypass CORS) */
+async function fetchSRT(url){
+  try{
+    /* Route through img-proxy to bypass CORS on external CDN */
+    const proxied='/api/img-proxy?url='+encodeURIComponent(url);
+    const res=await fetch(proxied);
+    if(!res.ok)throw new Error('SRT fetch failed: '+res.status);
+    return await res.text();
+  }catch(e){
+    console.warn('[SUB] proxy fetch failed, trying direct:',e);
+    try{
+      const res=await fetch(url,{mode:'cors'});
+      if(res.ok)return await res.text();
+    }catch(e2){}
+    return null;
+  }
+}
+
+/* Find Indonesian subtitle URL from cached subtitle data */
+function findIdSubUrl(epIdx){
+  const ep=episodes[epIdx];
+  if(!ep)return null;
+  const epVid=ep.vid||(ep._raw&&ep._raw.vid)||'';
+  if(!epVid)return null;
+
+  /* Check subDataCache for any matching key */
+  for(const [key,subs] of subDataCache.entries()){
+    if(!key.includes(encodeURIComponent(epVid)))continue;
+    /* CubeTV format: {language_code, url} */
+    const idSub=subs.find(s=>(s.language_code||s.lang||'').toLowerCase()==='id');
+    if(idSub&&idSub.url)return idSub.url;
+    /* Pinedrama/ShortWave format: {lang, url} */
+    const idSub2=subs.find(s=>(s.lang||'').toLowerCase()==='id');
+    if(idSub2&&idSub2.url)return idSub2.url;
+  }
+  return null;
+}
+
+/* Load subtitle for episode */
+async function loadSubtitleForEp(idx){
+  clearSubtitles();
+  if(!subOn)return;
+
+  /* Wait a tick for subDataCache to be populated by fetchVideoLink */
+  await new Promise(r=>setTimeout(r,200));
+
+  const srtUrl=findIdSubUrl(idx);
+  if(!srtUrl){
+    console.log('[SUB] No Indonesian subtitle for ep',idx+1);
+    return;
+  }
+  console.log('[SUB] Loading ID subtitle for ep',idx+1,srtUrl);
+  const srtText=await fetchSRT(srtUrl);
+  if(!srtText)return;
+  subCues=parseSRT(srtText);
+  console.log('[SUB] Loaded',subCues.length,'cues');
+  _lastSubText='';
+}
+
+/* CC toggle */
+if(ccToggle){
+  ccToggle.onclick=()=>{
+    subOn=!subOn;
+    localStorage.setItem('dracin_cc',subOn?'on':'off');
+    ccToggle.classList.toggle('active',subOn);
+    if(subOn){
+      loadSubtitleForEp(curIdx);
+    }else{
+      clearSubtitles();
+    }
+  };
 }
 
 /* ── Init ── */
