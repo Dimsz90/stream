@@ -32,8 +32,8 @@ RECAPTCHA_SECRET_KEY = os.environ.get("RECAPTCHA_SECRET_KEY", "")
 RECAPTCHA_MIN_SCORE = float(os.environ.get("RECAPTCHA_MIN_SCORE", "0.5") or "0.5")
 
 # Remote stream worker. Dipakai server-side supaya URL remote tidak perlu ada di HTML.
-STREAM_API_REMOTE = os.environ.get("STREAM_API_REMOTE", "").rstrip("/")
-USE_STREAM_API_REMOTE = os.environ.get("USE_STREAM_API_REMOTE", "").lower() in ("1", "true", "yes", "on")
+STREAM_API_REMOTE = os.environ.get("STREAM_API_REMOTE", "https://vid-downloader-production-c8b5.up.railway.app").rstrip("/")
+USE_STREAM_API_REMOTE = os.environ.get("USE_STREAM_API_REMOTE", "true").lower() in ("1", "true", "yes", "on")
 
 # ── OMDb ──────────────────────────────────────────────────────────────────────
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
