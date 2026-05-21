@@ -727,6 +727,7 @@ async function getVideoUrl(ep){
     }
     if(platform==='shortwave'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang=in');if(link){ep.url=link;return link}return''}
     if(platform==='cubetv'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang=in');if(link){ep.url=link;return link}return''}
+    if(platform==='pinedrama'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=pinedrama&lang=in');if(link){ep.url=link;return link}return''}
     if(platform==='reelshort'){const link=await fetchVideoLink('/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang=in');if(link){ep.url=link;return link}return''}
     const link=await fetchVideoLink('/api/get-video?id='+encodeURIComponent(epVid));if(link){ep.url=link;return link}
   }catch(e){console.warn('[getVideoUrl] fallback error:',e)}

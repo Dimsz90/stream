@@ -68,9 +68,9 @@ PLATFORMS = {
         "label": "Semua",
         "icon":  "",
         "_engine": "aggregate",
-        "ttl_home":  600,
+        "ttl_home":  1800,
         "ttl_rank":  1800,
-        "ttl_search":120,
+        "ttl_search":1800,
     },
     "dramabox": {
         "prefix":   "/dramaboxv4",
@@ -95,28 +95,22 @@ PLATFORMS = {
         "ch_id":        "chapterId",
         "ch_index":     "chapterIndex",
         "ch_pay":       "isPay",
-        # Nested data path di response
-        # /api/home    → response["data"]["data"]["sections"] dan ["classifyBookList"]["records"]
-        # /api/rank    → response["data"]["data"]["rankList"]
-        # /api/search  → response["data"]["data"]["searchList"]
-        # /api/drama/:id → response["data"]["data"]  (chapter list di .list[])
-        # /api/drama/:id/episodes → response["data"]  (flat, episodes di .episodes[])
-        "ttl_home":  600,
-        "ttl_rank":  3600,
-        "ttl_search":120,
-        "ttl_detail":300,
-        "ttl_ep":    300,
+        "ttl_home":  1800,
+        "ttl_rank":  1800,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
     },
     "reelshort": {
         "label":    "ReelShort",
         "icon":     "🎬",
         "_engine": "reelshort",
-        "ttl_home":  600,
-        "ttl_rank":  3600,
-        "ttl_search":120,
-        "ttl_detail":300,
-        "ttl_ep":    300,
-        "ttl_video": 120,
+        "ttl_home":  1800,
+        "ttl_rank":  1800,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
+        "ttl_video": 1800,
     },
     # ── Melolo — pakai Captain API v1 (endpoint berbeda) ──────────────────────
     # Tidak pakai prefix/dracin-style fetch, ditangani oleh _melolo_fetch()
@@ -124,47 +118,58 @@ PLATFORMS = {
         "label": "Melolo",
         "icon":  "🎭",
         "_engine": "melolo",   # flag: pakai engine captain-v1
-        "ttl_home":  600,
-        "ttl_rank":  3600,
-        "ttl_search":120,
-        "ttl_ep":    300,
+        "ttl_home":  1800,
+        "ttl_rank":  1800,
+        "ttl_search":1800,
+        "ttl_ep":    1800,
     },
     "cubetv": {
         "label": "CubeTV",
         "icon":  "📺",
         "_engine": "cubetv",
-        "ttl_home":  600,
+        "ttl_home":  1800,
         "ttl_rank":  1800,
-        "ttl_search":120,
-        "ttl_detail":300,
-        "ttl_ep":    300,
-        "ttl_video": 120,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
+        "ttl_video": 1800,
     },
     "dramanova": {
         "label": "Dramanova",
         "icon":  "",
         "_engine": "dramanova",
-        "ttl_home":  600,
+        "ttl_home":  1800,
         "ttl_rank":  1800,
-        "ttl_search":120,
-        "ttl_detail":300,
-        "ttl_ep":    300,
-        "ttl_video": 300,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
+        "ttl_video": 1800,
     },
     "shortwave": {
         "label": "ShortWave",
         "icon":  "",
         "_engine": "shortwave",
-        "ttl_home":  600,
+        "ttl_home":  1800,
         "ttl_rank":  1800,
-        "ttl_search":120,
-        "ttl_detail":300,
-        "ttl_ep":    300,
-        "ttl_video": 120,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
+        "ttl_video": 1800,
+    },
+    "pinedrama": {
+        "label": "Pinedrama",
+        "icon":  "🌲",
+        "_engine": "pinedrama",
+        "ttl_home":  1800,
+        "ttl_rank":  1800,
+        "ttl_search":1800,
+        "ttl_detail":1800,
+        "ttl_ep":    1800,
+        "ttl_video": 1800,
     },
 }
 
-AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave", "cubetv")
+AGGREGATE_PLATFORMS = ("dramabox", "reelshort", "melolo", "shortwave", "cubetv", "pinedrama")
 
 # ── Melolo / Captain v1 config ────────────────────────────────────────────────
 CAPTAIN_BASE  = CAPTAIN_ROOT
@@ -177,8 +182,10 @@ def _melolo_headers() -> dict:
     h["Accept"] = "application/json"
     return h
 
-def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int = 300):
+def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int = 1800):
     """Fetch dari Captain API v1 (melolo, dll) dengan cache."""
+    # Enforce 30 mins (1800 seconds) caching for all short drama API requests
+    ttl = 1800
     cache_key = f"melolo:{platform}:{path}:{json.dumps(params or {}, sort_keys=True)}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -195,13 +202,111 @@ def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int
         return None
 
 
-def _cubetv_fetch(path: str, params: dict | None = None, ttl: int = 300):
+def _cubetv_fetch(path: str, params: dict | None = None, ttl: int = 1800):
     """Fetch dari Captain API untuk CubeTV."""
     if params and "lang" in params:
         params = dict(params)
         if str(params.get("lang", "")).lower() in ("in", "id"):
             params["lang"] = "id"
     return _melolo_fetch("cubetv", path, params=params, ttl=ttl)
+
+
+def _pinedrama_headers() -> dict:
+    h = HEADERS.copy()
+    h["Authorization"] = f"Bearer {CAPTAIN_TOKEN}"
+    h["Content-Type"] = "application/json"
+    h["Accept"] = "application/json"
+    return h
+
+
+def _pinedrama_fetch(path: str, params: dict | None = None, ttl: int = 1800):
+    # Enforce 30 mins (1800 seconds) caching as requested
+    ttl = 1800
+    cache_key = f"dracin:pinedrama:{path}:{json.dumps(params or {}, sort_keys=True)}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    url = f"{CAPTAIN_BASE}/pinedrama{path}"
+    try:
+        r = requests.get(url, headers=_pinedrama_headers(), params=params, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("code", -1) == 0:
+            _cache.set(cache_key, data, ttl=ttl)
+        return data
+    except Exception as e:
+        print(f"[DRACIN:pinedrama] ERROR {path}: {e}")
+        return None
+
+
+def _pinedrama_norm_book(raw: dict) -> dict:
+    book_id = raw.get("collectionId") or raw.get("id") or ""
+    title = raw.get("title") or raw.get("bookName") or "Untitled"
+    cover = _normalize_cover_url(
+        raw.get("cover") or raw.get("cover_url") or "",
+        ref="https://captain.sapimu.au/"
+    )
+    intro = raw.get("description") or raw.get("introduction") or ""
+    chapter_count = int(raw.get("totalEpisodes") or raw.get("episodeCount") or 0)
+    
+    tags = []
+    raw_cats = raw.get("categories")
+    if raw_cats:
+        if isinstance(raw_cats, str):
+            tags = [t.strip() for t in raw_cats.split(",") if t.strip()]
+        elif isinstance(raw_cats, list):
+            tags = [str(t) for t in raw_cats]
+
+    play_count = raw.get("viewCount") or 0
+
+    return {
+        "bookId":        book_id,
+        "bookName":      title,
+        "cover":         cover,
+        "introduction":  intro,
+        "chapterCount":  chapter_count,
+        "playCount":     play_count,
+        "tags":          tags,
+        "platform":      "pinedrama",
+    }
+
+
+def _pinedrama_get_cursor(category_id: str, page: int, lang: str) -> str | None:
+    if page <= 1:
+        return None
+    
+    # Cek cache
+    cache_key = f"pinedrama:cursor:{lang}:{category_id}:{page}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Jika tidak ada di cache, kita fetch page-1 untuk mendapatkan cursor page
+    prev_page = page - 1
+    prev_cursor = _pinedrama_get_cursor(category_id, prev_page, lang)
+    
+    # Request prev_page
+    params = {
+        "scene": 1,
+        "category_id": category_id,
+        "count": 20,
+        "language": lang,
+    }
+    if prev_cursor:
+        params["cursor"] = prev_cursor
+        
+    raw = _pinedrama_fetch("/api/drama/center", params, ttl=1800)
+    if not raw or raw.get("code") != 0:
+        return None
+        
+    next_cursor = raw.get("data", {}).get("nextCursor")
+    if next_cursor:
+        _cache.set(cache_key, next_cursor, ttl=1800)
+        return next_cursor
+        
+    return None
+
 
 
 
@@ -398,7 +503,7 @@ def _melolo_extract_list(data) -> list:
     return []
 
 
-def _dramanova_fetch(path: str, params: dict | None = None, ttl: int = 300):
+def _dramanova_fetch(path: str, params: dict | None = None, ttl: int = 1800):
     """Fetch Captain Dramanova endpoints."""
     return _melolo_fetch("dramanova", path, params=params, ttl=ttl)
 
@@ -481,7 +586,7 @@ def _dramanova_norm_episode(raw: dict, idx: int) -> dict:
     }
 
 
-def _reelshort_fetch(path: str, params: dict | None = None, ttl: int = 300):
+def _reelshort_fetch(path: str, params: dict | None = None, ttl: int = 1800):
     """Fetch Captain ReelShort endpoints."""
     return _melolo_fetch("reelshort", path, params=params, ttl=ttl)
 
@@ -597,7 +702,7 @@ def get_reelshort_video(book_id: str, chapter_id: str, lang="in") -> dict | None
     }
 
 
-def _shortwave_fetch(path: str, params: dict | None = None, ttl: int = 300):
+def _shortwave_fetch(path: str, params: dict | None = None, ttl: int = 1800):
     """Fetch Captain ShortWave endpoints."""
     return _melolo_fetch("shortwave", path, params=params, ttl=ttl)
 
@@ -890,7 +995,7 @@ def get_cubetv_video(video_id: str, episode_id: str, lang="in") -> dict | None:
         "_raw":        data,
     }
 
-_cache = TTLCache(default_ttl=300, max_size=1000)
+_cache = TTLCache(default_ttl=1800, max_size=1000)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -902,11 +1007,13 @@ def _headers() -> dict:
     return h
 
 
-def _fetch(platform: str, endpoint: str, params: dict | None = None, ttl: int = 300):
+def _fetch(platform: str, endpoint: str, params: dict | None = None, ttl: int = 1800):
     """
     Fetch dari API dengan caching in-memory.
     endpoint : path setelah prefix, misal '/api/home'
     """
+    # Enforce 30 mins (1800 seconds) caching for all short drama API requests
+    ttl = 1800
     cfg = PLATFORMS.get(platform)
     if not cfg:
         return None
@@ -1312,6 +1419,50 @@ def get_home(platform="dramabox", page=1, size=20, lang="in") -> dict | None:
             "total":      total,
         }
 
+    if cfg.get("_engine") == "pinedrama":
+        try:
+            page = int(page) if page else 1
+            size = int(size) if size else 20
+        except Exception:
+            page = 1
+            size = 20
+
+        category_id = "0"
+        pinedrama_lang = "id" if lang in ("in", "id") else lang
+        params = {
+            "scene": 1,
+            "category_id": category_id,
+            "count": size,
+            "language": pinedrama_lang,
+        }
+        if page > 1:
+            cursor = _pinedrama_get_cursor(category_id, page, pinedrama_lang)
+            if cursor:
+                params["cursor"] = cursor
+
+        raw = _pinedrama_fetch("/api/drama/center", params, ttl=cfg["ttl_home"])
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        if not isinstance(data, dict):
+            return None
+
+        colls = data.get("collections") or []
+        books = [_pinedrama_norm_book(b) for b in colls]
+        
+        next_cursor = data.get("nextCursor")
+        if next_cursor:
+            cache_key = f"pinedrama:cursor:{pinedrama_lang}:{category_id}:{page + 1}"
+            _cache.set(cache_key, next_cursor, ttl=cfg["ttl_home"])
+
+        return {
+            "platform":   platform,
+            "page":       page,
+            "sections":   [],
+            "books":      books,
+            "hasMore":    bool(next_cursor),
+            "bannerList": [],
+            "total":      len(books),
+        }
+
     # ── Engine: dracin (DramaBox/ReelShort) ───────────────────────────────────
     raw = _fetch(platform, "/api/home",
                  {"page": page, "size": size, "lang": lang},
@@ -1501,6 +1652,28 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
             "books":     [_shortwave_norm_book(b) for b in items[:size]],
         }
 
+    if cfg.get("_engine") == "pinedrama":
+        try:
+            size = int(size or 20)
+        except Exception:
+            size = 20
+        params = {
+            "scene": 2,
+            "category_id": "101",
+            "count": size,
+            "language": "id" if lang in ("in", "id") else lang,
+        }
+        raw = _pinedrama_fetch("/api/drama/center", params, ttl=cfg["ttl_rank"])
+        data = raw.get("data") if isinstance(raw, dict) else {}
+        colls = data.get("collections") or []
+        books = [_pinedrama_norm_book(b) for b in colls]
+        return {
+            "platform":  platform,
+            "rankType":  rank_type,
+            "rankTypes": [],
+            "books":     books[:size],
+        }
+
     # ── Engine: dracin ────────────────────────────────────────────────────────
     raw = _fetch(platform, "/api/rank",
                  {"lang": lang},
@@ -1664,6 +1837,31 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
             "total":    len(rows),
         }
 
+    if cfg.get("_engine") == "pinedrama":
+        try:
+            page = int(page or 1)
+        except Exception:
+            page = 1
+        params = {
+            "keyword": keyword,
+            "language": "id" if lang in ("in", "id") else lang,
+        }
+        raw = _pinedrama_fetch("/api/drama/search", params, ttl=cfg["ttl_search"])
+        colls = raw.get("data") if isinstance(raw, dict) else []
+        if not isinstance(colls, list):
+            colls = raw.get("data", {}).get("list") if isinstance(raw, dict) else []
+        if not isinstance(colls, list):
+            colls = []
+        books = [_pinedrama_norm_book(b) for b in colls]
+        return {
+            "platform": platform,
+            "keyword":  keyword,
+            "page":     page,
+            "books":    books,
+            "hasMore":  False,
+            "total":    len(books),
+        }
+
     # ── Engine: dracin ────────────────────────────────────────────────────────
     raw = _fetch(platform, "/api/search",
                  {"keyword": keyword, "page": page, "lang": lang},
@@ -1791,6 +1989,50 @@ def get_detail(drama_id: str, platform="dramabox", lang="en") -> dict | None:
             "chapters":      chapters,
             "freeCount":     len(free_eps),
             "paidCount":     len([c for c in chapters if c["isPay"] == 1]),
+            "totalChapters": len(chapters),
+            "performers":    [],
+            "rating":        {"show": False, "score": "", "count": ""},
+            "recommends":    [],
+            "downLoadQuality": [],
+        }
+
+    if cfg.get("_engine") == "pinedrama":
+        pinedrama_lang = "id" if lang in ("in", "id") else lang
+        raw_detail = _pinedrama_fetch("/api/drama/detail", {"collection_id": drama_id, "language": pinedrama_lang}, ttl=cfg["ttl_detail"])
+        raw_episodes = _pinedrama_fetch("/api/drama/episodes", {"collection_id": drama_id, "language": pinedrama_lang}, ttl=cfg["ttl_ep"])
+        
+        detail_data = raw_detail.get("data") if isinstance(raw_detail, dict) else {}
+        if not isinstance(detail_data, dict):
+            detail_data = {}
+        episodes_list = raw_episodes.get("data", {}).get("episodes") if isinstance(raw_episodes, dict) else []
+        if not isinstance(episodes_list, list):
+            episodes_list = []
+            
+        chapters = []
+        for i, ep in enumerate(episodes_list):
+            ep_num = ep.get("seqId") or ep.get("num") or (i + 1)
+            video_id = ep.get("videoId") or ep.get("id") or ""
+            is_pay = 0 if ep.get("isFree", True) else 1
+            chapters.append({
+                "chapterId":   str(video_id),
+                "chapterIndex": i,
+                "episode":     ep_num,
+                "isPay":       is_pay,
+                "title":       ep.get("title") or ep.get("name") or f"Episode {ep_num}",
+                "cover":       ep.get("cover") or ep.get("coverUrl") or "",
+            })
+            
+        free_count = len([c for c in chapters if c["isPay"] == 0])
+        paid_count = len([c for c in chapters if c["isPay"] == 1])
+        
+        return {
+            "bookId":        drama_id,
+            "platform":      platform,
+            "bookStatus":    1,
+            "corner":        None,
+            "chapters":      chapters,
+            "freeCount":     free_count,
+            "paidCount":     paid_count,
             "totalChapters": len(chapters),
             "performers":    [],
             "rating":        {"show": False, "score": "", "count": ""},
@@ -2035,6 +2277,46 @@ def get_episodes(drama_id: str, platform="dramabox", lang="in") -> dict | None:
             "freeCount":     len(free_eps),
         }
 
+    if cfg.get("_engine") == "pinedrama":
+        pinedrama_lang = "id" if lang in ("in", "id") else lang
+        raw_detail = _pinedrama_fetch("/api/drama/detail", {"collection_id": drama_id, "language": pinedrama_lang}, ttl=cfg["ttl_detail"])
+        raw_episodes = _pinedrama_fetch("/api/drama/episodes", {"collection_id": drama_id, "language": pinedrama_lang}, ttl=cfg["ttl_ep"])
+        
+        detail_data = raw_detail.get("data") if isinstance(raw_detail, dict) else {}
+        if not isinstance(detail_data, dict):
+            detail_data = {}
+        episodes_list = raw_episodes.get("data", {}).get("episodes") if isinstance(raw_episodes, dict) else []
+        if not isinstance(episodes_list, list):
+            episodes_list = []
+            
+        episodes = []
+        for i, ep in enumerate(episodes_list):
+            ep_num = ep.get("seqId") or ep.get("num") or (i + 1)
+            video_id = ep.get("videoId") or ep.get("id") or ""
+            is_pay = 0 if ep.get("isFree", True) else 1
+            episodes.append({
+                "episode":     ep_num,
+                "vid":         str(video_id),
+                "isPay":       is_pay,
+                "title":       ep.get("title") or ep.get("name") or f"Episode {ep_num}",
+                "url":         "",
+                "_raw":        ep,
+            })
+            
+        free_count = len([e for e in episodes if e["isPay"] == 0])
+        
+        return {
+            "bookId":        drama_id,
+            "bookName":      detail_data.get("title") or "Drama",
+            "cover":         detail_data.get("cover") or "",
+            "description":   detail_data.get("description") or "",
+            "totalEpisodes": detail_data.get("totalEpisodes") or len(episodes),
+            "quality":       720,
+            "platform":      platform,
+            "episodes":      episodes,
+            "freeCount":     free_count,
+        }
+
     raw = _fetch(platform, f"/api/drama/{drama_id}/episodes",
                  {"lang": lang},
                  ttl=cfg["ttl_ep"])
@@ -2101,14 +2383,66 @@ def get_languages(platform="dramabox") -> list | None:
         return None
 
     if cfg.get("_engine") == "cubetv":
-        raw = _cubetv_fetch("/languages", ttl=86400)
+        raw = _cubetv_fetch("/languages", ttl=1800)
         return raw.get("data", []) if isinstance(raw, dict) else None
 
-    raw = _fetch(platform, "/api/languages", ttl=86400)  # cache 24 jam
+    if cfg.get("_engine") == "pinedrama":
+        raw = _pinedrama_fetch("/api/languages", ttl=1800)
+        if not raw or not isinstance(raw, dict):
+            return None
+        return raw.get("data", {}).get("languages", [])
+
+    raw = _fetch(platform, "/api/languages", ttl=1800)  # cache 30 mins
     if not raw or raw.get("code", -1) != 0:
         return None
 
     return raw.get("data", [])
+
+
+def get_categories(platform="pinedrama", lang="in") -> list | None:
+    cfg = PLATFORMS.get(platform)
+    if not cfg:
+        return None
+    if cfg.get("_engine") == "pinedrama":
+        pinedrama_lang = "id" if lang in ("in", "id") else lang
+        raw = _pinedrama_fetch("/api/drama/categories", {"language": pinedrama_lang}, ttl=1800)
+        if not raw or not isinstance(raw, dict):
+            return None
+        return raw.get("data", [])
+    return None
+
+
+def get_pinedrama_video(drama_id: str, video_id: str, lang="in") -> dict | None:
+    if not drama_id or not video_id:
+        return None
+    pinedrama_lang = "id" if lang in ("in", "id") else lang
+    raw = _pinedrama_fetch(
+        "/api/drama/play",
+        {"collection_id": drama_id, "video_id": video_id, "language": pinedrama_lang},
+        ttl=PLATFORMS["pinedrama"]["ttl_video"]
+    )
+    data = raw.get("data") if isinstance(raw, dict) else {}
+    if not isinstance(data, dict):
+        return None
+    
+    play_url = data.get("playUrl") or ""
+    subtitles = []
+    for sub in data.get("subtitles") or []:
+        if isinstance(sub, dict):
+            subtitles.append({
+                "lang": sub.get("lang") or "",
+                "format": sub.get("format") or "",
+                "url": sub.get("url") or "",
+            })
+            
+    return {
+        "vid":       video_id,
+        "url":       play_url,
+        "directUrl": play_url,
+        "duration":  data.get("duration") or 0,
+        "subtitles": subtitles,
+        "_raw":      data,
+    }
 
 
 # ── Flask / Server build_response ────────────────────────────────────────────
@@ -2193,10 +2527,23 @@ def build_response(path: str, params: dict) -> tuple[dict, int]:
             return {"status": "success", "data": data}, 200
         return {"status": "error", "message": "Episodes tidak ditemukan"}, 404
 
+    # ── /api/dracin/categories
+    if path.endswith("/categories"):
+        data = get_categories(platform=platform, lang=lang)
+        if data is not None:
+            return {"status": "success", "data": data}, 200
+        return {"status": "error", "message": "Categories tidak tersedia"}, 503
+
     if path.endswith("/video"):
         file_id = p("id", "")
         if not file_id:
             return {"status": "error", "message": "Parameter 'id' wajib diisi"}, 400
+        if platform == "pinedrama":
+            book_id = p("bookId", p("collection_id", p("drama_id", "")))
+            data = get_pinedrama_video(book_id, file_id, lang=lang)
+            if data and data.get("url"):
+                return {"status": "success", "data": data, "link": data["url"]}, 200
+            return {"status": "error", "message": "Video tidak ditemukan"}, 404
         if platform == "dramanova":
             data = get_dramanova_video(file_id)
             if data and data.get("url"):
