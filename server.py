@@ -78,11 +78,16 @@ def _validate_dramanova_token(token: str) -> bool:
     except Exception:
         return False
 
+_modules_cache = {}
+
 def load(path):
-    """Load modul Python secara dinamis dari file"""
+    """Load modul Python secara dinamis dari file dengan caching"""
+    if path in _modules_cache:
+        return _modules_cache[path]
     spec = importlib.util.spec_from_file_location("mod", path)
     mod  = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    _modules_cache[path] = mod
     return mod
 
 def require_subscription():

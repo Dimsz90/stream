@@ -193,7 +193,7 @@ def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int
 
     url = f"{CAPTAIN_BASE}/{platform}{path}"
     try:
-        resp = requests.get(url, headers=_melolo_headers(), params=params, timeout=15)
+        resp = requests.get(url, headers=_melolo_headers(), params=params, timeout=5)
         data = resp.json()
         _cache.set(cache_key, data, ttl)
         return data
@@ -229,7 +229,7 @@ def _pinedrama_fetch(path: str, params: dict | None = None, ttl: int = 1800):
 
     url = f"{CAPTAIN_BASE}/pinedrama{path}"
     try:
-        r = requests.get(url, headers=_pinedrama_headers(), params=params, timeout=15)
+        r = requests.get(url, headers=_pinedrama_headers(), params=params, timeout=5)
         r.raise_for_status()
         data = r.json()
         if data.get("code", -1) == 0:
@@ -1030,7 +1030,7 @@ def _fetch(platform: str, endpoint: str, params: dict | None = None, ttl: int = 
 
     url = f"{DRACIN_BASE}{cfg['prefix']}{endpoint}"
     try:
-        r = requests.get(url, headers=_headers(), params=params, timeout=15)
+        r = requests.get(url, headers=_headers(), params=params, timeout=5)
         r.raise_for_status()
         data = r.json()
         # Hanya cache jika response sukses (code == 0)
@@ -2635,3 +2635,44 @@ class handler(BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+
+# ── Cache Warmup ─────────────────────────────────────────────────────────────
+
+def _warmup_cache():
+    def _run():
+        time.sleep(3)  # wait 3 seconds to let server start and bind
+        print("[WARMUP] Starting cache warm-up for all platforms...")
+        langs = ["in", "en"]
+        for lang in langs:
+            for platform in AGGREGATE_PLATFORMS:
+                try:
+                    print(f"[WARMUP] Fetching home for platform={platform}, lang={lang}...")
+                    get_home(platform, page=1, size=20, lang=lang)
+                except Exception as e:
+                    print(f"[WARMUP] Home warm-up failed for platform={platform}, lang={lang}: {e}")
+                
+                try:
+                    print(f"[WARMUP] Fetching rank for platform={platform}, lang={lang}...")
+                    get_rank(platform, lang=lang, size=20)
+                except Exception as e:
+                    print(f"[WARMUP] Rank warm-up failed for platform={platform}, lang={lang}: {e}")
+        
+        for lang in langs:
+            try:
+                print(f"[WARMUP] Fetching aggregate home for platform=all, lang={lang}...")
+                get_home("all", page=1, size=20, lang=lang)
+            except Exception as e:
+                print(f"[WARMUP] Aggregate home warm-up failed for lang={lang}: {e}")
+            try:
+                print(f"[WARMUP] Fetching aggregate rank for platform=all, lang={lang}...")
+                get_rank("all", lang=lang, size=20)
+            except Exception as e:
+                print(f"[WARMUP] Aggregate rank warm-up failed for lang={lang}: {e}")
+        print("[WARMUP] Cache warm-up complete!")
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+
+_warmup_cache()
