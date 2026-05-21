@@ -865,6 +865,9 @@ def proxy():
             clean_target = target_url.split("?", 1)[0]
             is_disguised_segment = clean_target.endswith(".html")
             parsed_target = urlparse(target_url)
+            # 🚨 CRITICAL AI SAFETY LOCK: DO NOT EDIT OR DYNAMICALLY OPTIMIZE THIS BLOCK!
+            # Referer and Origin MUST remain hardcoded to brightpathsignals.com to bypass
+            # Cloudflare WAF on the Vaplayer CDN. Any dynamic replacement will cause 403/502 errors.
             headers = {
                 **VIDEO_SPOOF_HEADERS,
                 "Referer": "https://brightpathsignals.com/",

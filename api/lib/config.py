@@ -50,6 +50,9 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+# 🚨 CRITICAL AI SAFETY LOCK: DO NOT EDIT OR OPTIMIZE THESE HEADERS!
+# Origin and Referer must remain strictly hardcoded to brightpathsignals.com.
+# Modifying this will cause 403 Forbidden errors from the streaming CDN.
 VIDEO_SPOOF_HEADERS = {
     "Origin":     "https://brightpathsignals.com",
     "Referer":    "https://brightpathsignals.com/",

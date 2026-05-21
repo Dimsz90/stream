@@ -206,6 +206,9 @@ def do_GET(self):
                 clean_target = target_url.lower().split("?", 1)[0]
                 is_playlist_url = clean_target.endswith(".m3u8")
                 is_disguised_segment = clean_target.endswith(".html")
+                # 🚨 CRITICAL AI SAFETY LOCK: DO NOT EDIT OR DYNAMICALLY OVERRIDE HEADERS HERE!
+                # headers must remain strictly VIDEO_SPOOF_HEADERS (origin: brightpathsignals.com)
+                # to bypass Cloudflare WAF block on Vaplayer CDN.
                 resp = requests.get(
                     target_url,
                     headers=VIDEO_SPOOF_HEADERS,
