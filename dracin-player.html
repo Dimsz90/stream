@@ -940,14 +940,20 @@ function findIdSubUrl(epIdx){
   const epVid=ep.vid||(ep._raw&&ep._raw.vid)||'';
   if(!epVid)return null;
 
+  /* First, check ep.subtitles directly (e.g. for Dramanova where subtitles are in episode details) */
+  if(ep.subtitles&&Array.isArray(ep.subtitles)){
+    const idSub=ep.subtitles.find(s=>['id','in'].includes((s.lang||s.language_code||'').toLowerCase()));
+    if(idSub&&idSub.url)return idSub.url;
+  }
+
   /* Check subDataCache for any matching key */
   for(const [key,subs] of subDataCache.entries()){
     if(!key.includes(encodeURIComponent(epVid)))continue;
     /* CubeTV format: {language_code, url} */
-    const idSub=subs.find(s=>(s.language_code||s.lang||'').toLowerCase()==='id');
+    const idSub=subs.find(s=>['id','in'].includes((s.language_code||s.lang||'').toLowerCase()));
     if(idSub&&idSub.url)return idSub.url;
     /* Pinedrama/ShortWave format: {lang, url} */
-    const idSub2=subs.find(s=>(s.lang||'').toLowerCase()==='id');
+    const idSub2=subs.find(s=>['id','in'].includes((s.lang||'').toLowerCase()));
     if(idSub2&&idSub2.url)return idSub2.url;
   }
   return null;
