@@ -1275,11 +1275,11 @@ def img_proxy():
     if not target_url:
         return "Missing url param", 400
 
-    allowed_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".avif")
+    allowed_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".avif", ".srt", ".vtt")
     path_lower = target_url.split("?")[0].lower()
     if not any(path_lower.endswith(e) for e in allowed_exts):
-        if "tplv-" not in target_url and "image" not in path_lower:
-            return "URL tidak tampak seperti gambar", 400
+        if "tplv-" not in target_url and "image" not in path_lower and "subtitle" not in path_lower:
+            return "URL tidak tampak seperti gambar atau subtitle", 400
 
     headers = {
         "User-Agent":      "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
