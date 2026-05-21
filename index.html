@@ -459,6 +459,27 @@ nav{
   font-family:var(--body);font-size:1.05em;
   line-height:1.5;border-radius:4px;
 }
+.toast-container {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(18, 22, 27, 0.9);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  z-index: 220;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.toast-container.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 #playerFrame{
   width:100vw;height:100vh;border:none;background:#000;
   position:absolute;top:0;left:0;z-index:201;display:none;
@@ -2771,6 +2792,105 @@ async function tryAlternateStream(opts) {
   }
 }
 
+/* ── PLAYER UTILITIES (Toast, Time Formatting, Key shortcuts, Gestures) ── */
+function formatTime(sec) {
+  if (isNaN(sec) || !isFinite(sec)) return "00:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function showToast(msg) {
+  let t = document.getElementById("plyrToast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "plyrToast";
+    t.className = "toast-container";
+    document.body.appendChild(t);
+  }
+  t.innerText = msg;
+  t.classList.add("show");
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// Keyboard shortcuts for desktop users
+document.addEventListener("keydown", (e) => {
+  const pMode = document.getElementById("playerMode");
+  if (!pMode || pMode.style.display === "none") return;
+  if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  
+  const v = document.getElementById("mainVideo");
+  if (!v || !plyrInst) return;
+
+  switch(e.key.toLowerCase()) {
+    case " ":
+      e.preventDefault();
+      plyrInst.togglePlay();
+      break;
+    case "arrowleft":
+      e.preventDefault();
+      v.currentTime = Math.max(0, v.currentTime - 10);
+      showToast("⏪ -10s");
+      break;
+    case "arrowright":
+      e.preventDefault();
+      v.currentTime = Math.min(v.duration || 0, v.currentTime + 10);
+      showToast("⏩ +10s");
+      break;
+    case "arrowup":
+      e.preventDefault();
+      plyrInst.volume = Math.min(1, plyrInst.volume + 0.1);
+      showToast(`Volume: ${Math.round(plyrInst.volume * 100)}%`);
+      break;
+    case "arrowdown":
+      e.preventDefault();
+      plyrInst.volume = Math.max(0, plyrInst.volume - 0.1);
+      showToast(`Volume: ${Math.round(plyrInst.volume * 100)}%`);
+      break;
+    case "f":
+      e.preventDefault();
+      plyrInst.fullscreen.toggle();
+      break;
+    case "m":
+      e.preventDefault();
+      plyrInst.muted = !plyrInst.muted;
+      showToast(plyrInst.muted ? "Muted" : "Unmuted");
+      break;
+  }
+});
+
+// Double tap gesture for seeking (left/right screen tap)
+let lastTapTime = 0;
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("videoContainer");
+  if (container) {
+    container.addEventListener("click", (e) => {
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+        const v = document.getElementById("mainVideo");
+        if (!v || !isFinite(v.duration)) return;
+        
+        if (x < width * 0.35) {
+          v.currentTime = Math.max(0, v.currentTime - 10);
+          showToast("⏪ -10s");
+        } else if (x > width * 0.65) {
+          v.currentTime = Math.min(v.duration, v.currentTime + 10);
+          showToast("⏩ +10s");
+        }
+      }
+      lastTapTime = now;
+    });
+  }
+});
+
 function playHls(streamUrl, opts = {}) {
   const v  = document.getElementById("mainVideo");
   const vc = document.getElementById("videoContainer");
@@ -2781,6 +2901,23 @@ function playHls(streamUrl, opts = {}) {
   v.onended = () => {
     saveFilmContinueProgress(v);
     if (currentPlayback.mediaType === "tv") changeEpisode(1);
+  };
+  v.onloadedmetadata = () => {
+    try {
+      if (!selectedItem) return;
+      const id = `film_${currentPlayback.mediaType}_${selectedItem["#IMDB_ID"] || selectedItem._tmdb_id || currentPlayback.title}`;
+      const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+      const found = all.find(x => x.id === id);
+      if (found && found.pct > 0.02 && found.pct < 0.98) {
+        const seekTime = found.pct * v.duration;
+        if (isFinite(seekTime) && seekTime > 0) {
+          v.currentTime = seekTime;
+          showToast(`Melanjutkan dari ${formatTime(seekTime)}`);
+        }
+      }
+    } catch(e) {
+      console.error(e);
+    }
   };
 
   const isM3u8 = opts.forceHls || streamUrl.toLowerCase().includes(".m3u8") || streamUrl.includes("mpegurl");
