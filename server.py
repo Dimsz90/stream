@@ -865,12 +865,10 @@ def proxy():
             clean_target = target_url.split("?", 1)[0]
             is_disguised_segment = clean_target.endswith(".html")
             parsed_target = urlparse(target_url)
-            spoof_origin = _stream_spoof_origin(target_url)
-            origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
             headers = {
                 **VIDEO_SPOOF_HEADERS,
-                "Referer": f"{origin_value}/",
-                "Origin": origin_value,
+                "Referer": "https://brightpathsignals.com/",
+                "Origin": "https://brightpathsignals.com",
                 **_forward_video_request_headers(),
             }
             resp = req.get(target_url, headers=headers, stream=True, timeout=15)
