@@ -41,31 +41,10 @@ def _stream_spoof_origin(target_url: str) -> str:
 
 
 def _pick_vaplayer_stream(streams):
-    if not isinstance(streams, list):
+    if not streams:
         return None
-
-    def score(url):
-        s = str(url or "").replace("\\/", "/")
-
-        # Deprioritaskan host yang bermasalah (blokir server-side proxy)
-        for bad in DEPRIORITIZED_HOSTS:
-            if bad in s:
-                return (-1, 0, 0)
-
-        # Semua host Vaplayer CDN dapat base score sama
-        # — tidak perlu whitelist, deteksi via path pattern
-        is_vaplayer = _is_vaplayer_stream(s)
-        host_score = 50 if is_vaplayer else 0
-
-        ext_score = 10 if ".m3u8" in s else 0
-        # master.m3u8 lebih baik karena punya multi-quality
-        kind_score = 5 if "/master.m3u8" in s else 0
-        return (host_score, ext_score + kind_score, -len(s))
-
     urls = [str(u or "").replace("\\/", "/") for u in streams if u]
-    if not urls:
-        return None
-    return sorted(urls, key=score, reverse=True)[0]
+    return urls[0] if urls else None
 
 
 
@@ -84,8 +63,7 @@ def _normalize_vaplayer_streams(streams):
             continue
         seen.add(url)
         urls.append(url)
-    picked = _pick_vaplayer_stream(urls)
-    return sorted(urls, key=lambda url: (url != picked, url))
+    return urls
 
 
 def extract_imdb_id(raw: str):
@@ -228,16 +206,9 @@ def do_GET(self):
                 clean_target = target_url.lower().split("?", 1)[0]
                 is_playlist_url = clean_target.endswith(".m3u8")
                 is_disguised_segment = clean_target.endswith(".html")
-                spoof_origin = _stream_spoof_origin(target_url)
-                origin_value = spoof_origin or f"{parsed_target.scheme}://{parsed_target.netloc}"
-                spoof = {
-                    **VIDEO_SPOOF_HEADERS,
-                    "Referer": f"{origin_value}/",
-                    "Origin":  origin_value,
-                }
                 resp = requests.get(
                     target_url,
-                    headers=spoof,
+                    headers=VIDEO_SPOOF_HEADERS,
                     stream=True,
                     timeout=15,
                 )

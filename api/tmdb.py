@@ -35,25 +35,10 @@ def _is_vaplayer_stream(url: str) -> bool:
 
 
 def _pick_vaplayer_stream(streams):
-    def score(url):
-        s = str(url or "").replace("\\/", "/")
-
-        # Deprioritaskan host yang bermasalah
-        for bad in DEPRIORITIZED_HOSTS:
-            if bad in s:
-                return (-1, 0, 0)
-
-        # Semua host Vaplayer CDN dapat base score sama — dynamic
-        host_score = 50 if _is_vaplayer_stream(s) else 0
-        ext_score = 10 if ".m3u8" in s else 0
-        # master.m3u8 lebih baik karena punya multi-quality
-        kind_score = 5 if "/master.m3u8" in s else 0
-        return (host_score, ext_score + kind_score, -len(s))
-
     urls = _normalize_vaplayer_streams(streams)
     if not urls:
         return None
-    return sorted(urls, key=score, reverse=True)[0]
+    return urls[0]
 
 
 def _normalize_vaplayer_streams(streams):
@@ -67,18 +52,7 @@ def _normalize_vaplayer_streams(streams):
             continue
         seen.add(url)
         urls.append(url)
-    if not urls:
-        return []
-    def score(url):
-        s = str(url or "").replace("\\/", "/")
-        for bad in DEPRIORITIZED_HOSTS:
-            if bad in s:
-                return (-1, 0, 0)
-        host_score = 50 if _is_vaplayer_stream(s) else 0
-        ext_score = 10 if ".m3u8" in s else 0
-        kind_score = 5 if "/master.m3u8" in s else 0
-        return (host_score, ext_score + kind_score, -len(s))
-    return sorted(urls, key=score, reverse=True)
+    return urls
 
 
 def _get_json(url, params=None, ttl=3600):
