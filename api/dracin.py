@@ -928,6 +928,11 @@ def _cubetv_merge_books(*groups: list) -> list:
 def _cubetv_norm_episode(raw: dict, idx: int) -> dict:
     ep_num = raw.get("episodeNumber") or raw.get("episode") or idx + 1
     chapter_id = raw.get("episodeid") or raw.get("episodeId") or raw.get("id") or ""
+    # CubeTV lockStatus semantics: 1 = unlocked/free, other values = locked/paid
+    # chargeCoin > 0 also indicates a paid episode
+    lock_status = int(raw.get("lockStatus") or 0)
+    charge_coin = int(raw.get("chargeCoin") or 0)
+    is_pay = 0 if (lock_status == 1 and charge_coin == 0) else 1
     return {
         "episode":      ep_num,
         "chapterIndex": idx,
@@ -935,7 +940,7 @@ def _cubetv_norm_episode(raw: dict, idx: int) -> dict:
         "episodeId":    str(chapter_id),
         "vid":          str(chapter_id),
         "url":          "",
-        "isPay":        1 if int(raw.get("lockStatus") or 0) else 0,
+        "isPay":        is_pay,
         "title":        raw.get("episodeTitle") or f"Episode {ep_num}",
         "duration":     raw.get("duration") or 0,
         "commentCount": raw.get("commentCount") or 0,
@@ -2384,7 +2389,13 @@ def get_languages(platform="dramabox") -> list | None:
 
     if cfg.get("_engine") == "cubetv":
         raw = _cubetv_fetch("/languages", ttl=1800)
-        return raw.get("data", []) if isinstance(raw, dict) else None
+        if not isinstance(raw, dict):
+            return None
+        raw_langs = raw.get("data", [])
+        if not isinstance(raw_langs, list):
+            return None
+        # Normalize CubeTV language format: {key, name, ...} → {code, name}
+        return [{"code": lang.get("key", ""), "name": lang.get("name", "")} for lang in raw_langs]
 
     if cfg.get("_engine") == "pinedrama":
         raw = _pinedrama_fetch("/api/languages", ttl=1800)
