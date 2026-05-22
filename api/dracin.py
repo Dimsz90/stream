@@ -73,7 +73,7 @@ PLATFORMS = {
         "ttl_search":1800,
     },
     "dramabox": {
-        "prefix":   "/dramaboxv4",
+        "prefix":   os.environ.get("DRAMABOX_PREFIX", "/dramaboxtempek"),
         "label":    "DramaBox",
         "icon":     "📱",
         # Field mapping buku
@@ -1700,6 +1700,105 @@ def get_rank(platform="dramabox", rank_type=1, lang="in", size=20) -> dict | Non
     }
 
 
+def get_recommend(platform="dramabox", page=1, lang="in") -> dict | None:
+    """
+    /api/recommend/book -> data.data.recommendList.records[]
+    """
+    cfg = PLATFORMS.get(platform)
+    if not cfg:
+        return None
+    if platform != "dramabox":
+        return None
+
+    raw = _fetch(platform, "/api/recommend/book", {"lang": lang}, ttl=cfg["ttl_home"])
+    inner = _unwrap(raw)
+    if inner is None:
+        return None
+
+    rec = inner.get("recommendList", {}) if isinstance(inner, dict) else {}
+    records = rec.get("records", []) if isinstance(rec, dict) else []
+    books = [_norm_book(cfg, b) for b in records]
+
+    try:
+        current = int(rec.get("current", page)) if isinstance(rec, dict) else int(page)
+    except Exception:
+        current = int(page or 1)
+
+    return {
+        "platform": platform,
+        "page": current,
+        "title": inner.get("recommendListTitle", "Rekomendasi"),
+        "books": books,
+        "total": rec.get("total", len(books)) if isinstance(rec, dict) else len(books),
+        "pages": rec.get("pages", 1) if isinstance(rec, dict) else 1,
+    }
+
+
+def get_channels(platform="dramabox", lang="in") -> dict | None:
+    """
+    /api/channels -> data.channels[]
+    """
+    cfg = PLATFORMS.get(platform)
+    if not cfg:
+        return None
+    if platform != "dramabox":
+        return None
+
+    raw = _fetch(platform, "/api/channels", {"lang": lang}, ttl=cfg["ttl_home"])
+    if not raw or raw.get("code", -1) != 0:
+        return None
+
+    data = raw.get("data", {}) if isinstance(raw.get("data"), dict) else {}
+    return {
+        "platform": platform,
+        "channels": data.get("channels", []),
+        "total": data.get("total", 0),
+    }
+
+
+def get_theater(platform="dramabox", channel_id=None, lang="in") -> dict | None:
+    """
+    /api/theater -> data.data.columnVoList[].bookList[]
+    """
+    cfg = PLATFORMS.get(platform)
+    if not cfg:
+        return None
+    if platform != "dramabox":
+        return None
+
+    params = {"lang": lang}
+    if channel_id not in (None, "", "null"):
+        params["channelId"] = channel_id
+
+    raw = _fetch(platform, "/api/theater", params, ttl=cfg["ttl_home"])
+    inner = _unwrap(raw)
+    if inner is None or not isinstance(inner, dict):
+        return None
+
+    columns = []
+    for col in inner.get("columnVoList", []):
+        if not isinstance(col, dict):
+            continue
+        books = [_norm_book(cfg, b) for b in (col.get("bookList") or [])]
+        columns.append({
+            "columnId": col.get("columnId"),
+            "title": col.get("title", ""),
+            "subTitle": col.get("subTitle", ""),
+            "style": col.get("style", ""),
+            "type": col.get("type"),
+            "books": books,
+        })
+
+    return {
+        "platform": platform,
+        "columns": columns,
+        "bannerList": inner.get("bannerList", []),
+        "watchHistory": inner.get("watchHistory", []),
+        "recommendList": inner.get("recommendList", {}),
+        "newTheaterList": inner.get("newTheaterList", {}),
+    }
+
+
 def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict | None:
     """
     Search drama. Untuk melolo: Captain v1 /api/v1/search
@@ -2516,6 +2615,29 @@ def build_response(path: str, params: dict) -> tuple[dict, int]:
         if data:
             return {"status": "success", "data": data}, 200
         return {"status": "error", "message": f"Rank tidak tersedia untuk platform '{platform}'"}, 503
+
+    # ── /api/dracin/recommend
+    if path.endswith("/recommend"):
+        page = int(p("page", 1) or 1)
+        data = get_recommend(platform=platform, page=page, lang=lang)
+        if data:
+            return {"status": "success", "data": data}, 200
+        return {"status": "error", "message": f"Recommend tidak tersedia untuk platform '{platform}'"}, 503
+
+    # ── /api/dracin/channels
+    if path.endswith("/channels"):
+        data = get_channels(platform=platform, lang=lang)
+        if data:
+            return {"status": "success", "data": data}, 200
+        return {"status": "error", "message": f"Channels tidak tersedia untuk platform '{platform}'"}, 503
+
+    # ── /api/dracin/theater
+    if path.endswith("/theater"):
+        channel_id = p("channelId", p("channel_id", ""))
+        data = get_theater(platform=platform, channel_id=channel_id, lang=lang)
+        if data:
+            return {"status": "success", "data": data}, 200
+        return {"status": "error", "message": f"Theater tidak tersedia untuk platform '{platform}'"}, 503
 
     # ── /api/dracin/search
     if path.endswith("/search"):
