@@ -1115,12 +1115,43 @@ def _norm_episode(cfg: dict, ep: dict, idx: int) -> dict:
     Field berbeda dari chapter list di detail endpoint.
     """
     ep_num = ep.get(cfg.get("ep_num", "episode"), idx + 1)
+    raw_subtitles = ep.get("subtitles") or []
+    subtitles = []
+    default_subtitle = None
+
+    for sub in raw_subtitles:
+        if not isinstance(sub, dict):
+            continue
+        item = {
+            "lang": sub.get("lang") or sub.get("language") or "",
+            "url": sub.get("url") or "",
+            "isDefault": bool(sub.get("isDefault", False)),
+            "format": sub.get("format") or "",
+        }
+        if item["url"]:
+            subtitles.append(item)
+            if item["isDefault"] and default_subtitle is None:
+                default_subtitle = item
+
+    if default_subtitle is None and subtitles:
+        # fallback: utamakan subtitle sesuai lang episode jika ada, lalu item pertama
+        episode_lang = (ep.get("lang") or "").strip().lower()
+        if episode_lang:
+            default_subtitle = next(
+                (s for s in subtitles if (s.get("lang") or "").strip().lower() == episode_lang),
+                subtitles[0]
+            )
+        else:
+            default_subtitle = subtitles[0]
+
     return {
         "episode":  ep_num,
         "url":      ep.get(cfg.get("ep_url", "url"), ep.get("videoUrl", ep.get("url", ""))),
         "isPay":    int(ep.get(cfg.get("ep_pay", "isPay"), ep.get("isCharge", 0)) or 0),
         "title":    ep.get(cfg.get("ep_title", "chapterName"), ep.get("title", f"Episode {ep_num}")),
         "quality":  ep.get("quality", 0),
+        "subtitles": subtitles,
+        "subtitle": default_subtitle,  # subtitle default agar player gampang pakai
     }
 
 
