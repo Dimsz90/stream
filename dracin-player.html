@@ -937,14 +937,15 @@ async function fetchSRT(url){
 function findIdSubUrl(epIdx){
   const ep=episodes[epIdx];
   if(!ep)return null;
-  const epVid=ep.vid||(ep._raw&&ep._raw.vid)||'';
-  if(!epVid)return null;
 
   /* First, check ep.subtitles directly (e.g. for Dramanova where subtitles are in episode details) */
   if(ep.subtitles&&Array.isArray(ep.subtitles)){
     const idSub=ep.subtitles.find(s=>['id','in'].includes((s.lang||s.language_code||'').toLowerCase()));
     if(idSub&&idSub.url)return idSub.url;
   }
+
+  const epVid=ep.vid||(ep.chapterId)||(ep._raw&&ep._raw.vid)||'';
+  if(!epVid)return null;
 
   /* Check subDataCache for any matching key */
   for(const [key,subs] of subDataCache.entries()){
