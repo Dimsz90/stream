@@ -363,6 +363,7 @@ video{
 const P=new URLSearchParams(location.search);
 const bookId=P.get('id');
 const platform=P.get('platform')||'dramabox';
+const langPref=(P.get('lang')||'in').toLowerCase();
 const startEp=parseInt(P.get('ep'))||0;
 const coverUrl=P.get('cover')||'';
 const SUBSCRIPTION_SESSION_KEY='streamvault_subscription_token';
@@ -777,10 +778,10 @@ async function fetchVideoLink(reqUrl,options={}){
 
 /* Build the video API request URL for current platform */
 function _videoReqUrl(epVid){
-  if(platform==='cubetv')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang=in';
-  if(platform==='shortwave')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang=in';
-  if(platform==='pinedrama')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=pinedrama&lang=in';
-  if(platform==='reelshort')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang=in';
+  if(platform==='cubetv')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=cubetv&lang='+encodeURIComponent(langPref);
+  if(platform==='shortwave')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=shortwave&lang='+encodeURIComponent(langPref);
+  if(platform==='pinedrama')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=pinedrama&lang='+encodeURIComponent(langPref);
+  if(platform==='reelshort')return'/api/dracin/video?id='+encodeURIComponent(epVid)+'&bookId='+encodeURIComponent(bookId)+'&platform=reelshort&lang='+encodeURIComponent(langPref);
   return null;
 }
 
@@ -933,29 +934,50 @@ async function fetchSRT(url){
   }
 }
 
-/* Find Indonesian subtitle URL from cached subtitle data */
-function findIdSubUrl(epIdx){
+function pickSubtitleUrl(subs,isLangMatch){
+  if(!Array.isArray(subs)||!subs.length)return null;
+  const matched=subs.find(s=>s&&isLangMatch((s.lang||s.language_code||s.srclang||''))&&s.url);
+  if(matched)return matched.url;
+  const def=subs.find(s=>s&&s.isDefault&&s.url);
+  if(def)return def.url;
+  const first=subs.find(s=>s&&s.url);
+  return first?first.url:null;
+}
+
+/* Find subtitle URL based on platform-specific subtitle shapes */
+function findSubtitleUrl(epIdx){
+  const isLangMatch=(raw)=>{
+    const v=(raw||'').toLowerCase();
+    if(!v)return false;
+    if(v===langPref)return true;
+    if(langPref==='in'&&v==='id')return true;
+    if(langPref==='id'&&v==='in')return true;
+    return false;
+  };
   const ep=episodes[epIdx];
   if(!ep)return null;
 
-  /* First, check ep.subtitles directly (e.g. for Dramanova where subtitles are in episode details) */
-  if(ep.subtitles&&Array.isArray(ep.subtitles)){
-    const idSub=ep.subtitles.find(s=>['id','in'].includes((s.lang||s.language_code||'').toLowerCase()));
-    if(idSub&&idSub.url)return idSub.url;
+  /* Direct episode subtitle payload (dramabox/dramanova/pinedrama/shortwave) */
+  if(['dramabox','dramanova','pinedrama','shortwave'].includes(platform)){
+    const direct=pickSubtitleUrl(ep.subtitles,isLangMatch);
+    if(direct)return direct;
+    if(ep.subtitle&&ep.subtitle.url)return ep.subtitle.url;
+  }
+
+  /* Reelshort/CubeTV can also attach subtitle lists directly */
+  if(['reelshort','cubetv'].includes(platform)){
+    const direct=pickSubtitleUrl(ep.subtitles||ep.videoCaption,isLangMatch);
+    if(direct)return direct;
   }
 
   const epVid=ep.vid||(ep.chapterId)||(ep._raw&&ep._raw.vid)||'';
   if(!epVid)return null;
 
-  /* Check subDataCache for any matching key */
+  /* Cache fallback from /api/dracin/video response */
   for(const [key,subs] of subDataCache.entries()){
     if(!key.includes(encodeURIComponent(epVid)))continue;
-    /* CubeTV format: {language_code, url} */
-    const idSub=subs.find(s=>['id','in'].includes((s.language_code||s.lang||'').toLowerCase()));
-    if(idSub&&idSub.url)return idSub.url;
-    /* Pinedrama/ShortWave format: {lang, url} */
-    const idSub2=subs.find(s=>['id','in'].includes((s.lang||'').toLowerCase()));
-    if(idSub2&&idSub2.url)return idSub2.url;
+    const cached=pickSubtitleUrl(subs,isLangMatch);
+    if(cached)return cached;
   }
   return null;
 }
@@ -968,12 +990,12 @@ async function loadSubtitleForEp(idx){
   /* Wait a tick for subDataCache to be populated by fetchVideoLink */
   await new Promise(r=>setTimeout(r,200));
 
-  const srtUrl=findIdSubUrl(idx);
+  const srtUrl=findSubtitleUrl(idx);
   if(!srtUrl){
-    console.log('[SUB] No Indonesian subtitle for ep',idx+1);
+    console.log('[SUB] No subtitle for preferred lang',langPref,'ep',idx+1);
     return;
   }
-  console.log('[SUB] Loading ID subtitle for ep',idx+1,srtUrl);
+  console.log('[SUB] Loading subtitle for lang',langPref,'ep',idx+1,srtUrl);
   const srtText=await fetchSRT(srtUrl);
   if(!srtText)return;
   subCues=parseSRT(srtText);
@@ -1022,7 +1044,7 @@ async function init(){
     }
     const token=sessionStorage.getItem('dramanova_token');
     const headers=token?{'X-Dramanova-Token':token}:{};
-    let reqUrl='/api/dracin/episodes?id='+bookId+'&lang=in&platform='+encodeURIComponent(platform);
+    let reqUrl='/api/dracin/episodes?id='+bookId+'&lang='+encodeURIComponent(langPref)+'&platform='+encodeURIComponent(platform);
     try{if(token){const u=new URL(reqUrl,location.origin);if(!u.searchParams.get('dramanova_token'))u.searchParams.set('dramanova_token',token);reqUrl=u.pathname+u.search+u.hash}}catch(e){}
     const r=await appFetch(reqUrl,{headers});
     const j=await r.json();
