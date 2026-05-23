@@ -1063,6 +1063,7 @@ def proxy():
             variants = variants[:4]
 
         session = req.Session()
+        hard_blocked = False
         for name, headers in variants:
             if _deadline_exceeded():
                 attempts.append({"client": "requests", "headers": name, "error": "deadline_exceeded", "outbound_proxy": bool(stream_proxy)})
@@ -1091,15 +1092,38 @@ def proxy():
 
             last_resp = resp
             attempts.append({"client": "requests", "headers": name, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
+            
+            # Jika 404, langsung hentikan (karena URL expired/salah)
+            if resp.status_code == 404:
+                return resp, attempts, None
+                
             if not is_playlist:
                 if resp.ok:
                     return resp, attempts, None
+                # Jika diblokir (403, 401, 429), langsung break ke curl_cffi
+                if resp.status_code in (401, 403, 429, 451):
+                    hard_blocked = True
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
+                    break
                 continue
 
             content_type, content, sample, looks_like_playlist, looks_like_html = _playlist_state(resp)
             last_playlist_text = content
             if resp.ok and looks_like_playlist and not looks_like_html:
                 return resp, attempts, content
+                
+            # Jika playlist diblokir, langsung break ke curl_cffi
+            if resp.status_code in (401, 403, 429, 451) and looks_like_html:
+                hard_blocked = True
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+                break
+                
             try:
                 resp.close()
             except Exception:
@@ -1108,8 +1132,10 @@ def proxy():
         if enable_curl_fallback and not _deadline_exceeded():
             try:
                 from curl_cffi import requests as curl_req
-                for name, headers in variants:
-                    for browser in ("chrome124", "chrome120"):
+                # Untuk curl_cffi, kita hanya mencoba varian terbaik ("dev") dengan browser "chrome124"
+                # Jika diblokir atau 404, tidak perlu mencoba kombinasi lainnya karena memakan waktu terlalu lama
+                for name, headers in [variants[0]]:
+                    for browser in ("chrome124",):
                         if _deadline_exceeded():
                             attempts.append({"client": "curl_cffi", "headers": name, "impersonate": browser, "error": "deadline_exceeded", "outbound_proxy": bool(stream_proxy)})
                             break
@@ -1128,6 +1154,10 @@ def proxy():
 
                         last_resp = resp
                         attempts.append({"client": "curl_cffi", "headers": name, "impersonate": browser, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
+                        
+                        if resp.status_code == 404:
+                            return resp, attempts, None
+                            
                         if resp.ok:
                             if is_playlist:
                                 try:
