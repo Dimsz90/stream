@@ -863,7 +863,7 @@ def proxy():
     # if remote_api_enabled():
     #     return remote_api_passthrough("/api/proxy")
 
-    use_advanced_fetch = os.environ.get("PROXY_USE_ADVANCED_FETCH", "").lower() in ("1", "true", "yes", "on")
+    use_advanced_fetch = os.environ.get("PROXY_USE_ADVANCED_FETCH", "true").lower() in ("1", "true", "yes", "on")
     if not use_advanced_fetch:
         try:
             is_playlist_url = target_url.lower().split("?", 1)[0].endswith(".m3u8")
@@ -1002,7 +1002,7 @@ def proxy():
         last_playlist_text = None
         stream_proxy = os.environ.get("STREAM_PROXY_URL", "").strip()
         proxy_cfg = {"http": stream_proxy, "https": stream_proxy} if stream_proxy else None
-        enable_curl_fallback = os.environ.get("PROXY_ENABLE_CURL_CFFI", "").lower() in ("1", "true", "yes", "on")
+        enable_curl_fallback = os.environ.get("PROXY_ENABLE_CURL_CFFI", "true").lower() in ("1", "true", "yes", "on")
 
         started_at = time.monotonic()
         max_total_seconds = 22 if is_playlist else 45
@@ -1018,7 +1018,6 @@ def proxy():
             variants = variants[:4]
 
         session = req.Session()
-        hard_blocked = False
         for name, headers in variants:
             if _deadline_exceeded():
                 attempts.append({"client": "requests", "headers": name, "error": "deadline_exceeded", "outbound_proxy": bool(stream_proxy)})
@@ -1056,19 +1055,12 @@ def proxy():
             last_playlist_text = content
             if resp.ok and looks_like_playlist and not looks_like_html:
                 return resp, attempts, content
-            if resp.status_code in (401, 403, 429, 451) and looks_like_html:
-                hard_blocked = True
-                try:
-                    resp.close()
-                except Exception:
-                    pass
-                break
             try:
                 resp.close()
             except Exception:
                 pass
 
-        if (not is_playlist) and enable_curl_fallback and not hard_blocked and not _deadline_exceeded():
+        if enable_curl_fallback and not _deadline_exceeded():
             try:
                 from curl_cffi import requests as curl_req
                 for name, headers in variants:
@@ -1092,13 +1084,20 @@ def proxy():
                         last_resp = resp
                         attempts.append({"client": "curl_cffi", "headers": name, "impersonate": browser, "status": resp.status_code, "outbound_proxy": bool(stream_proxy)})
                         if resp.ok:
-                            return resp, attempts, None
+                            if is_playlist:
+                                try:
+                                    content = resp.text
+                                except Exception:
+                                    content = resp.content.decode('utf-8', errors='ignore')
+                                _, _, _, looks_like_playlist, looks_like_html = _playlist_state(resp, content)
+                                if looks_like_playlist and not looks_like_html:
+                                    return resp, attempts, content
+                            else:
+                                return resp, attempts, None
                         try:
                             resp.close()
                         except Exception:
                             pass
-                    if hard_blocked:
-                        break
             except Exception as err:
                 attempts.append({"client": "curl_cffi", "error": str(err)})
 
