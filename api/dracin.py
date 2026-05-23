@@ -194,6 +194,11 @@ def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int
     url = f"{CAPTAIN_BASE}/{platform}{path}"
     try:
         resp = requests.get(url, headers=_melolo_headers(), params=params, timeout=5)
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        if "application/json" not in ctype:
+            snippet = (resp.text or "")[:120].replace("\n", " ").replace("\r", " ")
+            print(f"[MELOLO:{platform}] NON-JSON {path} status={resp.status_code} ctype={ctype} body={snippet}")
+            return None
         data = resp.json()
         _cache.set(cache_key, data, ttl)
         return data
@@ -614,12 +619,17 @@ def _reelshort_extract_books(raw: dict) -> list:
     if not isinstance(data, dict):
         return []
 
-    books = []
-    for section in data.get("lists") or []:
-        if isinstance(section, dict):
-            books.extend(section.get("books") or [])
-    if books:
-        return books
+    lists_val = data.get("lists")
+    if isinstance(lists_val, list) and lists_val:
+        first = lists_val[0]
+        if isinstance(first, dict) and ("book_title" in first or "book_id" in first or "t_book_id" in first):
+            return lists_val
+        books = []
+        for section in lists_val:
+            if isinstance(section, dict):
+                books.extend(section.get("books") or [])
+        if books:
+            return books
 
     for key in ("books", "list", "rows", "records", "items", "dramas"):
         val = data.get(key)
@@ -1940,8 +1950,8 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
 
     if cfg.get("_engine") == "reelshort":
         raw = _reelshort_fetch(
-            f"/api/v1/search/{quote(keyword, safe='')}",
-            {"lang": lang},
+            "/api/v1/search",
+            {"q": keyword, "page": page, "lang": lang},
             ttl=cfg["ttl_search"],
         )
         rows = _reelshort_extract_books(raw or {})
@@ -1950,7 +1960,7 @@ def search_drama(keyword: str, platform="dramabox", page=1, lang="in") -> dict |
             "keyword":  keyword,
             "page":     page,
             "books":    [_reelshort_norm_book(b) for b in rows],
-            "hasMore":  False,
+            "hasMore":  len(rows) >= 20,
             "total":    len(rows),
         }
 
