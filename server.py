@@ -361,45 +361,6 @@ def debug_ip():
             results[name] = {"error": str(e)}
 
     return jsonify(results)
-
-@app.route("/api/debug-proxy")
-def debug_proxy():
-    target_url = request.args.get("url", "").strip()
-    if not target_url:
-        return jsonify({"error": "url parameter required"}), 400
-    
-    results = {}
-    
-    # 1. Test with requests
-    import requests as req
-    headers = {
-        "Origin": "https://brightpathsignals.com",
-        "Referer": "https://brightpathsignals.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    }
-    try:
-        r = req.get(target_url, headers=headers, timeout=10)
-        results["requests"] = {
-            "status": r.status_code,
-            "headers": dict(r.headers),
-            "preview": r.text[:500]
-        }
-    except Exception as e:
-        results["requests"] = {"error": str(e)}
-        
-    # 2. Test with curl_cffi
-    try:
-        from curl_cffi import requests as curl_req
-        c_res = curl_req.get(target_url, headers=headers, impersonate="chrome124", timeout=10)
-        results["curl_cffi"] = {
-            "status": c_res.status_code,
-            "headers": dict(c_res.headers),
-            "preview": c_res.text[:500]
-        }
-    except Exception as e:
-        results["curl_cffi"] = {"error": str(e)}
-        
-    return jsonify(results)
         
 @app.route("/api/subscription/plans")
 def subscription_plans():
@@ -1188,7 +1149,7 @@ def proxy():
 
         resp, attempts, cached_playlist_text = _fetch_video(target_url, is_playlist_url and not is_disguised_segment)
         if resp is None:
-            return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 400
+            return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 502
 
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
 
@@ -1204,7 +1165,7 @@ def proxy():
                     "content_type": content_type,
                     "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
                     "attempts": attempts,
-                }), 400
+                }), 502
             content_type = "video/mp2t"
 
         if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
@@ -1220,7 +1181,7 @@ def proxy():
                     "content_type": content_type,
                     "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
                     "attempts": attempts,
-                }), 400
+                }), 502
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
