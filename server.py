@@ -632,6 +632,12 @@ def debug():
         else:
             results[pkg] = f"OK ({info})"
 
+    results["proxy_env"] = {
+        "PROXY_USE_ADVANCED_FETCH": os.environ.get("PROXY_USE_ADVANCED_FETCH"),
+        "PROXY_ENABLE_CURL_CFFI": os.environ.get("PROXY_ENABLE_CURL_CFFI"),
+        "STREAM_PROXY_URL": bool(os.environ.get("STREAM_PROXY_URL")),
+    }
+
     return jsonify(results)
 
 @app.route("/api/get-video")
