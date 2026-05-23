@@ -860,8 +860,8 @@ def proxy():
     if denied:
         return denied
 
-    if remote_api_enabled():
-        return remote_api_passthrough("/api/proxy")
+    # if remote_api_enabled():
+    #     return remote_api_passthrough("/api/proxy")
 
     use_advanced_fetch = os.environ.get("PROXY_USE_ADVANCED_FETCH", "").lower() in ("1", "true", "yes", "on")
     if not use_advanced_fetch:
