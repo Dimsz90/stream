@@ -1177,6 +1177,313 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
   .dracin-detail-title{font-size:18px}
   .dracin-detail-actions{flex-direction:column}
 }
+
+/* ── Redesigned Player View Page ── */
+#playerMode {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: none;
+  overflow: hidden;
+}
+
+.player-bg-backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(50px) brightness(0.22) saturate(1.2);
+  opacity: 0.65;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#playerContentWrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+#playerContentWrapper::-webkit-scrollbar {
+  width: 6px;
+}
+#playerContentWrapper::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+#playerContentWrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.player-page-header {
+  width: min(100%, 1024px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding-bottom: 8px;
+}
+
+.player-back-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+.player-back-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--border3);
+}
+
+.player-page-title-group {
+  text-align: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.player-page-title {
+  font-family: var(--body);
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.player-page-subtitle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 3px;
+}
+
+#playerArea {
+  width: min(100%, 1024px);
+  aspect-ratio: 16/9;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  position: relative;
+  flex-shrink: 0;
+}
+
+#videoContainer, #playerFrame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+#playerControlBoard {
+  width: min(100%, 1024px);
+  background: rgba(16, 18, 22, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+
+.server-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.server-tabs-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+}
+
+.server-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.server-tab-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.server-tab-btn:hover {
+  background: var(--surface3);
+  border-color: var(--border3);
+  color: #fff;
+}
+
+.server-tab-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111316;
+}
+
+.player-episode-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 20px;
+}
+
+.player-season-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.player-season-row::-webkit-scrollbar {
+  display: none;
+}
+
+.player-season-btn {
+  flex-shrink: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.player-season-btn:hover {
+  background: var(--surface3);
+  border-color: var(--border3);
+  color: #fff;
+}
+
+.player-season-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+
+.player-episode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.player-episode-grid::-webkit-scrollbar {
+  width: 4px;
+}
+.player-episode-grid::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 2px;
+}
+
+.player-episode-btn {
+  height: 38px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.player-episode-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.player-episode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111316;
+}
+
+.player-info-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-info-title {
+  font-family: var(--body);
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.player-info-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.player-info-desc {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.65;
+  margin-top: 8px;
+}
+
+/* Adjust old overlays to fit responsive player area */
+#playerArea .povl {
+  border-radius: 12px;
+}
+#playerBar {
+  border-radius: 0 0 12px 12px;
+}
 </style>
 </head>
 <body>
@@ -1452,23 +1759,90 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 </div>
 
 <div id="playerMode">
-  <div class="povl" id="pLoading">
-    <div class="big-spin"></div>
-    <p id="pLoadTxt">Mengambil stream URL...</p>
-  </div>
-  <div class="povl hidden" id="pError">
-    <h3>GAGAL</h3>
-    <p id="pErrTxt">Stream tidak tersedia.</p>
-    <button class="pbtn" style="margin-top:8px" onclick="closePlayer()">← KEMBALI</button>
-  </div>
+  <!-- Backdrop Blur Image Background -->
+  <div class="player-bg-backdrop" id="playerBackdropBg"></div>
 
-  <div id="videoContainer">
-    <video id="mainVideo" controls autoplay playsinline crossorigin="anonymous"></video>
+  <div id="playerContentWrapper">
+    <!-- Header Page -->
+    <div class="player-page-header">
+      <button class="player-back-btn" onclick="closePlayer()">← KEMBALI</button>
+      <div class="player-page-title-group">
+        <div class="player-page-title" id="playerPageTitle">Memuat...</div>
+        <div class="player-page-subtitle" id="playerPageSubtitle">Streaming</div>
+      </div>
+      <button class="player-back-btn" onclick="closePlayer()">✕ TUTUP</button>
+    </div>
+
+    <!-- Player Container -->
+    <div id="playerArea">
+      <div class="povl" id="pLoading">
+        <div class="big-spin"></div>
+        <p id="pLoadTxt">Mengambil stream URL...</p>
+      </div>
+      <div class="povl hidden" id="pError">
+        <h3>GAGAL</h3>
+        <p id="pErrTxt">Stream tidak tersedia.</p>
+        <button class="pbtn" style="margin-top:8px" onclick="closePlayer()">← KEMBALI</button>
+      </div>
+
+      <div id="videoContainer">
+        <video id="mainVideo" controls autoplay playsinline crossorigin="anonymous"></video>
+      </div>
+      <iframe id="playerFrame" allowfullscreen
+        allow="autoplay; fullscreen; picture-in-picture"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
+      </iframe>
+
+      <!-- Player top overlay bar (auto-hide on video) -->
+      <div class="player-bar" id="playerBar">
+        <div class="player-title" id="playerTitle">Memuat...</div>
+        <div class="player-btns">
+          <div class="episode-nav" id="episodeNav">
+            <button class="pbtn" onclick="changeEpisode(-1)">PREV</button>
+            <span class="episode-label" id="episodeLabel">S1E1</span>
+            <button class="pbtn" onclick="changeEpisode(1)">NEXT</button>
+          </div>
+          <button class="pbtn" id="btnSubBrowse" onclick="toggleSubPanel()">CC SUB</button>
+          <button class="pbtn" id="btnRotateLock" onclick="toggleRotateLock()" title="Kunci orientasi layar">
+            <span class="lock-icon">🔄</span>
+            <span id="rotateLockLabel">ROTATE</span>
+          </button>
+          <button class="pbtn" onclick="closePlayer()">✕ TUTUP</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player Control Board (Sources, TV Episodes, Movie Info) -->
+    <div id="playerControlBoard">
+      <!-- Server Sources -->
+      <div class="server-tabs-container">
+        <div class="server-tabs-label">SERVER SOURCE</div>
+        <div class="server-tabs" id="playerServerTabs">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- TV Series Season/Episode direct selection -->
+      <div class="player-episode-section" id="playerEpisodeSection" style="display:none">
+        <div class="server-tabs-label">PILIH EPISODE</div>
+        <div class="player-season-row" id="playerSeasonRow">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="player-episode-grid" id="playerEpisodeGrid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Movie / TV Info -->
+      <div class="player-info-section">
+        <div class="player-info-title" id="playerInfoTitle">Title</div>
+        <div class="player-info-meta" id="playerInfoMeta">
+          <!-- Badges like Year, Rating, Genre tags -->
+        </div>
+        <div class="player-info-desc" id="playerInfoDesc">Plot description...</div>
+      </div>
+    </div>
   </div>
-  <iframe id="playerFrame" allowfullscreen
-    allow="autoplay; fullscreen; picture-in-picture"
-    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
-  </iframe>
 
   <div id="subOverlay"></div>
 
@@ -1489,24 +1863,6 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
     <div class="sub-status-bar">
       <div class="sub-status-dot" id="subDot"></div>
       <span id="subStatus">Tidak ada subtitle aktif</span>
-    </div>
-  </div>
-
-  <div class="player-bar" id="playerBar">
-    <div class="player-title" id="playerTitle">Memuat...</div>
-    <div class="player-btns">
-      <div class="episode-nav" id="episodeNav">
-        <button class="pbtn" onclick="changeEpisode(-1)">PREV</button>
-        <span class="episode-label" id="episodeLabel">S1E1</span>
-        <button class="pbtn" onclick="changeEpisode(1)">NEXT</button>
-      </div>
-      <button class="pbtn" id="btnSubBrowse" onclick="toggleSubPanel()">CC SUB</button>
-      <!-- Rotate Lock Button -->
-      <button class="pbtn" id="btnRotateLock" onclick="toggleRotateLock()" title="Kunci orientasi layar">
-        <span class="lock-icon">🔄</span>
-        <span id="rotateLockLabel">ROTATE</span>
-      </button>
-      <button class="pbtn" onclick="closePlayer()">✕ TUTUP</button>
     </div>
   </div>
 </div>
@@ -2632,10 +2988,239 @@ function playEpisode(season, episode) {
   startTvEpisodeStream(season, episode);
 }
 
+/* ── Redesigned Player View Helpers ── */
+let playerSources = {
+  proxy: "",
+  direct: "",
+  embed: "",
+  active: "proxy"
+};
+
+function getLastWatchedEpisode(item) {
+  try {
+    const mediaType = isTVItem(item) ? 'tv' : 'movie';
+    const id = `film_${mediaType}_${item["#IMDB_ID"] || item._tmdb_id || item["#TITLE"]}`;
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    const found = all.find(x => x.id === id);
+    if (found && found.epTitle && found.epTitle.startsWith('S')) {
+      const m = found.epTitle.match(/S(\d+)E(\d+)/);
+      if (m) {
+        return { season: parseInt(m[1]), episode: parseInt(m[2]) };
+      }
+    }
+  } catch {}
+  return { season: 1, episode: 1 };
+}
+
+function updatePlayerMetadata() {
+  const item = selectedItem;
+  if (!item) return;
+  
+  const title = item["#TITLE"] || item.title || "Unknown Title";
+  const desc = item["#DESC"] || item.description || item.plot || "Sinopsis tidak tersedia.";
+  const year = item["#YEAR"] || item.year || "";
+  const rating = item["#RATING"] || item.rating || "";
+  
+  document.getElementById("playerPageTitle").textContent = title;
+  document.getElementById("playerInfoTitle").textContent = title;
+  document.getElementById("playerInfoDesc").textContent = desc;
+  
+  // Set backdrop
+  const bgUrl = item.backdrop || item["#IMG_POSTER"] || item.poster || "";
+  const bgEl = document.getElementById("playerBackdropBg");
+  if (bgEl) {
+    bgEl.style.backgroundImage = bgUrl ? `url(${bgUrl})` : "none";
+  }
+  
+  let badges = "";
+  if (year) badges += `<span class="badge">${year}</span>`;
+  if (rating) badges += `<span class="badge" style="color:#d7c98f">★ ${rating}</span>`;
+  
+  const genres = item["#GENRES"] || item.genre || "";
+  if (genres) {
+    const list = Array.isArray(genres) ? genres : String(genres).split(",").map(x => x.trim());
+    badges += list.map(g => `<span class="badge">${g}</span>`).join("");
+  }
+  
+  document.getElementById("playerInfoMeta").innerHTML = badges;
+}
+
+function updateServerTabs(data, imdbId, season, episode) {
+  playerSources = {
+    proxy: data.stream_url || data.streamUrl || data.link || "",
+    direct: data.rawStreamUrl || "",
+    embed: "",
+    active: "proxy"
+  };
+  
+  // Construct embed URL for streamimdb.ru
+  if (imdbId) {
+    if (currentPlayback.mediaType === "tv") {
+      playerSources.embed = `https://streamimdb.ru/embed/tv/${imdbId}/${season}/${episode}`;
+    } else {
+      playerSources.embed = `https://streamimdb.ru/embed/movie/${imdbId}`;
+    }
+  } else if (data.imdbId || data.imdb_id) {
+    const id = data.imdbId || data.imdb_id;
+    if (currentPlayback.mediaType === "tv") {
+      playerSources.embed = `https://streamimdb.ru/embed/tv/${id}/${season}/${episode}`;
+    } else {
+      playerSources.embed = `https://streamimdb.ru/embed/movie/${id}`;
+    }
+  }
+
+  const container = document.getElementById("playerServerTabs");
+  container.innerHTML = "";
+  
+  const addTab = (id, label) => {
+    const btn = document.createElement("button");
+    btn.className = `server-tab-btn ${playerSources.active === id ? 'active' : ''}`;
+    btn.textContent = label;
+    btn.onclick = () => selectServerSource(id);
+    container.appendChild(btn);
+  };
+  
+  if (playerSources.proxy) {
+    addTab("proxy", "Server 1 (HLS Proxy)");
+  }
+  if (playerSources.direct) {
+    addTab("direct", "Server 2 (Direct HLS)");
+  }
+  if (playerSources.embed) {
+    addTab("embed", "Server Embed (streamimdb.ru)");
+  }
+}
+
+function selectServerSource(id) {
+  playerSources.active = id;
+  const btns = document.querySelectorAll(".server-tab-btn");
+  
+  if (id === "proxy" && btns[0]) {
+    btns.forEach(b => b.classList.remove("active"));
+    btns[0].classList.add("active");
+  } else if (id === "direct") {
+    btns.forEach(b => b.classList.remove("active"));
+    const match = Array.from(btns).find(b => b.textContent.includes("Direct"));
+    if (match) match.classList.add("active");
+  } else if (id === "embed") {
+    btns.forEach(b => b.classList.remove("active"));
+    const match = Array.from(btns).find(b => b.textContent.includes("Embed"));
+    if (match) match.classList.add("active");
+  }
+  
+  const v = document.getElementById("mainVideo");
+  const vc = document.getElementById("videoContainer");
+  const f = document.getElementById("playerFrame");
+  
+  if (id === "proxy" || id === "direct") {
+    f.src = "";
+    f.style.display = "none";
+    vc.style.display = "block";
+    const url = id === "proxy" ? playerSources.proxy : playerSources.direct;
+    const alternateStreamEndpoint = SUB.imdbId ? `${STREAM_API}/api/get-video?id=${encodeURIComponent(SUB.imdbId)}` : "";
+    playHls(url, {alternateStreamEndpoint, forceHls: true});
+  } else if (id === "embed") {
+    if (hlsInst) { hlsInst.destroy(); hlsInst = null; }
+    if (plyrInst) { plyrInst.destroy(); plyrInst = null; }
+    v.pause();
+    v.src = "";
+    vc.style.display = "none";
+    
+    hidePOverlays();
+    f.style.display = "block";
+    f.src = playerSources.embed;
+    
+    // Hide controls overlay since embed has its own
+    document.getElementById("playerBar").classList.add("faded");
+  }
+}
+
+async function renderPlayerEpisodeSection() {
+  const section = document.getElementById("playerEpisodeSection");
+  if (currentPlayback.mediaType !== "tv" || !currentPlayback.tmdbId) {
+    section.style.display = "none";
+    return;
+  }
+  
+  section.style.display = "block";
+  const seasonRow = document.getElementById("playerSeasonRow");
+  const episodeGrid = document.getElementById("playerEpisodeGrid");
+  
+  seasonRow.innerHTML = "Memuat...";
+  episodeGrid.innerHTML = "";
+  
+  try {
+    const r = await fetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const seasons = (data.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
+    
+    if (!seasons.length) {
+      seasonRow.innerHTML = "Season tidak tersedia.";
+      return;
+    }
+    
+    seasonRow.innerHTML = seasons.map(s => `
+      <button class="player-season-btn ${s.season_number === currentPlayback.season ? 'active' : ''}" 
+        onclick="selectPlayerSeason(${s.season_number}, ${s.episode_count}, this)">
+        Season ${s.season_number}
+      </button>
+    `).join("");
+    
+    await selectPlayerSeason(currentPlayback.season, seasons.find(s => s.season_number === currentPlayback.season)?.episode_count || 1);
+  } catch {
+    seasonRow.innerHTML = "Gagal memuat season.";
+  }
+}
+
+async function selectPlayerSeason(seasonNum, episodeCount, el) {
+  document.querySelectorAll(".player-season-btn").forEach(btn => btn.classList.remove("active"));
+  if (el) {
+    el.classList.add("active");
+  } else {
+    const btns = document.querySelectorAll(".player-season-btn");
+    const match = Array.from(btns).find(b => b.textContent.includes(`Season ${seasonNum}`));
+    if (match) match.classList.add("active");
+  }
+  
+  const grid = document.getElementById("playerEpisodeGrid");
+  grid.innerHTML = "Memuat episode...";
+  
+  let episodesList = [];
+  try {
+    const r = await fetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
+    if (r.ok) {
+      const data = await r.json();
+      episodesList = data.episodes || [];
+    }
+  } catch {}
+  
+  if (episodesList.length === 0) {
+    episodesList = Array.from({length: episodeCount}, (_, i) => ({episode_number: i+1}));
+  }
+  
+  grid.innerHTML = episodesList.map(ep => {
+    const n = ep.episode_number || 1;
+    const isActive = seasonNum === currentPlayback.season && n === currentPlayback.episode;
+    return `
+      <button class="player-episode-btn ${isActive ? 'active' : ''}" 
+        title="${esc(ep.name || `Episode ${n}`)}" 
+        onclick="playPlayerEpisode(${seasonNum}, ${n})">
+        ${n}
+      </button>
+    `;
+  }).join("");
+}
+
+function playPlayerEpisode(season, episode) {
+  startTvEpisodeStream(season, episode);
+}
+
 async function startStream() {
   if (!selectedItem) return;
   if (isTVItem(selectedItem)) {
-    openSeasonModal(selectedItem);
+    const last = getLastWatchedEpisode(selectedItem);
+    startTvEpisodeStream(last.season, last.episode);
     return;
   }
 
@@ -2657,6 +3242,8 @@ async function startStream() {
 
   enterBrowseOrientationMode();
   closeDetail();
+  
+  updatePlayerMetadata();
   document.getElementById("playerMode").style.display = "block";
   showPLoading(`Mengambil stream untuk "${title}"...`);
   document.getElementById("playerTitle").textContent =
@@ -2665,8 +3252,14 @@ async function startStream() {
   try {
     const res  = await appFetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
     const data = await res.json();
+    
+    updateServerTabs(data, id);
+    renderPlayerEpisodeSection();
+    
     if (data.stream_url) {
       playHls(data.stream_url, {alternateStreamEndpoint: `${STREAM_API}/api/get-video?id=${encodeURIComponent(id)}`, forceHls:true});
+    } else if (playerSources.embed) {
+      selectServerSource("embed");
     } else {
       showPError("Stream tidak tersedia untuk film ini.");
     }
@@ -2694,6 +3287,9 @@ async function startTvEpisodeStream(season, episode) {
   resetSubtitlePanel();
 
   enterBrowseOrientationMode();
+  closeDetail();
+  
+  updatePlayerMetadata();
   document.getElementById("playerMode").style.display = "block";
   document.getElementById("episodeNav").style.display = "flex";
   updateEpisodeLabel();
@@ -2708,15 +3304,26 @@ async function startTvEpisodeStream(season, episode) {
     const endpoint = imdbId ? "imdb" : "tmdb-stream";
     const res = await appFetch(`${STREAM_API}/api/${endpoint}?${q}`);
     const data = await res.json();
+    
     if (data.totalEpisodes) currentPlayback.totalEpisodes = data.totalEpisodes;
     if (data.imdbId || data.imdb_id) SUB.imdbId = data.imdbId || data.imdb_id;
+    
+    updateServerTabs(data, SUB.imdbId || imdbId, season, episode);
+    renderPlayerEpisodeSection();
+    
     if (data.episodeTitle) {
       document.getElementById("playerTitle").textContent = `${title} - ${data.episodeTitle} (S${season}E${episode})`;
+      document.getElementById("playerPageSubtitle").textContent = `S${season}E${episode} · ${data.episodeTitle}`;
+    } else {
+      document.getElementById("playerPageSubtitle").textContent = `S${season}E${episode}`;
     }
-    if (data.stream_url || data.streamUrl || data.link) {
-      const imdbId = SUB.imdbId || selectedItem["#IMDB_ID"] || "";
-      const alternateStreamEndpoint = imdbId ? `${STREAM_API}/api/get-video?id=${encodeURIComponent(imdbId)}` : "";
-      playHls(data.stream_url || data.streamUrl || data.link, {alternateStreamEndpoint, forceHls:true});
+    
+    const streamUrl = data.stream_url || data.streamUrl || data.link;
+    if (streamUrl) {
+      const altEndpoint = SUB.imdbId ? `${STREAM_API}/api/get-video?id=${encodeURIComponent(SUB.imdbId)}` : "";
+      playHls(streamUrl, {alternateStreamEndpoint: altEndpoint, forceHls:true});
+    } else if (playerSources.embed) {
+      selectServerSource("embed");
     } else {
       showPError(data.message || "Stream episode tidak tersedia.");
     }
