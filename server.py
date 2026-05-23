@@ -1188,7 +1188,7 @@ def proxy():
 
         resp, attempts, cached_playlist_text = _fetch_video(target_url, is_playlist_url and not is_disguised_segment)
         if resp is None:
-            return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 502
+            return jsonify({"status": "error", "message": "Proxy request failed", "attempts": attempts}), 400
 
         content_type = resp.headers.get("Content-Type", "application/octet-stream")
 
@@ -1204,7 +1204,7 @@ def proxy():
                     "content_type": content_type,
                     "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
                     "attempts": attempts,
-                }), 502
+                }), 400
             content_type = "video/mp2t"
 
         if not is_disguised_segment and ("mpegurl" in content_type.lower() or is_playlist_url):
@@ -1220,7 +1220,7 @@ def proxy():
                     "content_type": content_type,
                     "blocked_by": "cloudflare" if "cloudflare" in sample or "you have been blocked" in sample else "",
                     "attempts": attempts,
-                }), 502
+                }), 400
 
             def rewrite(m):
                 abs_link = urljoin(target_url, m.group(1))
