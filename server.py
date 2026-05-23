@@ -201,10 +201,21 @@ def rewrite_remote_urls(obj):
         return {k: rewrite_remote_urls(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [rewrite_remote_urls(v) for v in obj]
-    if isinstance(obj, str) and obj.startswith(base):
-        return cache_remote_proxy_url(obj)
-    if isinstance(obj, str) and obj.startswith(("/api/proxy", "/api/remote-proxy")):
-        return cache_remote_proxy_url(f"{base}{obj}")
+    if isinstance(obj, str):
+        if "/api/proxy" in obj:
+            try:
+                from urllib.parse import urlparse, parse_qs
+                parsed = urlparse(obj)
+                qs = parse_qs(parsed.query)
+                nested_url = qs.get("url", [None])[0]
+                if nested_url:
+                    return sign_proxy_url(nested_url)
+            except Exception:
+                pass
+        if obj.startswith(base):
+            return cache_remote_proxy_url(obj)
+        if obj.startswith(("/api/proxy", "/api/remote-proxy")):
+            return cache_remote_proxy_url(f"{base}{obj}")
     return obj
 
 def remote_api_json(path):
@@ -1011,17 +1022,21 @@ def proxy():
         enable_curl_fallback = os.environ.get("PROXY_ENABLE_CURL_CFFI", "true").lower() in ("1", "true", "yes", "on")
 
         started_at = time.monotonic()
-        max_total_seconds = 22 if is_playlist else 45
+        # Fast-fail: segments must complete in 6s so Gunicorn threads are freed
+        # quickly and the browser can fallback to direct CDN streaming.
+        # Playlists get 15s since they are small text responses.
+        max_total_seconds = 15 if is_playlist else 6
 
         def _deadline_exceeded():
             return (time.monotonic() - started_at) >= max_total_seconds
 
         variants = _header_variants(url)
         if is_playlist:
-            # Jangan brute-force terlalu lama untuk playlist.
-            # Jika terlalu lambat, Cloudflare/Railway akan mengembalikan 502 edge
-            # sebelum app sempat mengirim JSON error yang jelas.
-            variants = variants[:4]
+            # Only try 2 header variants for playlists to stay under deadline
+            variants = variants[:2]
+        else:
+            # For segments, only try the first ("dev") variant — fail fast
+            variants = variants[:1]
 
         session = req.Session()
         hard_blocked = False
@@ -1035,11 +1050,12 @@ def proxy():
                 break
             try:
                 if is_playlist:
-                    read_timeout = max(3.0, min((10 if name == "dev" else 12), remaining - 0.6))
-                    timeout = (4, read_timeout)
+                    read_timeout = max(3.0, min((8 if name == "dev" else 10), remaining - 0.6))
+                    timeout = (3, read_timeout)
                 else:
-                    read_timeout = max(4.0, min(20, remaining - 0.6))
-                    timeout = (6, read_timeout)
+                    # Segments: very tight timeouts — 2s connect, 4s read
+                    read_timeout = max(2.0, min(4, remaining - 0.5))
+                    timeout = (2, read_timeout)
                 resp = session.get(
                     url,
                     headers=headers,
@@ -1107,7 +1123,7 @@ def proxy():
                                 impersonate=browser,
                                 proxies=proxy_cfg,
                                 stream=True,
-                                timeout=12 if is_playlist else 20,
+                                timeout=10 if is_playlist else 5,
                             )
                         except Exception as err:
                             attempts.append({"client": "curl_cffi", "headers": name, "impersonate": browser, "error": str(err), "outbound_proxy": bool(stream_proxy)})
