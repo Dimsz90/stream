@@ -586,7 +586,7 @@ def debug():
 
         return True, "?"
 
-    for pkg in ["requests", "bs4", "yt_dlp", "playwright", "PIL", "pillow_heif"]:
+    for pkg in ["requests", "bs4", "yt_dlp", "playwright", "PIL", "pillow_heif", "curl_cffi"]:
         ok, info = _get_pkg_version(pkg)
         if not ok:
             results[pkg] = f"MISSING: {info}"
