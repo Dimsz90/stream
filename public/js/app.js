@@ -582,7 +582,7 @@ async function loadGenrePage() {
     const genreParam = currentGenre !== "all" ? `&with_genres=${currentGenre}` : "";
     const url = `${TMDB_BASE}/discover/${mediaType}?api_key=${TMDB_KEY}&language=id-ID&sort_by=popularity.desc&page=${genrePageNum}${genreParam}`;
 
-    const r = await fetch(url);
+    const r = await appFetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const raw = await r.json();
     const results = (raw.results || []).filter(i => i.poster_path);
@@ -658,7 +658,7 @@ async function doSearch() {
   allResults = [];
 
   try {
-    const r = await fetch(`${IMDB_API}/search?q=${encodeURIComponent(q)}`);
+    const r = await appFetch(`${IMDB_API}/search?q=${encodeURIComponent(q)}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const raw = await r.json();
 
@@ -688,7 +688,7 @@ async function loadMoreSearch() {
   btn.textContent = "Memuat...";
 
   try {
-    const r = await fetch(`${IMDB_API}/search?q=${encodeURIComponent(searchQuery)}&page=${searchPage}`);
+    const r = await appFetch(`${IMDB_API}/search?q=${encodeURIComponent(searchQuery)}&page=${searchPage}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const raw = await r.json();
 
@@ -859,7 +859,7 @@ async function fetchRecoCategory(cat) {
   try {
     const sep = cat.endpoint.includes("?") ? "&" : "?";
     const url = `${TMDB_BASE}${cat.endpoint}${sep}api_key=${TMDB_KEY}&language=id-ID&page=1`;
-    const r = await fetch(url);
+    const r = await appFetch(url);
     if (!r.ok) return;
     const raw = await r.json();
     const results = (raw.results||[]).filter(i => i.poster_path);
@@ -890,7 +890,7 @@ async function ensureTmdbMeta(m) {
   if (!imdbId || !TMDB_KEY) return m;
 
   try {
-    const r = await fetch(`${TMDB_BASE}/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_KEY}&language=id-ID&external_source=imdb_id`);
+    const r = await appFetch(`${TMDB_BASE}/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_KEY}&language=id-ID&external_source=imdb_id`);
     if (!r.ok) return m;
     const data = await r.json();
     const wantTV = isTVItem(m);
@@ -912,8 +912,8 @@ async function openDetail(m) {
     try {
       const type = m._tmdb_type||"movie";
       const [extR, detR] = await Promise.all([
-        fetch(`${TMDB_BASE}/${type}/${m._tmdb_id}/external_ids?api_key=${TMDB_KEY}`),
-        fetch(`${TMDB_BASE}/${type}/${m._tmdb_id}?api_key=${TMDB_KEY}&language=id-ID`),
+        appFetch(`${TMDB_BASE}/${type}/${m._tmdb_id}/external_ids?api_key=${TMDB_KEY}`),
+        appFetch(`${TMDB_BASE}/${type}/${m._tmdb_id}?api_key=${TMDB_KEY}&language=id-ID`),
       ]);
       const ext = await extR.json();
       const det = await detR.json();
@@ -970,7 +970,7 @@ function openImdb() {
 
 async function fetchProviders(imdbId) {
   try {
-    const r = await fetch(`${IMDB_API}/justwatch?q=${imdbId}`);
+    const r = await appFetch(`${IMDB_API}/justwatch?q=${imdbId}`);
     if (!r.ok) return;
     const data = await r.json();
     const providers = new Set();
@@ -992,7 +992,7 @@ async function fetchProviders(imdbId) {
 
 async function fetchPhotos(imdbId) {
   try {
-    const r = await fetch(`${IMDB_API}/photo/${imdbId}`);
+    const r = await appFetch(`${IMDB_API}/photo/${imdbId}`);
     if (!r.ok) return;
     const data = await r.json();
     let urls = [];
@@ -1049,7 +1049,7 @@ async function openSeasonModal(item) {
   }
 
   try {
-    const r = await fetch(`${TMDB_BASE}/tv/${tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
+    const r = await appFetch(`${TMDB_BASE}/tv/${tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const seasons = (data.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
@@ -1088,7 +1088,7 @@ async function selectSeason(seasonNum, episodeCount, el) {
   const tmdbId = seasonModalItem?._tmdb_id;
 
   try {
-    const r = await fetch(`${TMDB_BASE}/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
+    const r = await appFetch(`${TMDB_BASE}/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     renderEpisodeGrid(seasonNum, data.episodes || [], episodeCount);
@@ -1280,7 +1280,7 @@ async function renderPlayerEpisodeSection() {
   episodeGrid.innerHTML = "";
   
   try {
-    const r = await fetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
+    const r = await appFetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}?api_key=${TMDB_KEY}&language=id-ID`);
     if (!r.ok) throw new Error();
     const data = await r.json();
     const seasons = (data.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
@@ -1318,7 +1318,7 @@ async function selectPlayerSeason(seasonNum, episodeCount, el) {
   
   let episodesList = [];
   try {
-    const r = await fetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
+    const r = await appFetch(`${TMDB_BASE}/tv/${currentPlayback.tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}&language=id-ID`);
     if (r.ok) {
       const data = await r.json();
       episodesList = data.episodes || [];
