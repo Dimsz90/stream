@@ -2250,7 +2250,6 @@ function esc(s) {
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[m]
   );
 }
-</script>
 
 
 /* ════════════════════════════════════════
@@ -2726,7 +2725,6 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !playerOpen) enterBrowseOrientationMode();
 });
 initSubscriptionGate();
-</script>
 
 
 /* ── PWA ── */
@@ -2777,4 +2775,3 @@ btnInstall.addEventListener("click", async () => {
   deferredPrompt=null;
 });
 window.addEventListener("appinstalled", () => { btnInstall.style.display="none"; });
-</script>
