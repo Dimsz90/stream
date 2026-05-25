@@ -96,7 +96,9 @@ def require_subscription():
     ok, payload, status_code = check_subscription(request.headers)
     if ok:
         return None
-    return jsonify(payload), status_code
+    resp = jsonify(payload)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp, status_code
 
 def sign_proxy_url(url, base=""):
     from lib.proxy_signing import sign_proxy_url as _sign_proxy_url

@@ -197,6 +197,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self._cors()
         self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
