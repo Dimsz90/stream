@@ -862,6 +862,38 @@ def imdb_api():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/imdb-proxy", defaults={"subpath": ""})
+@app.route("/api/imdb-proxy/<path:subpath>")
+def imdb_proxy_route(subpath):
+    denied = require_subscription()
+    if denied:
+        return denied
+    endpoint = f"/{subpath}"
+    if request.query_string:
+        endpoint = f"{endpoint}?{request.query_string.decode('utf-8')}"
+    
+    try:
+        from api.imdb import imdb_proxy_req
+        body, code, ct = imdb_proxy_req(endpoint)
+        return Response(body, status=code, headers={"Content-Type": ct})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/tmdb-proxy", defaults={"subpath": ""})
+@app.route("/api/tmdb-proxy/<path:subpath>")
+def tmdb_proxy_route(subpath):
+    denied = require_subscription()
+    if denied:
+        return denied
+    endpoint = f"/{subpath}"
+    params = {k: request.args.getlist(k) for k in request.args.keys()}
+    try:
+        from api.tmdb import tmdb_proxy_req
+        body, code, ct = tmdb_proxy_req(endpoint, params)
+        return Response(body, status=code, headers={"Content-Type": ct})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/proxy")
 def proxy():
     import requests as req

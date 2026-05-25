@@ -157,6 +157,30 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
 
 # ═══════════════════════════════════════════════
 #  HTTP HANDLER
+def imdb_proxy_req(endpoint: str):
+    """
+    Proxy request to https://imdb.iamidiotareyoutoo.com with caching.
+    """
+    if not endpoint.startswith("/"):
+        endpoint = "/" + endpoint
+    
+    cache_key = f"imdb_proxy:{endpoint}"
+    cached = imdb_cache.get(cache_key)
+    if cached:
+        return cached
+
+    target = f"https://imdb.iamidiotareyoutoo.com{endpoint}"
+    try:
+        r = requests.get(target, headers=HEADERS, timeout=10)
+        ttl = 3600 if "search" in endpoint else 86400
+        result = (r.content, r.status_code, r.headers.get("Content-Type", "application/json"))
+        if r.status_code == 200:
+            imdb_cache.set(cache_key, result, ttl=ttl)
+        return result
+    except Exception as e:
+        return json.dumps({"error": str(e)}).encode(), 500, "application/json"
+
+
 # ═══════════════════════════════════════════════
 class handler(BaseHTTPRequestHandler):
 
@@ -174,15 +198,21 @@ def do_GET(self):
         # ── imdb-proxy HARUS duluan ──
         if "/api/imdb-proxy" in path:
             endpoint = (params.get("endpoint", [None])[0] or "").strip()
+            if not endpoint:
+                # Extract from path: /api/imdb-proxy/search?q=foo -> /search?q=foo
+                match = re.search(r"/api/imdb-proxy(/.*)", parsed.path)
+                if match:
+                    endpoint = match.group(1)
+                    if parsed.query:
+                        endpoint = f"{endpoint}?{parsed.query}"
+            
             if not endpoint or not endpoint.startswith("/"):
                 return self.send_json({"error": "endpoint tidak valid"}, 400)
             try:
-                target = f"https://imdb.iamidiotareyoutoo.com{endpoint}"
-                r = requests.get(target, headers=HEADERS, timeout=8)
-                body = r.content
-                self.send_response(r.status_code)
+                body, code, ct = imdb_proxy_req(endpoint)
+                self.send_response(code)
                 self._cors()
-                self.send_header("Content-Type", r.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Type", ct)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)

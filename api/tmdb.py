@@ -193,9 +193,78 @@ def build_stream_payload(tmdb_id, media_type="movie", season=1, episode=1, proxy
     }
 
 
+def tmdb_proxy_req(endpoint: str, query_params: dict):
+    """
+    Proxy request to TMDB API with server-side TMDB_API_KEY.
+    """
+    if not endpoint.startswith("/"):
+        endpoint = "/" + endpoint
+
+    # Clean query parameters
+    cleaned_params = {}
+    for k, v in query_params.items():
+        if k == "endpoint":
+            continue
+        if isinstance(v, list):
+            cleaned_params[k] = v[0] if v else ""
+        else:
+            cleaned_params[k] = str(v)
+
+    # Cache key
+    params_str = json.dumps(cleaned_params, sort_keys=True)
+    cache_key = f"tmdb_proxy:{endpoint}:{params_str}"
+    
+    cached = tmdb_cache.get(cache_key)
+    if cached:
+        return cached
+
+    url = f"{TMDB_BASE}{endpoint}"
+    q = {"api_key": TMDB_API_KEY, "language": "id-ID"}
+    q.update(cleaned_params)
+
+    try:
+        r = requests.get(url, params=q, timeout=10)
+        result = (r.content, r.status_code, r.headers.get("Content-Type", "application/json"))
+        ttl = 3600 if "search" in endpoint or "discover" in endpoint else 86400
+        if r.status_code == 200:
+            tmdb_cache.set(cache_key, result, ttl=ttl)
+        return result
+    except Exception as e:
+        return json.dumps({"error": str(e)}).encode(), 500, "application/json"
+
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        params = parse_qs(urlparse(self.path).query)
+        parsed = urlparse(self.path)
+        path = parsed.path
+        params = parse_qs(parsed.query)
+
+        # ── tmdb-proxy ──
+        if "/api/tmdb-proxy" in path:
+            endpoint = (params.get("endpoint", [None])[0] or "").strip()
+            if not endpoint:
+                import re as _re
+                match = _re.search(r"/api/tmdb-proxy(/.*)", path)
+                if match:
+                    endpoint = match.group(1)
+            
+            if not endpoint or not endpoint.startswith("/"):
+                return self._send_json({"error": "endpoint tidak valid"}, 400)
+                
+            try:
+                body, code, ct = tmdb_proxy_req(endpoint, params)
+                self.send_response(code)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
         tmdb_id = (params.get("id", [None])[0] or params.get("tmdb_id", [None])[0] or "").strip()
         media_type = (params.get("type", ["movie"])[0] or "movie").strip()
         season = int(params.get("s", params.get("season", ["1"]))[0] or 1)

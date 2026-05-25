@@ -1,8 +1,10 @@
-const CACHE_NAME = "StreamVault-v1.3";
+const CACHE_NAME = "StreamVault-v1.4";
 
 const PRECACHE = [
   "/extractor.html",
   "/manifest.json",
+  "/css/style.css",
+  "/js/app.js",
   "https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap",
   "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js",
 ];

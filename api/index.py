@@ -61,6 +61,14 @@ class handler(BaseHTTPRequestHandler):
         if path == "/api/imdb":
             return self._dispatch_module("imdb", "GET")
 
+        # /api/imdb-proxy
+        if path == "/api/imdb-proxy" or path.startswith("/api/imdb-proxy/"):
+            return self._dispatch_module("imdb", "GET")
+
+        # /api/tmdb-proxy
+        if path == "/api/tmdb-proxy" or path.startswith("/api/tmdb-proxy/"):
+            return self._dispatch_module("tmdb", "GET")
+
         # /api/proxy
         if path == "/api/proxy":
             return self._dispatch_module("imdb", "GET")
