@@ -203,7 +203,7 @@ def tmdb_proxy_req(endpoint: str, query_params: dict):
     # Clean query parameters
     cleaned_params = {}
     for k, v in query_params.items():
-        if k == "endpoint":
+        if k in ("endpoint", "api_key"):
             continue
         if isinstance(v, list):
             cleaned_params[k] = v[0] if v else ""
