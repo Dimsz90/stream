@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+
+# Local dev
+.env
+dev.py
+tet.py
+*.log
+
+# Railway files (tidak diperlukan di Fly.io)
+railway.json
+DEPLOY_RAILWAY.md
+
+# Docs
+*.md
+!README.md
+
+# OS
+.DS_Store
+Thumbs.db
