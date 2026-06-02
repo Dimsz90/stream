@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for streaming-dimas on 2026-06-02T11:15:45+07:00
+# fly.toml app configuration file generated for stream-2tym9w on 2026-06-02T04:23:12Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -9,7 +9,7 @@ primary_region = 'sin'
 [build]
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8079
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
