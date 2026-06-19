@@ -1380,7 +1380,8 @@ async function startStream() {
     `${title}${selectedItem["#YEAR"] ? " ("+selectedItem["#YEAR"]+")" : ""}`;
 
   try {
-    const res  = await appFetch(`${STREAM_API}/api/imdb?id=${id}&action=stream`);
+    const tmdbParam = selectedItem._tmdb_id ? `&tmdb_id=${encodeURIComponent(selectedItem._tmdb_id)}` : "";
+    const res  = await appFetch(`${STREAM_API}/api/imdb?id=${id}&action=stream${tmdbParam}`);
     const data = await res.json();
     
     updateServerTabs(data, id);
@@ -1429,11 +1430,15 @@ async function startTvEpisodeStream(season, episode) {
 
   try {
     const imdbId = selectedItem["#IMDB_ID"] || "";
+    const tmdbParam = tmdbId ? `&tmdb_id=${encodeURIComponent(tmdbId)}` : "";
     const q = imdbId
       ? new URLSearchParams({id: imdbId, action: "stream", s: season, e: episode})
       : new URLSearchParams({id: tmdbId, type: "tv", s: season, e: episode});
     const endpoint = imdbId ? "imdb" : "tmdb-stream";
-    const res = await appFetch(`${STREAM_API}/api/${endpoint}?${q}`);
+    const url = imdbId
+      ? `${STREAM_API}/api/${endpoint}?${q}${tmdbParam}`
+      : `${STREAM_API}/api/${endpoint}?${q}`;
+    const res = await appFetch(url);
     const data = await res.json();
     
     if (data.totalEpisodes) currentPlayback.totalEpisodes = data.totalEpisodes;

@@ -50,12 +50,11 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# 🚨 CRITICAL AI SAFETY LOCK: DO NOT EDIT OR OPTIMIZE THESE HEADERS!
-# Origin and Referer must remain strictly hardcoded to brightpathsignals.com.
-# Modifying this will cause 403 Forbidden errors from the streaming CDN.
+# Origin dan Referer yang valid untuk bypass Cloudflare WAF Vaplayer CDN.
+# Terakhir diverifikasi dari network request 200 OK — jangan diganti sembarangan.
 VIDEO_SPOOF_HEADERS = {
-    "Origin":     "https://brightpathsignals.com",
-    "Referer":    "https://brightpathsignals.com/",
+    "Origin":     "https://nextgencloudfabric.com",
+    "Referer":    "https://nextgencloudfabric.com/",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
 }

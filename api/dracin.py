@@ -68,9 +68,9 @@ PLATFORMS = {
         "label": "Semua",
         "icon":  "",
         "_engine": "aggregate",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
     },
     "dramabox": {
         "prefix":   os.environ.get("DRAMABOX_PREFIX", "/dramaboxtempek"),
@@ -95,22 +95,22 @@ PLATFORMS = {
         "ch_id":        "chapterId",
         "ch_index":     "chapterIndex",
         "ch_pay":       "isPay",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
     },
     "reelshort": {
         "label":    "ReelShort",
         "icon":     "🎬",
         "_engine": "reelshort",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
-        "ttl_video": 1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
+        "ttl_video": 86400,
     },
     # ── Melolo — pakai Captain API v1 (endpoint berbeda) ──────────────────────
     # Tidak pakai prefix/dracin-style fetch, ditangani oleh _melolo_fetch()
@@ -118,54 +118,54 @@ PLATFORMS = {
         "label": "Melolo",
         "icon":  "🎭",
         "_engine": "melolo",   # flag: pakai engine captain-v1
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_ep":    1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_ep":    86400,
     },
     "cubetv": {
         "label": "CubeTV",
         "icon":  "📺",
         "_engine": "cubetv",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
-        "ttl_video": 1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
+        "ttl_video": 86400,
     },
     "dramanova": {
         "label": "Dramanova",
         "icon":  "",
         "_engine": "dramanova",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
-        "ttl_video": 1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
+        "ttl_video": 86400,
     },
     "shortwave": {
         "label": "ShortWave",
         "icon":  "",
         "_engine": "shortwave",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
-        "ttl_video": 1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
+        "ttl_video": 86400,
     },
     "pinedrama": {
         "label": "Pinedrama",
         "icon":  "🌲",
         "_engine": "pinedrama",
-        "ttl_home":  1800,
-        "ttl_rank":  1800,
-        "ttl_search":1800,
-        "ttl_detail":1800,
-        "ttl_ep":    1800,
-        "ttl_video": 1800,
+        "ttl_home":  86400,
+        "ttl_rank":  86400,
+        "ttl_search":86400,
+        "ttl_detail":86400,
+        "ttl_ep":    86400,
+        "ttl_video": 86400,
     },
 }
 
@@ -182,10 +182,10 @@ def _melolo_headers() -> dict:
     h["Accept"] = "application/json"
     return h
 
-def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int = 1800):
+def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int = 86400):
     """Fetch dari Captain API v1 (melolo, dll) dengan cache."""
-    # Enforce 30 mins (1800 seconds) caching for all short drama API requests
-    ttl = 1800
+    # Enforce 24 hours (86400 seconds) caching for all short drama API requests
+    ttl = 86400
     cache_key = f"melolo:{platform}:{path}:{json.dumps(params or {}, sort_keys=True)}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -207,7 +207,7 @@ def _melolo_fetch(platform: str, path: str, params: dict | None = None, ttl: int
         return None
 
 
-def _cubetv_fetch(path: str, params: dict | None = None, ttl: int = 1800):
+def _cubetv_fetch(path: str, params: dict | None = None, ttl: int = 86400):
     """Fetch dari Captain API untuk CubeTV."""
     if params and "lang" in params:
         params = dict(params)
@@ -224,9 +224,9 @@ def _pinedrama_headers() -> dict:
     return h
 
 
-def _pinedrama_fetch(path: str, params: dict | None = None, ttl: int = 1800):
-    # Enforce 30 mins (1800 seconds) caching as requested
-    ttl = 1800
+def _pinedrama_fetch(path: str, params: dict | None = None, ttl: int = 86400):
+    # Enforce 24 hours (86400 seconds) caching as requested
+    ttl = 86400
     cache_key = f"dracin:pinedrama:{path}:{json.dumps(params or {}, sort_keys=True)}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -301,13 +301,13 @@ def _pinedrama_get_cursor(category_id: str, page: int, lang: str) -> str | None:
     if prev_cursor:
         params["cursor"] = prev_cursor
         
-    raw = _pinedrama_fetch("/api/drama/center", params, ttl=1800)
+    raw = _pinedrama_fetch("/api/drama/center", params, ttl=86400)
     if not raw or raw.get("code") != 0:
         return None
         
     next_cursor = raw.get("data", {}).get("nextCursor")
     if next_cursor:
-        _cache.set(cache_key, next_cursor, ttl=1800)
+        _cache.set(cache_key, next_cursor, ttl=86400)
         return next_cursor
         
     return None
@@ -508,7 +508,7 @@ def _melolo_extract_list(data) -> list:
     return []
 
 
-def _dramanova_fetch(path: str, params: dict | None = None, ttl: int = 1800):
+def _dramanova_fetch(path: str, params: dict | None = None, ttl: int = 86400):
     """Fetch Captain Dramanova endpoints."""
     return _melolo_fetch("dramanova", path, params=params, ttl=ttl)
 
@@ -591,7 +591,7 @@ def _dramanova_norm_episode(raw: dict, idx: int) -> dict:
     }
 
 
-def _reelshort_fetch(path: str, params: dict | None = None, ttl: int = 1800):
+def _reelshort_fetch(path: str, params: dict | None = None, ttl: int = 86400):
     """Fetch Captain ReelShort endpoints."""
     return _melolo_fetch("reelshort", path, params=params, ttl=ttl)
 
@@ -712,7 +712,7 @@ def get_reelshort_video(book_id: str, chapter_id: str, lang="in") -> dict | None
     }
 
 
-def _shortwave_fetch(path: str, params: dict | None = None, ttl: int = 1800):
+def _shortwave_fetch(path: str, params: dict | None = None, ttl: int = 86400):
     """Fetch Captain ShortWave endpoints."""
     return _melolo_fetch("shortwave", path, params=params, ttl=ttl)
 
@@ -1010,7 +1010,7 @@ def get_cubetv_video(video_id: str, episode_id: str, lang="in") -> dict | None:
         "_raw":        data,
     }
 
-_cache = TTLCache(default_ttl=1800, max_size=1000)
+_cache = TTLCache(default_ttl=86400, max_size=1000)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1022,13 +1022,13 @@ def _headers() -> dict:
     return h
 
 
-def _fetch(platform: str, endpoint: str, params: dict | None = None, ttl: int = 1800):
+def _fetch(platform: str, endpoint: str, params: dict | None = None, ttl: int = 86400):
     """
     Fetch dari API dengan caching in-memory.
     endpoint : path setelah prefix, misal '/api/home'
     """
-    # Enforce 30 mins (1800 seconds) caching for all short drama API requests
-    ttl = 1800
+    # Enforce 24 hours (86400 seconds) caching for all short drama API requests
+    ttl = 86400
     cfg = PLATFORMS.get(platform)
     if not cfg:
         return None
@@ -2528,7 +2528,7 @@ def get_languages(platform="dramabox") -> list | None:
         return None
 
     if cfg.get("_engine") == "cubetv":
-        raw = _cubetv_fetch("/languages", ttl=1800)
+        raw = _cubetv_fetch("/languages", ttl=86400)
         if not isinstance(raw, dict):
             return None
         raw_langs = raw.get("data", [])
@@ -2538,12 +2538,12 @@ def get_languages(platform="dramabox") -> list | None:
         return [{"code": lang.get("key", ""), "name": lang.get("name", "")} for lang in raw_langs]
 
     if cfg.get("_engine") == "pinedrama":
-        raw = _pinedrama_fetch("/api/languages", ttl=1800)
+        raw = _pinedrama_fetch("/api/languages", ttl=86400)
         if not raw or not isinstance(raw, dict):
             return None
         return raw.get("data", {}).get("languages", [])
 
-    raw = _fetch(platform, "/api/languages", ttl=1800)  # cache 30 mins
+    raw = _fetch(platform, "/api/languages", ttl=86400)  # cache 24 hours
     if not raw or raw.get("code", -1) != 0:
         return None
 
@@ -2556,7 +2556,7 @@ def get_categories(platform="pinedrama", lang="in") -> list | None:
         return None
     if cfg.get("_engine") == "pinedrama":
         pinedrama_lang = "id" if lang in ("in", "id") else lang
-        raw = _pinedrama_fetch("/api/drama/categories", {"language": pinedrama_lang}, ttl=1800)
+        raw = _pinedrama_fetch("/api/drama/categories", {"language": pinedrama_lang}, ttl=86400)
         if not raw or not isinstance(raw, dict):
             return None
         return raw.get("data", [])

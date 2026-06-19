@@ -27,7 +27,7 @@ REMOTE_PROXY_CACHE = {}
 REMOTE_PROXY_TTL = 60 * 60 * 4
 # Hardcoded hosts dihapus — spoof origin sekarang dynamic
 # berdasarkan apakah URL berasal dari Vaplayer CDN
-BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
+BRIGHTPATH_ORIGIN = "https://nextgencloudfabric.com"
 
 # Indikator bahwa URL berasal dari Vaplayer CDN dan perlu di-spoof
 # Deteksi via path pattern, bukan whitelist host
@@ -821,6 +821,7 @@ def imdb_api():
 
     raw_id = request.args.get("id", "").strip()
     action = request.args.get("action", "info").strip()
+    tmdb_id = request.args.get("tmdb_id", "").strip() or None
 
     if not raw_id:
         return jsonify({"error": "Parameter ?id= diperlukan"}), 400
@@ -838,9 +839,9 @@ def imdb_api():
             season = request.args.get("s") or request.args.get("season") or "1"
             episode = request.args.get("e") or request.args.get("episode") or "1"
             if hasattr(mod, "get_fast_streams"):
-                raw_urls = mod.get_fast_streams(imdb_id, media_type, season, episode)
+                raw_urls = mod.get_fast_streams(imdb_id, media_type, season, episode, tmdb_id=tmdb_id)
             else:
-                raw_url = mod.get_fast_stream(imdb_id, media_type, season, episode)
+                raw_url = mod.get_fast_stream(imdb_id, media_type, season, episode, tmdb_id=tmdb_id)
                 raw_urls = [raw_url] if raw_url else []
             raw_url = raw_urls[0] if raw_urls else None
             if raw_url:

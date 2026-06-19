@@ -226,6 +226,157 @@ video{
   .drama-meta{font-size:11px}
   .watch-card{left:12px;right:12px;bottom:60px}
 }
+
+/* ── Search Sheet ── */
+.search-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 70;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s;
+  display: none;
+}
+.search-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.search-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 71;
+  height: 80svh;
+  max-height: 520px;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom,0px));
+  background: rgba(10,10,10,0.98);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-width: 1px 0 0;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -24px 70px rgba(0,0,0,0.6);
+  transform: translateY(110%);
+  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+}
+.search-sheet.open {
+  transform: translateY(0);
+}
+.search-input-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.search-input-wrap input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+.search-input-wrap input:focus {
+  border-color: #e50914;
+}
+.search-input-wrap select {
+  padding: 0 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: #0f1113;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  max-width: 130px;
+}
+.search-input-wrap button {
+  background: #e50914;
+  border: none;
+  color: #fff;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity .15s;
+}
+.search-input-wrap button:active {
+  opacity: 0.8;
+}
+.search-results-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search-results-list::-webkit-scrollbar {
+  display: none;
+}
+.search-result-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: all .2s;
+}
+.search-result-item:hover, .search-result-item:active {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.1);
+}
+.search-result-poster {
+  width: 50px;
+  height: 70px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #111;
+  flex-shrink: 0;
+}
+.search-result-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.search-result-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'DM Sans', sans-serif;
+}
+.search-result-meta {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Sans', sans-serif;
+}
+.search-result-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.8);
+  text-transform: uppercase;
+}
 </style>
 </head>
 <body>
@@ -359,6 +510,34 @@ video{
   </div>
 </div>
 
+<!-- Search Overlay Sheet -->
+<div class="search-backdrop" id="searchBackdrop"></div>
+<section class="search-sheet" id="searchSheet" aria-hidden="true">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div style="font-size:18px;font-weight:800;color:#fff;font-family:'DM Sans',sans-serif;">Cari Drama Pendek</div>
+    <button id="searchClose" type="button" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#fff;font-size:20px;line-height:1;cursor:pointer;">&times;</button>
+  </div>
+  
+  <div class="search-input-wrap">
+    <input id="drSearchQuery" type="text" placeholder="Masukkan judul drama...">
+    <select id="drSearchPlatform">
+      <option value="all">Semua Platform</option>
+      <option value="dramabox">DramaBox</option>
+      <option value="reelshort">ReelShort</option>
+      <option value="melolo">Melolo</option>
+      <option value="shortwave">ShortWave</option>
+      <option value="cubetv">CubeTV</option>
+      <option value="dramanova">Dramanova</option>
+      <option value="pinedrama">Pinedrama</option>
+    </select>
+    <button id="drSearchSubmit" type="button">CARI</button>
+  </div>
+
+  <div class="search-results-list" id="drSearchResults">
+    <div style="color:rgba(255,255,255,.4);text-align:center;padding-top:40px;font-size:14px;font-family:'DM Sans',sans-serif;">Masukkan judul drama di atas untuk mulai mencari.</div>
+  </div>
+</section>
+
 <script>
 const P=new URLSearchParams(location.search);
 const bookId=P.get('id');
@@ -372,7 +551,7 @@ const PLATFORM_LABELS={dramabox:'DramaBox',reelshort:'ReelShort',melolo:'Melolo'
 let episodes=[],curIdx=0,hls=null,hideTimer=null,nextTimer=null,spinnerTimer=null,playSeq=0,feedObserver=null,feedLock=false;
 const videoUrlCache=new Map(),videoUrlInflight=new Map();
 const preparedUrls=new Map(),prewarmUrls=new Set(),prewarmInflight=new Set();
-const PREFETCH_AHEAD=3,PREFETCH_BEHIND=1;
+const PREFETCH_AHEAD=5,PREFETCH_BEHIND=2;
 
 const watchFeed=document.getElementById('watchFeed');
 const playerWrap=document.getElementById('playerWrap');
@@ -713,18 +892,106 @@ async function preloadNext(){if(curIdx>=episodes.length-1)return;preloadEpisodeU
 
 function isHlsUrl(url){return /\.m3u8(?:[?#]|$)/i.test(String(url||''))}
 
+async function prewarmHls(playlistUrl, maxSegments = 5) {
+  try {
+    const res = await fetch(playlistUrl, { cache: 'force-cache' });
+    if (!res.ok) return;
+    const text = await res.text();
+    
+    // Check if it's a multivariant (master) playlist
+    if (text.includes('#EXT-X-STREAM-INF')) {
+      const lines = text.split('\n');
+      let variantUrl = '';
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXT-X-STREAM-INF')) {
+          for (let j = i + 1; j < lines.length; j++) {
+            const nextLine = lines[j].trim();
+            if (nextLine && !nextLine.startsWith('#')) {
+              variantUrl = nextLine;
+              break;
+            }
+          }
+          if (variantUrl) break;
+        }
+      }
+      
+      if (variantUrl) {
+        let resolvedVariantUrl = variantUrl;
+        if (!variantUrl.startsWith('http://') && !variantUrl.startsWith('https://')) {
+          resolvedVariantUrl = new URL(variantUrl, playlistUrl).href;
+        }
+        await prewarmHls(resolvedVariantUrl, maxSegments);
+        return;
+      }
+    }
+    
+    // Media playlist, extract segments
+    const lines = text.split('\n');
+    const segments = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line && !line.startsWith('#')) {
+        segments.push(line);
+        if (segments.length >= maxSegments) break;
+      }
+    }
+    
+    const fetchPromises = segments.map(seg => {
+      let segUrl = seg;
+      if (!seg.startsWith('http://') && !seg.startsWith('https://')) {
+        segUrl = new URL(seg, playlistUrl).href;
+      }
+      return fetch(segUrl, { cache: 'force-cache' }).catch(()=>{});
+    });
+    
+    await Promise.all(fetchPromises);
+    console.log('[prewarm] HLS segments cached:', segments.length, playlistUrl);
+  } catch (e) {
+    console.warn('[prewarm] HLS prewarm failed:', e);
+  }
+}
+
 async function prewarmUrl(url){
   if(!url||prewarmUrls.has(url)||prewarmInflight.has(url))return;
   prewarmInflight.add(url);
   try{
     if(isHlsUrl(url)){
-      const u=new URL(url,location.href);const sameOrigin=u.origin===location.origin;
-      const opts={cache:'force-cache',credentials:sameOrigin?'same-origin':'omit'};
-      if(sameOrigin)opts.headers=withSubscriptionHeaders();
-      try{const r=await fetch(url,opts);if(r.ok)await r.text()}catch(e){if(!sameOrigin)await fetch(url,{cache:'force-cache',mode:'no-cors',credentials:'omit'}).catch(()=>{})}
+      await prewarmHls(url, 5);
     }else{
-      const preview=document.createElement('video');preview.preload='metadata';preview.muted=true;preview.playsInline=true;preview.style.display='none';preview.src=url;document.body.appendChild(preview);
-      await new Promise(resolve=>{const done=()=>{preview.removeAttribute('src');preview.load();preview.remove();resolve()};preview.onloadedmetadata=done;preview.onerror=done;setTimeout(done,3500)});
+      // Aggressive prewarming for MP4: fetch first 10MB
+      try {
+        const res = await fetch(url, {
+          headers: { 'Range': 'bytes=0-10485759' },
+          cache: 'force-cache'
+        });
+        if (res.ok) {
+          await res.arrayBuffer(); // Consume to cache
+          console.log('[prewarm] MP4 first 10MB cached:', url);
+        } else {
+          throw new Error('Range fetch failed');
+        }
+      } catch (err) {
+        // Fallback to video element prewarming with preload auto
+        const preview=document.createElement('video');
+        preview.preload='auto';
+        preview.muted=true;
+        preview.playsInline=true;
+        preview.style.display='none';
+        preview.src=url;
+        document.body.appendChild(preview);
+        await new Promise(resolve=>{
+          const done=()=>{
+            preview.removeAttribute('src');
+            preview.load();
+            preview.remove();
+            resolve();
+          };
+          preview.oncanplaythrough=done;
+          preview.onerror=done;
+          setTimeout(done,5000);
+        });
+      }
     }
     prewarmUrls.add(url);
   }catch(e){console.warn('[prewarm] gagal:',e)}finally{prewarmInflight.delete(url)}
@@ -812,11 +1079,35 @@ function loadHlsChain(rawUrl){
   if(hls)hls.destroy();
   showSpinner();
   if(Hls.isSupported()){
-    hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,startLevel:-1,capLevelToPlayerSize:true});
+    hls=new Hls({
+      maxBufferLength: 120, // Buffer up to 120 seconds ahead
+      maxMaxBufferLength: 300,
+      maxBufferSize: 120 * 1024 * 1024, // Up to 120MB buffer size
+      enableWorker: true, // Use web worker for demuxing
+      startLevel: -1, // Start with auto quality
+      capLevelToPlayerSize: true
+    });
     hls.loadSource(rawUrl);hls.attachMedia(vid);
     hls.on(Hls.Events.MANIFEST_PARSED,()=>playSafely());
     hls.on(Hls.Events.FRAG_BUFFERED,()=>hideSpinner());
-    hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){hideSpinner();console.error('[HLS] Fatal Error',d)}});
+    hls.on(Hls.Events.ERROR,(_,d)=>{
+      if(d.fatal){
+        switch (d.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.warn('[HLS] Network error, trying to recover...', d);
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.warn('[HLS] Media error, trying to recover...', d);
+            hls.recoverMediaError();
+            break;
+          default:
+            hideSpinner();
+            console.error('[HLS] Fatal Error',d);
+            break;
+        }
+      }
+    });
   }else{vid.src=rawUrl;playSafely()}
 }
 
@@ -1065,6 +1356,199 @@ async function init(){
       if(titleEl)titleEl.textContent='Error: '+(j.message||'Unknown');
     }
   }catch(e){console.error(e);if(titleEl)titleEl.textContent='Gagal memuat data'}
+}
+
+/* ── Search Sheet Logic ── */
+const searchBackdrop = document.getElementById('searchBackdrop');
+const searchSheet = document.getElementById('searchSheet');
+const searchClose = document.getElementById('searchClose');
+const drSearchQuery = document.getElementById('drSearchQuery');
+const drSearchPlatform = document.getElementById('drSearchPlatform');
+const drSearchSubmit = document.getElementById('drSearchSubmit');
+const drSearchResults = document.getElementById('drSearchResults');
+
+function setSearchSheet(open) {
+  if (open) {
+    searchBackdrop.style.display = 'block';
+    searchBackdrop.offsetHeight; // Force reflow
+    searchBackdrop.classList.add('open');
+    searchSheet.classList.add('open');
+    searchSheet.setAttribute('aria-hidden', 'false');
+    drSearchQuery.focus();
+  } else {
+    searchBackdrop.classList.remove('open');
+    searchSheet.classList.remove('open');
+    searchSheet.setAttribute('aria-hidden', 'true');
+    setTimeout(() => {
+      if (!searchBackdrop.classList.contains('open')) {
+        searchBackdrop.style.display = 'none';
+      }
+    }, 220);
+  }
+}
+
+if (searchClose) searchClose.onclick = () => setSearchSheet(false);
+if (searchBackdrop) searchBackdrop.onclick = () => setSearchSheet(false);
+
+const navDiscover = document.getElementById('navDiscover');
+if (navDiscover) {
+  navDiscover.onclick = () => {
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    navDiscover.classList.add('active');
+    setSearchSheet(true);
+  };
+}
+
+const navHome = document.getElementById('navHome');
+if (navHome) {
+  navHome.onclick = () => {
+    window.location.href = '/?tab=dracin';
+  };
+  navHome.classList.remove('active'); // Remove default active state since we're in player
+}
+
+// Pre-select current platform
+if (drSearchPlatform && typeof platform !== 'undefined') {
+  drSearchPlatform.value = platform;
+}
+
+let drSearchPage = 1;
+let drSearchLoading = false;
+let drSearchHasMore = true;
+let currentSearchQuery = '';
+let currentSearchPlatform = 'all';
+
+async function fetchMoreDracinSearch(reset = false) {
+  if (drSearchLoading) return;
+  drSearchLoading = true;
+  
+  if (reset) {
+    drSearchResults.innerHTML = '<div style="color:rgba(255,255,255,.6);text-align:center;padding-top:40px;"><div class="spinner show" style="position:relative;top:auto;left:auto;transform:none;margin:20px auto 0;"></div><p style="margin-top:10px;font-size:13px;font-family:\'DM Sans\',sans-serif;">Mencari...</p></div>';
+  } else {
+    // Append a small loading indicator at the bottom
+    const loadIndicator = document.createElement('div');
+    loadIndicator.id = 'drSearchLoadingIndicator';
+    loadIndicator.style.cssText = 'color:rgba(255,255,255,.4);text-align:center;padding:12px;font-size:13px;font-family:\'DM Sans\',sans-serif;width:100%;';
+    loadIndicator.innerHTML = 'Memuat lebih banyak...';
+    drSearchResults.appendChild(loadIndicator);
+  }
+
+  try {
+    const token = sessionStorage.getItem('dramanova_token');
+    const headers = token ? { 'X-Dramanova-Token': token } : {};
+    let reqUrl = `/api/dracin/search?platform=${encodeURIComponent(currentSearchPlatform)}&keyword=${encodeURIComponent(currentSearchQuery)}&page=${drSearchPage}&lang=${encodeURIComponent(langPref)}`;
+    
+    if (token) {
+      const u = new URL(reqUrl, location.origin);
+      u.searchParams.set('dramanova_token', token);
+      reqUrl = u.pathname + u.search + u.hash;
+    }
+    
+    const res = await appFetch(reqUrl, { headers });
+    const j = await res.json();
+    
+    // Remove loading indicator if it was appended
+    const indicator = document.getElementById('drSearchLoadingIndicator');
+    if (indicator) indicator.remove();
+
+    if (j.status === 'success') {
+      const books = j.data?.books || [];
+      
+      if (reset) {
+        if (books.length === 0) {
+          drSearchResults.innerHTML = '<div style="color:rgba(255,255,255,.4);text-align:center;padding-top:40px;font-size:14px;font-family:\'DM Sans\',sans-serif;">Tidak ditemukan drama dengan judul tersebut.</div>';
+          drSearchHasMore = false;
+          drSearchLoading = false;
+          return;
+        }
+        drSearchResults.innerHTML = '';
+      }
+
+      if (books.length === 0) {
+        drSearchHasMore = false;
+      } else {
+        books.forEach(book => {
+          const item = document.createElement('div');
+          item.className = 'search-result-item';
+          
+          const bId = book.bookId || book.id || '';
+          const bName = book.bookName || book.name || 'Drama';
+          const bCover = book.coverWap || book.cover || book.coverUrl || '';
+          const bPlat = book.platform || currentSearchPlatform;
+          
+          item.innerHTML = `
+            <img class="search-result-poster" src="${bCover || 'https://via.placeholder.com/150x210?text=No+Cover'}" onerror="this.src='https://via.placeholder.com/150x210?text=No+Cover'" alt="">
+            <div class="search-result-info">
+              <div class="search-result-title">${escapeHtml(bName)}</div>
+              <div class="search-result-meta">
+                <span class="search-result-badge">${bPlat}</span>
+                <span>${book.chapterCount || book.episodeCount || '?'} Ep</span>
+              </div>
+            </div>
+          `;
+          
+          item.onclick = () => {
+            setSearchSheet(false);
+            window.location.href = `dracin-player.html?id=${encodeURIComponent(bId)}&platform=${encodeURIComponent(bPlat)}&cover=${encodeURIComponent(bCover)}&lang=${encodeURIComponent(langPref)}`;
+          };
+          
+          drSearchResults.appendChild(item);
+        });
+        
+        // If we get fewer results than standard page size (usually 10-15), no more pages
+        if (books.length < 10) {
+          drSearchHasMore = false;
+        }
+      }
+    } else {
+      if (reset) {
+        drSearchResults.innerHTML = `<div style="color:#ff9b9b;text-align:center;padding-top:40px;font-size:14px;font-family:\'DM Sans\',sans-serif;">Error: ${escapeHtml(j.message || 'Unknown')}</div>`;
+      }
+      drSearchHasMore = false;
+    }
+  } catch (e) {
+    console.error('[Search] Failed:', e);
+    if (reset) {
+      drSearchResults.innerHTML = '<div style="color:#ff9b9b;text-align:center;padding-top:40px;font-size:14px;font-family:\'DM Sans\',sans-serif;">Gagal memuat hasil pencarian.</div>';
+    }
+    drSearchHasMore = false;
+  } finally {
+    drSearchLoading = false;
+  }
+}
+
+function doDracinSearch() {
+  const query = drSearchQuery.value.trim();
+  const searchPlat = drSearchPlatform.value || 'all';
+  if (!query) return;
+  
+  currentSearchQuery = query;
+  currentSearchPlatform = searchPlat;
+  drSearchPage = 1;
+  drSearchHasMore = true;
+  
+  fetchMoreDracinSearch(true);
+}
+
+if (drSearchResults) {
+  drSearchResults.addEventListener('scroll', () => {
+    if (drSearchLoading || !drSearchHasMore) return;
+    
+    const threshold = 60; // Fetch when 60px from bottom
+    const isNearBottom = drSearchResults.scrollHeight - drSearchResults.scrollTop - drSearchResults.clientHeight < threshold;
+    
+    if (isNearBottom) {
+      drSearchPage++;
+      fetchMoreDracinSearch(false);
+    }
+  });
+}
+
+if (drSearchSubmit) drSearchSubmit.onclick = doDracinSearch;
+if (drSearchQuery) {
+  drSearchQuery.onkeydown = (e) => {
+    if (e.key === 'Enter') doDracinSearch();
+  };
 }
 
 if(bookId)init();

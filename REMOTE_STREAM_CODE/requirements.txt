@@ -1,0 +1,6 @@
+flask
+flask-cors
+requests
+yt-dlp
+beautifulsoup4
+curl_cffi>=0.7.4

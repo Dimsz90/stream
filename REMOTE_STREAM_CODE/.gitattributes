@@ -1,0 +1,16 @@
+# Default
+* text=auto
+
+# Paksa LF untuk file penting
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+
+# Binary 
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.mp4 binary

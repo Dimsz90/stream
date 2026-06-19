@@ -17,7 +17,7 @@ from lib import vidgf
 import traceback
 
 
-BRIGHTPATH_ORIGIN = "https://brightpathsignals.com"
+BRIGHTPATH_ORIGIN = "https://nextgencloudfabric.com"
 
 # tmstrd.justhd.tv memakai segment .html dan memblokir server-side proxy
 DEPRIORITIZED_HOSTS = {"tmstrd.justhd.tv"}
@@ -113,45 +113,67 @@ def get_movie_info(imdb_id: str) -> dict:
     return info
 
 
-def get_fast_streams(imdb_id: str, media_type: str = "movie", season=None, episode=None):
-    cache_key = f"streams:{imdb_id}:{media_type}"
-    params = {"imdb": imdb_id, "type": media_type}
+def get_fast_streams(imdb_id: str, media_type: str = "movie", season=None, episode=None, tmdb_id=None):
+    cache_key = f"streams:{tmdb_id or imdb_id}:{media_type}"
     if media_type == "tv" and season and episode:
         cache_key += f":s{season}:e{episode}"
-        params["s"] = season
-        params["e"] = episode
 
     cached = imdb_cache.get(cache_key)
     if cached:
         return cached
 
     api_url = "https://streamdata.vaplayer.ru/api.php"
-    try:
-        param_attempts = [params]
-        if media_type == "tv" and season and episode:
-            param_attempts.append({
-                "imdb": imdb_id,
-                "type": media_type,
-                "season": season,
-                "episode": episode,
-            })
+    # Spoof headers yang sudah diverifikasi 200 OK
+    spoof_headers = {
+        "Origin":     "https://nextgencloudfabric.com",
+        "Referer":    "https://nextgencloudfabric.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    }
 
+    # Buat daftar attempt: prioritas tmdb param, fallback imdb param
+    param_attempts = []
+
+    if tmdb_id:
+        # Attempt 1: pakai tmdb param (format yang berhasil 200 OK)
+        p = {"tmdb": str(tmdb_id), "type": media_type}
+        if media_type == "tv" and season and episode:
+            p["s"] = season
+            p["e"] = episode
+        param_attempts.append(p)
+        # Attempt 2: tmdb + season/episode versi alternatif
+        if media_type == "tv" and season and episode:
+            param_attempts.append({"tmdb": str(tmdb_id), "type": media_type,
+                                    "season": season, "episode": episode})
+
+    # Fallback: pakai imdb param
+    p_imdb = {"imdb": imdb_id, "type": media_type}
+    if media_type == "tv" and season and episode:
+        p_imdb["s"] = season
+        p_imdb["e"] = episode
+    param_attempts.append(p_imdb)
+    if media_type == "tv" and season and episode:
+        param_attempts.append({"imdb": imdb_id, "type": media_type,
+                                "season": season, "episode": episode})
+
+    try:
         for attempt_params in param_attempts:
-            r = requests.get(api_url, params=attempt_params, headers=VIDEO_SPOOF_HEADERS, timeout=5)
+            r = requests.get(api_url, params=attempt_params, headers=spoof_headers, timeout=8)
             if r.status_code == 200:
                 data = r.json()
                 streams = data.get("data", {}).get("stream_urls", [])
                 if streams:
                     urls = _normalize_vaplayer_streams(streams)
-                    imdb_cache.set(cache_key, urls, ttl=30)
-                    return urls
+                    if urls:
+                        imdb_cache.set(cache_key, urls, ttl=30)
+                        return urls
     except Exception:
         pass
     return []
 
 
-def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episode=None):
-    streams = get_fast_streams(imdb_id, media_type, season, episode)
+def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episode=None, tmdb_id=None):
+    streams = get_fast_streams(imdb_id, media_type, season, episode, tmdb_id=tmdb_id)
     return streams[0] if streams else None
 
 
