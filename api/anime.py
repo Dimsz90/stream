@@ -288,14 +288,13 @@ class SamehadakuScraper:
     def get_homepage(self):
         """Get latest anime from homepage"""
         soup = self._get_soup(self.base_url)
-        if not soup:
-            return {'ongoing': [], 'completed': [], 'latest': []}
-        
         result = {
             'ongoing': [],
             'completed': [],
             'latest': []
         }
+        if not soup:
+            return result
         
         try:
             post_show = soup.find('div', class_='post-show')
@@ -323,11 +322,55 @@ class SamehadakuScraper:
                         'thumbnail': img.get('src', '') if img else '',
                         'episodes': 'Ongoing'
                     })
+
+            # Fetch popular anime page 1 with try-catch so it never breaks homepage
+            try:
+                pop1 = self.get_popular_anime(1)
+                if pop1:
+                    seen_links = set(x['link'] for x in result['ongoing'] if isinstance(x, dict) and x.get('link'))
+                    for item in pop1:
+                        if isinstance(item, dict) and item.get('link') and item['link'] not in seen_links:
+                            result['ongoing'].append(item)
+                            seen_links.add(item['link'])
+            except Exception as pe:
+                print(f"Error fetching popular anime page 1: {pe}")
                     
         except Exception as e:
             print(f"Error getting homepage: {e}")
         
         return result
+
+    def get_popular_anime(self, page=1):
+        """Scrape popular anime directory list"""
+        url = f"{self.base_url}/daftar-anime-2/page/{page}/?order=popular"
+        soup = self._get_soup(url)
+        if not soup:
+            return []
+        
+        results = []
+        articles = soup.find_all('article', class_='animpost')
+        for article in articles:
+            try:
+                a = article.find('a')
+                if not a:
+                    continue
+                link = a.get('href', '')
+                h2 = article.find(['h2', 'h3'])
+                title = h2.text.strip() if h2 else a.get('title', 'Unknown')
+                img = article.find('img')
+                thumb = img.get('src') or img.get('data-src') or '' if img else ''
+                score_elem = article.find('div', class_='score') or article.find('div', class_='type')
+                eps = score_elem.text.strip() if score_elem else 'Anime'
+                
+                results.append({
+                    'title': title,
+                    'link': link,
+                    'thumbnail': thumb,
+                    'episodes': eps
+                })
+            except Exception as e:
+                continue
+        return results
 
 import threading
 
@@ -370,10 +413,29 @@ def build_response(path: str, params: dict, body_data: dict = None):
         cached = ANIME_CACHE.get(cache_key)
         if cached:
             return {"status": "success", "data": cached, "cached": True}, 200
-        data = scraper.get_homepage()
-        if data and (data.get('latest') or data.get('ongoing')):
-            ANIME_CACHE.set(cache_key, data, ttl=600)  # 10 mins cache
-        return {"status": "success", "data": data}, 200
+        try:
+            data = scraper.get_homepage()
+            if data and (data.get('latest') or data.get('ongoing')):
+                ANIME_CACHE.set(cache_key, data, ttl=600)  # 10 mins cache
+            return {"status": "success", "data": data}, 200
+        except Exception as e:
+            print(f"Error in anime home response: {e}")
+            return {"status": "error", "message": str(e)}, 500
+
+    elif path.endswith("/popular"):
+        page_val = params.get("page", ["1"])[0] if isinstance(params.get("page"), list) else params.get("page", "1")
+        try:
+            page = int(page_val)
+        except ValueError:
+            page = 1
+        cache_key = f"anime:popular:{page}"
+        cached = ANIME_CACHE.get(cache_key)
+        if cached:
+            return {"status": "success", "data": cached, "cached": True}, 200
+        results = scraper.get_popular_anime(page)
+        if results:
+            ANIME_CACHE.set(cache_key, results, ttl=600)
+        return {"status": "success", "data": results}, 200
         
     elif path.endswith("/search"):
         q = params.get("q", [""])[0] if isinstance(params.get("q"), list) else params.get("q", "")

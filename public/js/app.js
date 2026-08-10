@@ -2763,8 +2763,11 @@ async function dracinLoadBrowse(reset = true) {
 const ANIME = {
   initialized: false,
   loading: false,
+  page: 2,
+  hasMore: true,
   selectedAnime: null,
   episodes: [],
+  seenLinks: new Set(),
 };
 
 function animeStatus(show, txt) {
@@ -2848,11 +2851,23 @@ async function animeLoadHome() {
 
     if (grid) {
       grid.innerHTML = '';
+      ANIME.seenLinks.clear();
+      ANIME.page = 2;
+      ANIME.hasMore = true;
       const ongoing = data?.ongoing || [];
       if (!ongoing.length) {
         grid.innerHTML = `<div class="dr-empty"><h3>TIDAK ADA ANIME</h3></div>`;
       } else {
-        ongoing.forEach(item => grid.appendChild(animeMakeCard(item)));
+        ongoing.forEach(item => {
+          if (item.link) ANIME.seenLinks.add(item.link);
+          grid.appendChild(animeMakeCard(item));
+        });
+      }
+      const loadBtn = document.getElementById('animeLoadMore');
+      if (loadBtn) {
+        loadBtn.style.display = ongoing.length >= 10 ? 'block' : 'none';
+        loadBtn.textContent = 'MUAT LEBIH BANYAK';
+        loadBtn.disabled = false;
       }
     }
   } catch (e) {
@@ -2878,6 +2893,9 @@ async function animeSearch() {
     animeLoadHome();
     return;
   }
+
+  const loadBtn = document.getElementById('animeLoadMore');
+  if (loadBtn) loadBtn.style.display = 'none';
 
   if (title) title.textContent = `HASIL PENCARIAN: "${esc(q)}"`;
   if (latestWrap) latestWrap.style.display = 'none';
@@ -2926,7 +2944,47 @@ function saveAnimeContinueProgress(epUrl, epTitle) {
     if (all.length > 24) all.length = 24;
     localStorage.setItem('cw_progress', JSON.stringify(all));
     if (typeof renderContinueWatching === 'function') renderContinueWatching();
+    renderAnimeContinueWatching();
   } catch(e) {
+    console.error(e);
+  }
+}
+
+function renderAnimeContinueWatching() {
+  const section = document.getElementById('animeContinueSection');
+  const row = document.getElementById('animeContinueRow');
+  const badge = document.getElementById('animeContinueBadge');
+  if (!section || !row || !badge) return;
+
+  try {
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    const items = all.filter(x => x && x.mediaType === 'anime');
+    if (!items.length) {
+      section.style.display = 'none';
+      row.innerHTML = '';
+      badge.textContent = '';
+      return;
+    }
+    section.style.display = 'block';
+    badge.textContent = `${items.length} anime`;
+    row.innerHTML = '';
+    items.forEach(cw => {
+      const card = document.createElement('div');
+      card.className = 'cw-card';
+      card.onclick = () => {
+        if (cw.item) openAnimeDetail(cw.item);
+      };
+      card.innerHTML = `
+        <div class="cw-poster"><img src="${esc(cw.poster || '')}" alt="${esc(cw.title)}"></div>
+        <div style="min-width:0">
+          <div class="cw-name">${esc(cw.title)}</div>
+          <div class="cw-meta">${esc(cw.epTitle || 'Lanjut nonton')}</div>
+          <div class="cw-action">▶ PUTAR KEMBALI</div>
+        </div>
+      `;
+      row.appendChild(card);
+    });
+  } catch (e) {
     console.error(e);
   }
 }
@@ -3104,6 +3162,51 @@ function closeAnimePlayer() {
   if (modal) modal.style.display = 'none';
 }
 
+async function animeLoadMore() {
+  if (ANIME.loading || !ANIME.hasMore) return;
+  ANIME.loading = true;
+  ANIME.page++;
+  
+  const loadBtn = document.getElementById('animeLoadMore');
+  if (loadBtn) {
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'MEMUAT...';
+  }
+  
+  animeStatus(true, `Memuat halaman ${ANIME.page}...`);
+  try {
+    const results = await animeFetchPayload(`/api/anime/popular?page=${ANIME.page}`);
+    ANIME.loading = false;
+    animeStatus(false);
+    
+    if (loadBtn) {
+      loadBtn.disabled = false;
+      loadBtn.textContent = 'MUAT LEBIH BANYAK';
+    }
+    
+    const grid = document.getElementById('anime-grid');
+    if (results && results.length) {
+      results.forEach(item => {
+        if (item.link && !ANIME.seenLinks.has(item.link)) {
+          ANIME.seenLinks.add(item.link);
+          grid.appendChild(animeMakeCard(item));
+        }
+      });
+    } else {
+      ANIME.hasMore = false;
+      if (loadBtn) loadBtn.style.display = 'none';
+    }
+  } catch (e) {
+    console.error(e);
+    ANIME.loading = false;
+    animeStatus(false);
+    if (loadBtn) {
+      loadBtn.disabled = false;
+      loadBtn.textContent = 'MUAT LEBIH BANYAK';
+    }
+  }
+}
+
 // Bind anime functions explicitly to window for inline HTML handlers
 window.closeAnimeDetail = closeAnimeDetail;
 window.openAnimeDetail = openAnimeDetail;
@@ -3112,6 +3215,7 @@ window.closeAnimePlayer = closeAnimePlayer;
 window.toggleAnimeBookmark = toggleAnimeBookmark;
 window.switchAnimeServer = switchAnimeServer;
 window.animeSearch = animeSearch;
+window.animeLoadMore = animeLoadMore;
 window.renderAnimeBookmarks = renderAnimeBookmarks;
 window.renderAnimeContinueWatching = renderAnimeContinueWatching;
 switchMainTab(_initialMainTab);
