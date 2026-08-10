@@ -8,6 +8,7 @@ __pycache__/
 dist/
 build/
 .eggs/
+public/js/app.src.js
 
 # Virtual env
 venv/
