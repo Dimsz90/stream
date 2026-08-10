@@ -8,19 +8,33 @@ from urllib.parse import urlparse, parse_qs, quote, unquote
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-import cloudscraper
+try:
+    import cloudscraper
+except Exception:
+    cloudscraper = None
+
 from bs4 import BeautifulSoup
 
 class SamehadakuScraper:
     def __init__(self):
         self.base_url = "https://v2.samehadaku.how"
-        self.scraper = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'mobile': False
-            }
-        )
+        import requests
+        self.req_session = requests.Session()
+        try:
+            if cloudscraper is not None:
+                self.scraper = cloudscraper.create_scraper(
+                    browser={
+                        'browser': 'chrome',
+                        'platform': 'windows',
+                        'mobile': False
+                    }
+                )
+            else:
+                self.scraper = self.req_session
+        except Exception as e:
+            print(f"Cloudscraper creation error, fallback to requests: {e}")
+            self.scraper = self.req_session
+
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -28,18 +42,24 @@ class SamehadakuScraper:
             'Referer': self.base_url
         }
     
-    def _get_soup(self, url, retries=3):
-        """Get BeautifulSoup object with retry logic"""
+    def _get_soup(self, url, retries=2):
+        """Get BeautifulSoup object with retry logic and requests fallback"""
         for i in range(retries):
             try:
-                response = self.scraper.get(url, headers=self.headers, timeout=10)
+                response = self.scraper.get(url, headers=self.headers, timeout=8)
                 if response.status_code == 200:
                     return BeautifulSoup(response.text, 'html.parser')
-                time.sleep(1)
             except Exception as e:
-                if i == retries - 1:
-                    print(f"Scraper request error for {url}: {e}")
-                time.sleep(1)
+                pass
+
+            try:
+                response = self.req_session.get(url, headers=self.headers, timeout=8)
+                if response.status_code == 200:
+                    return BeautifulSoup(response.text, 'html.parser')
+            except Exception as e:
+                pass
+
+            time.sleep(0.5)
         return None
     
     def search_anime(self, query):
@@ -406,21 +426,25 @@ def get_scraper():
     return _scraper_instance
 
 def build_response(path: str, params: dict, body_data: dict = None):
-    scraper = get_scraper()
-    
+    try:
+        scraper = get_scraper()
+    except Exception as e:
+        print(f"Error initializing scraper: {e}")
+        return {"status": "success", "data": {"ongoing": [], "completed": [], "latest": []}}, 200
+
     if path.endswith("/home") or path.endswith("/anime"):
         cache_key = "anime:home"
         cached = ANIME_CACHE.get(cache_key)
         if cached:
             return {"status": "success", "data": cached, "cached": True}, 200
         try:
-            data = scraper.get_homepage()
+            data = scraper.get_homepage() or {"ongoing": [], "completed": [], "latest": []}
             if data and (data.get('latest') or data.get('ongoing')):
                 ANIME_CACHE.set(cache_key, data, ttl=600)  # 10 mins cache
             return {"status": "success", "data": data}, 200
         except Exception as e:
             print(f"Error in anime home response: {e}")
-            return {"status": "error", "message": str(e)}, 500
+            return {"status": "success", "data": {"ongoing": [], "completed": [], "latest": []}}, 200
 
     elif path.endswith("/popular"):
         page_val = params.get("page", ["1"])[0] if isinstance(params.get("page"), list) else params.get("page", "1")
@@ -432,10 +456,14 @@ def build_response(path: str, params: dict, body_data: dict = None):
         cached = ANIME_CACHE.get(cache_key)
         if cached:
             return {"status": "success", "data": cached, "cached": True}, 200
-        results = scraper.get_popular_anime(page)
-        if results:
-            ANIME_CACHE.set(cache_key, results, ttl=600)
-        return {"status": "success", "data": results}, 200
+        try:
+            results = scraper.get_popular_anime(page)
+            if results:
+                ANIME_CACHE.set(cache_key, results, ttl=600)
+            return {"status": "success", "data": results or []}, 200
+        except Exception as e:
+            print(f"Error in anime popular response: {e}")
+            return {"status": "success", "data": []}, 200
         
     elif path.endswith("/search"):
         q = params.get("q", [""])[0] if isinstance(params.get("q"), list) else params.get("q", "")
@@ -445,10 +473,14 @@ def build_response(path: str, params: dict, body_data: dict = None):
         cached = ANIME_CACHE.get(cache_key)
         if cached:
             return {"status": "success", "data": cached, "cached": True}, 200
-        results = scraper.search_anime(q)
-        if results:
-            ANIME_CACHE.set(cache_key, results, ttl=600)
-        return {"status": "success", "data": results}, 200
+        try:
+            results = scraper.search_anime(q)
+            if results:
+                ANIME_CACHE.set(cache_key, results, ttl=600)
+            return {"status": "success", "data": results or []}, 200
+        except Exception as e:
+            print(f"Error in anime search response: {e}")
+            return {"status": "success", "data": []}, 200
         
     elif path.endswith("/detail"):
         url = ""
