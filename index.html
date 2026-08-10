@@ -57,6 +57,7 @@
   <div class="nav-tabs">
     <div class="ntab active" id="ntFilm"   onclick="switchMainTab('film')">FILM</div>
     <div class="ntab"        id="ntDracin" onclick="switchMainTab('dracin')">DRACIN</div>
+    <div class="ntab"        id="ntAnime"  onclick="switchMainTab('anime')">ANIME</div>
   </div>
   <div class="nav-right">
     <button class="nav-subscription-btn" id="btnSubscription" type="button" onclick="showSubscriptionPlans()">LANGGANAN</button>
@@ -167,6 +168,61 @@
 
 </section>
 
+<!-- ── ANIME SECTION ── -->
+<section id="anime-section">
+
+  <!-- Search -->
+  <div class="dr-search-row" style="padding:1rem 1.2rem 0">
+    <input id="animeSearchInput" class="dr-search-input"
+           type="text" placeholder="Cari anime..."
+           onkeydown="if(event.key==='Enter')animeSearch()">
+    <button class="dr-search-btn" onclick="animeSearch()">CARI</button>
+  </div>
+  <div class="dr-status" id="animeStatus" style="display:none">
+    <div class="spinner"></div><span id="animeStatusTxt">Memuat anime...</span>
+  </div>
+
+  <!-- Continue Watching Anime -->
+  <div class="cw-section" id="animeContinueSection" style="padding:0 1.2rem;display:none">
+    <div class="cw-head">
+      <span class="cw-title">Lanjut Nonton Anime</span>
+      <span class="cw-badge" id="animeContinueBadge"></span>
+    </div>
+    <div class="cw-row" id="animeContinueRow"></div>
+  </div>
+
+  <!-- Bookmarked Anime -->
+  <div class="cw-section" id="animeBookmarkSection" style="padding:0 1.2rem;display:none">
+    <div class="cw-head">
+      <span class="cw-title">Anime Favorit / Tersimpan</span>
+      <span class="cw-badge" id="animeBookmarkBadge"></span>
+    </div>
+    <div class="cw-row" id="animeBookmarkRow"></div>
+  </div>
+
+  <!-- Latest Anime -->
+  <div id="animeLatestWrap" style="padding:0 1.2rem">
+    <div class="dr-section-head">
+      <span class="dr-section-title">EPISODE TERBARU</span>
+      <span class="dr-section-badge" id="animeLatestBadge"></span>
+    </div>
+    <div class="dr-hscroll" id="animeLatestRow">
+      <!-- di-render JS -->
+    </div>
+  </div>
+
+  <!-- Ongoing / Top Anime -->
+  <div id="animeOngoingWrap" style="padding:0 1.2rem 1rem">
+    <div class="dr-section-head">
+      <span class="dr-section-title" id="animeBrowseTitle">ANIME POPULER &amp; ONGOING</span>
+    </div>
+    <div id="anime-grid" class="dr-grid">
+      <!-- di-render JS -->
+    </div>
+  </div>
+
+</section>
+
 <!-- ── GRID ── -->
 <div class="grid-wrap" id="gridWrap">
   <div class="cw-section" id="filmContinueSection">
@@ -268,6 +324,46 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ── ANIME DETAIL PANEL ── -->
+<div id="animeDetailPanel">
+  <div class="dracin-detail-bg" onclick="closeAnimeDetail()"></div>
+  <div class="dracin-detail-sheet">
+    <button class="dracin-detail-close" onclick="closeAnimeDetail()">x</button>
+    <div class="dracin-detail-inner">
+      <div class="dracin-detail-poster"><img id="andPoster" src="" alt=""></div>
+      <div>
+        <div class="dracin-detail-title" id="andTitle">Anime</div>
+        <div class="dracin-detail-meta" id="andMeta"></div>
+        <div class="dracin-detail-desc" id="andDesc"></div>
+        <div class="sub-label">Daftar Episode</div>
+        <div class="dracin-episode-preview" id="andEpisodes"></div>
+        <div class="dracin-detail-actions" style="margin-top:1rem">
+          <button id="btnAnimeBookmark" class="dracin-primary" onclick="toggleAnimeBookmark()" style="background:#ff9900;color:#000">🔖 + BOOKMARK</button>
+          <button class="dracin-secondary" onclick="closeAnimeDetail()">TUTUP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ANIME PLAYER MODAL ── -->
+<div id="animePlayerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;flex-direction:column;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d1117;border-bottom:1px solid rgba(255,255,255,0.1)">
+    <div style="display:flex;flex-direction:column;">
+      <span id="animePlayerTitle" style="color:#fff;font-weight:bold;font-size:15px">Anime Player</span>
+      <span id="animePlayerSub" style="color:#8b949e;font-size:12px">Memuat stream...</span>
+    </div>
+    <button onclick="closeAnimePlayer()" style="background:#21262d;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer">TUTUP ✕</button>
+  </div>
+  <div style="flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center">
+    <iframe id="animeIframe" src="" style="width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+  </div>
+  <div id="animeServerContainer" style="padding:12px;background:#0d1117;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:8px;overflow-x:auto;align-items:center;">
+    <span style="color:#8b949e;font-size:12px;white-space:nowrap;">PILIH SERVER:</span>
+    <div id="animeServerList" style="display:flex;gap:8px"></div>
   </div>
 </div>
 

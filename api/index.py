@@ -101,12 +101,19 @@ class handler(BaseHTTPRequestHandler):
             # Dispatch ke modul dracin.py (biar dracin.py handle path parsing)
             return self._dispatch_module("dracin", "GET")
 
+        # /api/anime/*
+        if path.startswith("/api/anime/") or path == "/api/anime":
+            return self._dispatch_module("anime", "GET")
+
         self._send_json({"error": "Route tidak ditemukan"}, 404)
     # ── POST ───────────────────────────────────────────────────────────────────
     def do_POST(self):
         path = urlparse(self.path).path
         if self._subscription_denied(path):
             return
+
+        if path.startswith("/api/anime/"):
+            return self._dispatch_module("anime", "POST")
 
         if path == "/api/scan":
             return self._dispatch_module("scan", "POST")
@@ -177,7 +184,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Internal error: {e}"}, 500)
 
     def _subscription_denied(self, path: str) -> bool:
-        protected = path in PROTECTED_PATHS or path.startswith("/api/dracin/")
+        protected = path in PROTECTED_PATHS or path.startswith("/api/dracin/") or path.startswith("/api/anime/")
         if not protected:
             return False
         ok, payload, status_code = check_subscription(self.headers)

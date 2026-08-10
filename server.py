@@ -5,6 +5,16 @@ Berbasis Flask, mengintegrasikan seluruh fitur API dan SPA Routing.
 import importlib.util
 import os
 import sys
+
+# ── Load .env untuk development lokal ─────────────────────────────────────────
+# Di Railway/production, env vars sudah di-set langsung — ini hanya untuk lokal.
+try:
+    from dotenv import load_dotenv
+    _env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(_env_path):
+        load_dotenv(_env_path, override=False)  # override=False: jangan timpa yg sudah ada
+except ImportError:
+    pass  # python-dotenv tidak terinstall — tidak apa-apa di production
 import re
 import tempfile
 import mimetypes
@@ -1645,6 +1655,25 @@ def captain_videos(platform="melolo"):
         return jsonify({"error": "Parameter ?id= diperlukan"}), 400
     data, code = videos(book_id, platform, lang)
     return jsonify(data), code
+
+
+# ── ANIME ROUTES ─────────────────────────────────────────────────────────────
+
+@app.route("/api/anime/<path:subpath>", methods=["GET", "POST"])
+@app.route("/api/anime", methods=["GET", "POST"])
+def anime_api_route(subpath=""):
+    denied = require_subscription()
+    if denied:
+        return denied
+
+    from api.anime import build_response
+    full_path = f"/api/anime/{subpath}" if subpath else "/api/anime"
+    params = request.args.to_dict(flat=False)
+    body_data = request.get_json(silent=True) or {}
+    
+    data, code = build_response(full_path, params, body_data)
+    return jsonify(data), code
+
 # ── RUN SERVER ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

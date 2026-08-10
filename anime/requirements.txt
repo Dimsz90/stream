@@ -1,0 +1,6 @@
+flask
+flask-cors
+beautifulsoup4
+requests
+cloudscraper
+flask-sqlalchemy

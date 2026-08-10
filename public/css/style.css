@@ -632,14 +632,14 @@ nav{
 /* ════════════════════════════════════════
    DRACIN — Short Drama Section
 ════════════════════════════════════════ */
-#dracin-section{
+#dracin-section,#anime-section{
   flex:1;overflow-y:auto;padding:0 0 2rem;
   display:none;flex-direction:column;gap:0;
   /* Pastikan mengisi sisa tinggi layar seperti gridWrap */
   min-height:0;
 }
-#dracin-section::-webkit-scrollbar{width:4px}
-#dracin-section::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+#dracin-section::-webkit-scrollbar,#anime-section::-webkit-scrollbar{width:4px}
+#dracin-section::-webkit-scrollbar-thumb,#anime-section::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
 /* Platform tabs */
 .dr-plat-bar{
@@ -1103,7 +1103,8 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 .ntab.active{color:#fff;background:var(--accent);border-color:var(--accent);box-shadow:0 10px 28px rgba(225,29,72,.24)}
 .search-area{padding:16px 20px 10px}
 .search-row,.dr-search-row{border-radius:8px;background:#101216;border-color:#242832}
-.grid-wrap,#dracin-section{padding:18px 20px 24px}
+.grid-wrap{padding:18px 20px 24px}
+/* dracin-section & anime-section: padding dikelola per-child agar overflow scroll tidak rusak */
 .movie-grid,.dr-grid{gap:16px;grid-template-columns:repeat(auto-fill,minmax(138px,1fr))}
 .reco-row,.dr-hscroll,.cw-row{gap:14px}
 .reco-card,.movie-card,.dr-card,.cw-card{background:#111419;border:1px solid rgba(255,255,255,.08);border-radius:8px;box-shadow:none}
@@ -1150,7 +1151,7 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 .dracin-secondary{background:transparent;color:var(--text2)}
 .dracin-detail-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer}
 @media(max-width:640px){
-  .grid-wrap,#dracin-section{padding:12px}
+  .grid-wrap{padding:12px}
   .movie-grid,.dr-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .cw-card{width:190px;min-width:190px}
   .dracin-detail-sheet{inset:auto 0 0 0;left:0;top:auto;transform:none;width:100%;border-radius:14px 14px 0 0}
@@ -1464,4 +1465,110 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 }
 #playerBar {
   border-radius: 0 0 12px 12px;
+}
+
+/* ════════════════════════════════════════
+   ANIME SECTION — Dedicated Styles
+════════════════════════════════════════ */
+#anime-section{
+  width:100%;max-width:100vw;overflow-x:hidden;
+}
+
+/* Anime search bar area — padding konsisten */
+#anime-section .dr-search-row{
+  margin:12px 12px 8px;
+  max-width:calc(100vw - 24px);
+}
+
+/* Padding untuk setiap child block */
+#animeContinueSection,
+#animeBookmarkSection,
+#animeLatestWrap,
+#anime-section > div:not(.dr-search-row):not(.dr-status) {
+  padding-left:14px;
+  padding-right:14px;
+}
+
+/* Latest row — horizontal scroll */
+#animeLatestRow{
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:10px;
+}
+#animeLatestRow .dr-card{
+  width:110px;
+  flex:0 0 110px;
+}
+
+/* Browse grid — full-width responsive */
+#anime-grid{
+  grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+  gap:12px;
+  width:100%;
+}
+#anime-grid .dr-card{
+  width:100%;
+  min-width:0;
+}
+
+/* Anime detail panel — scrollable episode list */
+#animeDetailPanel{position:fixed;inset:0;z-index:145;display:none}
+#andEpisodes{
+  max-height:200px;
+  overflow-y:auto;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(50px,1fr));
+  gap:7px;
+  margin:8px 0 14px;
+  padding-right:4px;
+}
+#andEpisodes::-webkit-scrollbar{width:4px}
+#andEpisodes::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+#andEpisodes button{
+  height:36px;border-radius:7px;
+  border:1px solid var(--border2);
+  background:var(--surface2);
+  color:var(--text);font-weight:800;
+  cursor:pointer;font-size:11px;
+  transition:all .15s;
+}
+#andEpisodes button:hover{
+  border-color:var(--accent);
+  color:#fff;background:var(--accent);
+}
+
+/* Anime Player Modal — full-screen fixed */
+#animePlayerModal{
+  flex-direction:column;
+}
+#animePlayerModal iframe{
+  display:block;
+}
+
+/* Anime CW & Bookmark sections */
+#animeContinueSection.cw-section,
+#animeBookmarkSection.cw-section{
+  display:none; /* dikontrol JS */
+  margin-bottom:18px;
+  padding:0 14px;
+}
+
+/* Responsive anime */
+@media(max-width:640px){
+  #anime-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:9px;
+  }
+  #animeLatestRow .dr-card{width:96px;flex-basis:96px}
+  #anime-section .dr-search-row{margin:10px 10px 6px;max-width:calc(100vw - 20px)}
+  #animeContinueSection,
+  #animeBookmarkSection,
+  #animeLatestWrap,
+  #anime-section > div:not(.dr-search-row):not(.dr-status){
+    padding-left:10px;
+    padding-right:10px;
+  }
+}
+@media(max-width:400px){
+  #anime-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  #andEpisodes{grid-template-columns:repeat(auto-fill,minmax(44px,1fr))}
 }

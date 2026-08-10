@@ -2260,7 +2260,8 @@ function esc(s) {
 /* ════════════════════════════════════════
    DRACIN TAB HANDLER (FINAL FIX)
 ════════════════════════════════════════ */
-const _initialMainTab = new URLSearchParams(location.search).get('tab') === 'dracin' ? 'dracin' : 'film';
+const initialTabParam = new URLSearchParams(location.search).get('tab');
+const _initialMainTab = (initialTabParam === 'dracin' || initialTabParam === 'anime') ? initialTabParam : 'film';
 let _mainTab = _initialMainTab;
 
 function switchMainTab(tab) {
@@ -2268,15 +2269,24 @@ function switchMainTab(tab) {
   renderContinueWatching();
 
   document.querySelectorAll('.ntab').forEach(t => t.classList.remove('active'));
-  document.getElementById(tab === 'film' ? 'ntFilm' : 'ntDracin').classList.add('active');
+  const activeTabId = tab === 'film' ? 'ntFilm' : (tab === 'dracin' ? 'ntDracin' : 'ntAnime');
+  const activeTabEl = document.getElementById(activeTabId);
+  if (activeTabEl) activeTabEl.classList.add('active');
 
   const isFilm = tab === 'film';
+  const isDracin = tab === 'dracin';
+  const isAnime = tab === 'anime';
 
-  // Toggle visibility — dracin-section sekarang SEJAJAR dengan gridWrap (bukan di dalamnya)
-  document.getElementById('gridWrap').style.display     = isFilm ? '' : 'none';
-  document.getElementById('dracin-section').style.display = isFilm ? 'none' : 'flex';
+  // Toggle visibility
+  const gridWrap = document.getElementById('gridWrap');
+  const dracinSection = document.getElementById('dracin-section');
+  const animeSection = document.getElementById('anime-section');
 
-  // Sembunyikan elemen khusus film saat tab dracin aktif
+  if (gridWrap) gridWrap.style.display = isFilm ? '' : 'none';
+  if (dracinSection) dracinSection.style.display = isDracin ? 'flex' : 'none';
+  if (animeSection) animeSection.style.display = isAnime ? 'flex' : 'none';
+
+  // Sembunyikan elemen khusus film saat tab dracin/anime aktif
   const searchArea = document.querySelector('.search-area');
   const filterWrap = document.querySelector('.filter-wrap');
   if (searchArea) searchArea.style.display = isFilm ? '' : 'none';
@@ -2289,6 +2299,18 @@ function switchMainTab(tab) {
       dracinLoadRank();
       dracinLoadBrowse(true);
     }, 50);
+  }
+
+  if (tab === 'anime') {
+    if (typeof renderAnimeBookmarks === 'function') renderAnimeBookmarks();
+    if (typeof renderAnimeContinueWatching === 'function') renderAnimeContinueWatching();
+    if (!ANIME.initialized) {
+      ANIME.initialized = true;
+      console.log('%c[Anime] Inisialisasi...', 'color:#ff9900');
+      setTimeout(() => {
+        animeLoadHome();
+      }, 50);
+    }
   }
 }
 
@@ -2409,12 +2431,17 @@ function renderContinueList(sectionId, rowId, badgeId, items) {
   badge.textContent = `${items.length} item`;
   row.innerHTML = items.slice(0, 12).map(item => {
     const pct = Math.max(6, Math.min(100, Math.round((item.pct || 0) * 100 || 8)));
-    const meta = item.mediaType === 'dracin'
-      ? `${(item.platform || 'dracin').toUpperCase()} · Ep ${item.epNum || (item.epIdx + 1) || 1}`
-      : (item.epTitle || item.mediaType || 'Film');
+    let meta = item.epTitle || item.mediaType || 'Film';
+    if (item.mediaType === 'dracin') {
+      meta = `${(item.platform || 'dracin').toUpperCase()} · Ep ${item.epNum || (item.epIdx + 1) || 1}`;
+    } else if (item.mediaType === 'anime') {
+      meta = item.epTitle || 'Episode Anime';
+    }
     const action = item.mediaType === 'dracin'
       ? `location.href='${esc(continueHref(item))}'`
-      : `openDetail(JSON.parse(this.dataset.item))`;
+      : (item.mediaType === 'anime' 
+        ? `playAnimeEpisode('${esc(item.epUrl || '')}', '${esc(item.epTitle || '')}')`
+        : `openDetail(JSON.parse(this.dataset.item))`);
     const dataItem = esc(JSON.stringify(item.item || {
       "#TITLE": item.title || 'Untitled',
       "#IMG_POSTER": item.poster || '',
@@ -2447,7 +2474,13 @@ function renderContinueWatching() {
     'filmContinueSection',
     'filmContinueRow',
     'filmContinueBadge',
-    items.filter(item => item.mediaType !== 'dracin')
+    items.filter(item => item.mediaType !== 'dracin' && item.mediaType !== 'anime')
+  );
+  renderContinueList(
+    'animeContinueSection',
+    'animeContinueRow',
+    'animeContinueBadge',
+    items.filter(item => item.mediaType === 'anime')
   );
 }
 
@@ -2722,6 +2755,344 @@ async function dracinLoadBrowse(reset = true) {
       if (DR.browseController === controller) DR.browseController = null;
     }
   }
+}
+
+/* ════════════════════════════════════════
+   ANIME STATE & LOGIC
+════════════════════════════════════════ */
+const ANIME = {
+  initialized: false,
+  loading: false,
+  selectedAnime: null,
+  episodes: [],
+};
+
+function animeStatus(show, txt) {
+  const el = document.getElementById('animeStatus');
+  if (el) el.style.display = show ? 'flex' : 'none';
+  if (txt) {
+    const txtEl = document.getElementById('animeStatusTxt');
+    if (txtEl) txtEl.textContent = txt;
+  }
+}
+
+function animeMakeCard(anime, forScroll = false) {
+  const a = document.createElement('a');
+  a.className = 'dr-card';
+  if (forScroll) a.style.width = '110px';
+
+  a.href = '#';
+  a.onclick = e => {
+    e.preventDefault();
+    openAnimeDetail(anime);
+  };
+
+  const eps = anime.episodes || anime.episode || '';
+  const title = anime.title || 'Anime';
+  const thumb = anime.thumbnail || '';
+
+  a.innerHTML = `
+    <div class="dr-card-poster">
+      <img src="${esc(thumb)}" loading="lazy" alt="${esc(title)}"
+           referrerpolicy="no-referrer"
+           onerror="this.style.display='none'; this.parentNode.style.background='#12161b'; this.parentNode.innerHTML='NO IMAGE';">
+      <div class="dr-card-poster-overlay">
+        <div class="dr-card-eps">${esc(eps)}</div>
+      </div>
+    </div>
+    <div class="dr-card-info">
+      <div class="dr-card-name">${esc(title)}</div>
+    </div>
+  `;
+  return a;
+}
+
+async function animeFetchPayload(url) {
+  const subToken = await requireSubscriptionToken();
+  const opts = { headers: subToken ? { "X-Subscription-Token": subToken } : {} };
+  const res = await appFetch(url, opts);
+  const json = await res.json();
+  return json?.data || json;
+}
+
+async function animeLoadHome() {
+  if (ANIME.loading) return;
+  ANIME.loading = true;
+  animeStatus(true, 'Memuat rekomendasi anime...');
+
+  const latestRow = document.getElementById('animeLatestRow');
+  const grid = document.getElementById('anime-grid');
+  if (latestRow) dracinSkeletons(latestRow, 8, true);
+  if (grid) dracinSkeletons(grid, 12);
+
+  try {
+    const data = await animeFetchPayload('/api/anime/home');
+    ANIME.loading = false;
+    animeStatus(false);
+
+    if (latestRow) {
+      latestRow.innerHTML = '';
+      const latest = data?.latest || [];
+      document.getElementById('animeLatestBadge').textContent = `${latest.length} eps`;
+      latest.forEach(item => latestRow.appendChild(animeMakeCard(item, true)));
+    }
+
+    if (grid) {
+      grid.innerHTML = '';
+      const ongoing = data?.ongoing || [];
+      if (!ongoing.length) {
+        grid.innerHTML = `<div class="dr-empty"><h3>TIDAK ADA ANIME</h3></div>`;
+      } else {
+        ongoing.forEach(item => grid.appendChild(animeMakeCard(item)));
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    ANIME.loading = false;
+    animeStatus(false);
+    if (grid) grid.innerHTML = `<div class="dr-empty"><h3>GAGAL MEMUAT ANIME</h3><p>${esc(e.message)}</p></div>`;
+  }
+}
+
+async function animeSearch() {
+  const q = document.getElementById('animeSearchInput').value.trim();
+  const grid = document.getElementById('anime-grid');
+  const title = document.getElementById('animeBrowseTitle');
+  // Support both old and new wrapper ID
+  const latestWrap = document.getElementById('animeLatestWrap');
+  const ongoingWrap = document.getElementById('animeOngoingWrap');
+
+  if (!q) {
+    if (title) title.textContent = 'ANIME POPULER & ONGOING';
+    if (latestWrap) latestWrap.style.display = '';
+    if (ongoingWrap) ongoingWrap.style.display = '';
+    animeLoadHome();
+    return;
+  }
+
+  if (title) title.textContent = `HASIL PENCARIAN: "${esc(q)}"`;
+  if (latestWrap) latestWrap.style.display = 'none';
+  if (ongoingWrap) ongoingWrap.style.display = '';
+
+  if (grid) dracinSkeletons(grid, 12);
+
+  animeStatus(true, 'Mencari anime...');
+  try {
+    const results = await animeFetchPayload(`/api/anime/search?q=${encodeURIComponent(q)}`);
+    animeStatus(false);
+    if (grid) {
+      grid.innerHTML = '';
+      if (!results || !results.length) {
+        grid.innerHTML = `<div class="dr-empty"><h3>TIDAK DITEMUKAN</h3><p>Coba kata kunci lain</p></div>`;
+      } else {
+        results.forEach(item => grid.appendChild(animeMakeCard(item)));
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    animeStatus(false);
+    if (grid) grid.innerHTML = `<div class="dr-empty"><h3>PENCARIAN GAGAL</h3><p>${esc(e.message)}</p></div>`;
+  }
+}
+
+function saveAnimeContinueProgress(epUrl, epTitle) {
+  try {
+    if (!ANIME.selectedAnime || !epUrl) return;
+    const anime = ANIME.selectedAnime;
+    const id = `anime_${anime.link || anime.title}`;
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    const existing = all.findIndex(x => x.id === id);
+    const entry = {
+      id,
+      mediaType: 'anime',
+      title: anime.title || 'Anime',
+      poster: anime.thumbnail || '',
+      href: '#',
+      epTitle: epTitle || 'Episode Anime',
+      epUrl,
+      pct: 0.5,
+      item: anime,
+    };
+    if (existing >= 0) all[existing] = entry; else all.unshift(entry);
+    if (all.length > 24) all.length = 24;
+    localStorage.setItem('cw_progress', JSON.stringify(all));
+    if (typeof renderContinueWatching === 'function') renderContinueWatching();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function getAnimeBookmarks() {
+  try {
+    const rows = JSON.parse(localStorage.getItem('anime_bookmarks') || '[]');
+    return Array.isArray(rows) ? rows.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function isAnimeBookmarked(link) {
+  if (!link) return false;
+  const bookmarks = getAnimeBookmarks();
+  return bookmarks.some(b => b.link === link);
+}
+
+function updateAnimeBookmarkButton() {
+  const btn = document.getElementById('btnAnimeBookmark');
+  if (!btn || !ANIME.selectedAnime) return;
+  const bookmarked = isAnimeBookmarked(ANIME.selectedAnime.link);
+  btn.textContent = bookmarked ? '⭐ TERSIMPAN (HAPUS)' : '🔖 + BOOKMARK';
+  btn.style.background = bookmarked ? '#21262d' : '#ff9900';
+  btn.style.color = bookmarked ? '#fff' : '#000';
+}
+
+function toggleAnimeBookmark() {
+  if (!ANIME.selectedAnime) return;
+  const anime = ANIME.selectedAnime;
+  let bookmarks = getAnimeBookmarks();
+  const index = bookmarks.findIndex(b => b.link === anime.link);
+  if (index >= 0) {
+    bookmarks.splice(index, 1);
+  } else {
+    bookmarks.unshift(anime);
+  }
+  localStorage.setItem('anime_bookmarks', JSON.stringify(bookmarks));
+  updateAnimeBookmarkButton();
+  renderAnimeBookmarks();
+}
+
+function renderAnimeBookmarks() {
+  const section = document.getElementById('animeBookmarkSection');
+  const row = document.getElementById('animeBookmarkRow');
+  const badge = document.getElementById('animeBookmarkBadge');
+  if (!section || !row || !badge) return;
+
+  const bookmarks = getAnimeBookmarks();
+  if (!bookmarks.length) {
+    section.style.display = 'none';
+    row.innerHTML = '';
+    badge.textContent = '';
+    return;
+  }
+  section.style.display = 'block';
+  badge.textContent = `${bookmarks.length} anime`;
+  row.innerHTML = '';
+  bookmarks.forEach(anime => {
+    row.appendChild(animeMakeCard(anime, true));
+  });
+}
+
+async function openAnimeDetail(anime) {
+  ANIME.selectedAnime = anime;
+  ANIME.episodes = [];
+
+  const panel = document.getElementById('animeDetailPanel');
+  document.getElementById('andTitle').textContent = anime.title || 'Anime';
+  document.getElementById('andPoster').src = anime.thumbnail || '';
+  document.getElementById('andDesc').textContent = 'Memuat detail & sinopsis...';
+  document.getElementById('andMeta').innerHTML = '';
+  document.getElementById('andEpisodes').innerHTML = `<div class="episode-empty">Memuat episode...</div>`;
+  updateAnimeBookmarkButton();
+  if (panel) {
+    panel.style.display = 'block';
+    // Scroll sheet to top on open
+    const sheet = panel.querySelector('.dracin-detail-sheet');
+    if (sheet) sheet.scrollTop = 0;
+  }
+
+  try {
+    const detail = await animeFetchPayload(`/api/anime/detail?url=${encodeURIComponent(anime.link)}`);
+    if (detail) {
+      document.getElementById('andDesc').textContent = detail.synopsis || 'Tidak ada sinopsis.';
+      const genres = detail.genres ? detail.genres.split(',') : [];
+      document.getElementById('andMeta').innerHTML = [
+        detail.status || '',
+        detail.total_episodes ? `${detail.total_episodes} Ep` : '',
+        ...genres.slice(0, 4)
+      ].filter(Boolean).map(x => `<span class="dracin-pill">${esc(String(x).trim())}</span>`).join('');
+
+      ANIME.episodes = detail.episodes || [];
+      renderAnimeEpisodes();
+    }
+  } catch (e) {
+    console.error(e);
+    document.getElementById('andDesc').textContent = 'Gagal memuat detail anime.';
+    document.getElementById('andEpisodes').innerHTML = `<div class="episode-empty">Gagal memuat episode.</div>`;
+  }
+}
+
+function renderAnimeEpisodes() {
+  const container = document.getElementById('andEpisodes');
+  if (!container) return;
+  const eps = ANIME.episodes;
+  if (!eps || !eps.length) {
+    container.innerHTML = `<div class="episode-empty">Episode tidak tersedia</div>`;
+    return;
+  }
+  container.innerHTML = eps.map((ep, i) => {
+    return `<button onclick="playAnimeEpisode('${esc(ep.link)}', '${esc(ep.title)}')">${esc(ep.number || (i+1))}</button>`;
+  }).join('');
+}
+
+function closeAnimeDetail() {
+  const panel = document.getElementById('animeDetailPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+async function playAnimeEpisode(epUrl, epTitle) {
+  saveAnimeContinueProgress(epUrl, epTitle);
+  closeAnimeDetail();
+  const modal = document.getElementById('animePlayerModal');
+  const iframe = document.getElementById('animeIframe');
+  const titleEl = document.getElementById('animePlayerTitle');
+  const subEl = document.getElementById('animePlayerSub');
+  const serverList = document.getElementById('animeServerList');
+
+  if (titleEl) titleEl.textContent = ANIME.selectedAnime?.title || 'Anime';
+  if (subEl) subEl.textContent = epTitle || 'Memuat server...';
+  if (iframe) iframe.src = '';
+  if (serverList) serverList.innerHTML = 'Memuat server...';
+  if (modal) modal.style.display = 'flex';
+
+  try {
+    const data = await animeFetchPayload(`/api/anime/stream?url=${encodeURIComponent(epUrl)}`);
+    if (data && data.stream_url) {
+      if (iframe) iframe.src = data.stream_url;
+      if (subEl) subEl.textContent = epTitle || 'Sedang Diputar';
+
+      if (serverList && data.servers && data.servers.length) {
+        serverList.innerHTML = data.servers.map(srv => `
+          <button onclick="switchAnimeServer('${esc(srv.url)}', this)" style="background:#21262d;color:#fff;border:1px solid rgba(255,255,255,0.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">
+            ${esc(srv.name)}
+          </button>
+        `).join('');
+      } else if (serverList) {
+        serverList.innerHTML = `<span style="color:#8b949e;font-size:12px">Default Server</span>`;
+      }
+    } else {
+      if (subEl) subEl.textContent = 'Gagal memuat video stream.';
+      if (serverList) serverList.innerHTML = '';
+    }
+  } catch (e) {
+    console.error(e);
+    if (subEl) subEl.textContent = 'Error koneksi server.';
+  }
+}
+
+function switchAnimeServer(url, btn) {
+  const iframe = document.getElementById('animeIframe');
+  if (iframe) iframe.src = url;
+  if (btn && btn.parentNode) {
+    btn.parentNode.querySelectorAll('button').forEach(b => b.style.borderColor = 'rgba(255,255,255,0.1)');
+    btn.style.borderColor = '#ff9900';
+  }
+}
+
+function closeAnimePlayer() {
+  const modal = document.getElementById('animePlayerModal');
+  const iframe = document.getElementById('animeIframe');
+  if (iframe) iframe.src = '';
+  if (modal) modal.style.display = 'none';
 }
 switchMainTab(_initialMainTab);
 enterBrowseOrientationMode();
