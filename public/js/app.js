@@ -2811,7 +2811,16 @@ async function animeFetchPayload(url) {
   const subToken = await requireSubscriptionToken();
   const opts = { headers: subToken ? { "X-Subscription-Token": subToken } : {} };
   const res = await appFetch(url, opts);
-  const json = await res.json();
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = JSON.parse(text);
+      if (j && (j.message || j.error)) msg = j.message || j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+  const json = await res.json().catch(() => ({}));
   return json?.data || json;
 }
 
@@ -3094,6 +3103,17 @@ function closeAnimePlayer() {
   if (iframe) iframe.src = '';
   if (modal) modal.style.display = 'none';
 }
+
+// Bind anime functions explicitly to window for inline HTML handlers
+window.closeAnimeDetail = closeAnimeDetail;
+window.openAnimeDetail = openAnimeDetail;
+window.playAnimeEpisode = playAnimeEpisode;
+window.closeAnimePlayer = closeAnimePlayer;
+window.toggleAnimeBookmark = toggleAnimeBookmark;
+window.switchAnimeServer = switchAnimeServer;
+window.animeSearch = animeSearch;
+window.renderAnimeBookmarks = renderAnimeBookmarks;
+window.renderAnimeContinueWatching = renderAnimeContinueWatching;
 switchMainTab(_initialMainTab);
 enterBrowseOrientationMode();
 document.addEventListener("visibilitychange", () => {
