@@ -1696,11 +1696,19 @@ def anime_api_route(subpath=""):
 
     if subpath in ("bookmarks", "telegram/test"):
         from api.anime_notifications import build_response as build_notification_response
-        data, code = build_notification_response(
-            f"/api/anime/{subpath}",
-            request.headers,
-            request.get_json(silent=True) or {},
-        )
+        try:
+            data, code = build_notification_response(
+                f"/api/anime/{subpath}",
+                request.headers,
+                request.get_json(silent=True) or {},
+            )
+        except Exception as exc:
+            app.logger.exception("Anime notification endpoint failed")
+            data = {
+                "status": "error",
+                "message": str(exc)[:500] or "Sinkronisasi bookmark gagal.",
+            }
+            code = 500
         return jsonify(data), code
 
     from api.anime import build_response

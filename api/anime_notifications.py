@@ -112,10 +112,6 @@ def replace_bookmarks(username, bookmarks):
     existing_by_url = {row.get("anime_url"): row for row in existing}
     wanted = {item["anime_url"]: item for item in normalized}
 
-    for row in existing:
-        if row.get("anime_url") not in wanted:
-            _supabase("DELETE", "anime_bookmarks", params={"username": _eq(username), "anime_url": _eq(row.get("anime_url"))})
-
     scraper = SamehadakuScraper()
     rows = []
     for item in normalized:
@@ -135,7 +131,26 @@ def replace_bookmarks(username, bookmarks):
                 pass
         rows.append(row)
     if rows:
-        _supabase("POST", "anime_bookmarks", payload=rows, prefer="resolution=merge-duplicates")
+        _supabase(
+            "POST",
+            "anime_bookmarks",
+            params={"on_conflict": "username,anime_url"},
+            payload=rows,
+            prefer="resolution=merge-duplicates",
+        )
+
+    # Delete removed bookmarks only after the upsert succeeds, so a temporary
+    # database/source error cannot leave the user's bookmark list half-synced.
+    for existing_row in existing:
+        if existing_row.get("anime_url") not in wanted:
+            _supabase(
+                "DELETE",
+                "anime_bookmarks",
+                params={
+                    "username": _eq(username),
+                    "anime_url": _eq(existing_row.get("anime_url")),
+                },
+            )
     return list_bookmarks(username)
 
 
@@ -152,7 +167,13 @@ def save_bookmark(username, item):
             row["last_episode_url"] = latest.get("link")
     except Exception:
         pass
-    result = _supabase("POST", "anime_bookmarks", payload=row, prefer="resolution=merge-duplicates,return=representation")
+    result = _supabase(
+        "POST",
+        "anime_bookmarks",
+        params={"on_conflict": "username,anime_url"},
+        payload=row,
+        prefer="resolution=merge-duplicates,return=representation",
+    )
     return result[0] if isinstance(result, list) and result else row
 
 
@@ -269,6 +290,7 @@ def check_for_new_episodes():
                 _supabase(
                     "POST",
                     "anime_notifications",
+                    params={"on_conflict": "username,episode_url"},
                     payload={"username": username, "anime_url": bookmark.get("anime_url"), "episode_url": episode_url, "episode_number": _episode_number(episode)},
                     prefer="resolution=ignore-duplicates",
                 )
@@ -316,7 +338,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._send_json(check_for_new_episodes(), 200)
             except Exception as exc:
                 return self._send_json({"status": "error", "message": str(exc)}, 500)
-        data, code = build_response(parsed.path, self.headers, {})
+        try:
+            data, code = build_response(parsed.path, self.headers, {})
+        except Exception as exc:
+            data, code = {"status": "error", "message": str(exc)[:500]}, 500
         return self._send_json(data, code)
 
     def do_POST(self):
@@ -330,7 +355,10 @@ class handler(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(content_length).decode("utf-8"))
             except (TypeError, ValueError, json.JSONDecodeError):
                 body = {}
-        data, code = build_response(parsed.path, self.headers, body)
+        try:
+            data, code = build_response(parsed.path, self.headers, body)
+        except Exception as exc:
+            data, code = {"status": "error", "message": str(exc)[:500]}, 500
         return self._send_json(data, code)
 
     def _send_json(self, data, code=200):
