@@ -1040,6 +1040,13 @@ def proxy():
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "cross-site",
         }
+        if (parsed.hostname or "").lower().endswith("googlevideo.com"):
+            return [("blogger", {
+                **common,
+                "Referer": "https://www.blogger.com/",
+                "Origin": "https://www.blogger.com",
+                **forwarded,
+            })]
         configured = {**common, **VIDEO_SPOOF_HEADERS, **forwarded}
         origin_ref = {**common, "Referer": f"{origin}/", "Origin": origin, **forwarded}
         no_origin = {**common, "Referer": f"{origin}/", **forwarded}

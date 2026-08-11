@@ -64,6 +64,20 @@ def _filedon_proxy_url(url):
         return f"/api/anime/embed?url={quote(url, safe='')}"
 
 
+def _media_proxy_url(url):
+    """Return a signed same-origin relay URL for expiring media sources."""
+    if not url:
+        return ""
+    try:
+        try:
+            from .lib.proxy_signing import sign_proxy_url
+        except ImportError:
+            from lib.proxy_signing import sign_proxy_url
+        return sign_proxy_url(url)
+    except Exception:
+        return f"/api/proxy?url={quote(url, safe='')}"
+
+
 def _rewrite_filedon_embed(html_text):
     """Make a Filedon embed usable from our player without leaking secrets."""
     soup = BeautifulSoup(html_text or "", "html.parser")
@@ -293,12 +307,30 @@ def _resolve_blogger_media(url):
 
         if not info:
             return None
-        media_url = info.get("url") or ""
-        if not media_url:
-            formats = info.get("formats") or []
-            formats = [f for f in formats if f.get("url")]
-            if formats:
-                media_url = formats[-1]["url"]
+        formats = [f for f in (info.get("formats") or []) if f.get("url")]
+        progressive = [
+            f for f in formats
+            if (f.get("ext") or "").lower() == "mp4"
+            and f.get("vcodec") != "none"
+            and f.get("acodec") != "none"
+        ]
+        def format_score(fmt):
+            try:
+                height = float(fmt.get("height") or 0)
+            except (TypeError, ValueError):
+                height = 0
+            try:
+                bitrate = float(fmt.get("tbr") or 0)
+            except (TypeError, ValueError):
+                bitrate = 0
+            return height, bitrate
+
+        progressive.sort(key=format_score, reverse=True)
+        selected_format = progressive[0] if progressive else None
+        media_url = (selected_format or {}).get("url") or info.get("url") or ""
+        if not media_url and formats:
+            selected_format = formats[-1]
+            media_url = selected_format["url"]
         if not media_url:
             return None
 
@@ -311,9 +343,12 @@ def _resolve_blogger_media(url):
 
         return {
             "url": media_url,
-            "type": info.get("ext") or "mp4",
-            "mime": info.get("http_headers", {}).get("Content-Type", "video/mp4"),
-            "headers": info.get("http_headers") or {},
+            "type": (selected_format or {}).get("ext") or info.get("ext") or "mp4",
+            "mime": (selected_format or {}).get("http_headers", {}).get(
+                "Content-Type",
+                info.get("http_headers", {}).get("Content-Type", "video/mp4"),
+            ),
+            "headers": (selected_format or {}).get("http_headers") or info.get("http_headers") or {},
             "expires_at": expiry,
         }
     except Exception as exc:
@@ -578,7 +613,7 @@ class SamehadakuScraper:
                             provider = 'vip_streaming' if (
                                 _is_filedon_url(src)
                                 or ('vip' in server_name.lower() and 'stream' in server_name.lower())
-                            ) else 'embed'
+                            ) else 'blogspot' if (urlparse(src).hostname or '').lower() in BLOGGER_HOSTS else 'embed'
                             display_name = 'VIP Streaming' if provider == 'vip_streaming' else server_name
                             player_url = _filedon_proxy_url(src) if provider == 'vip_streaming' else src
                             direct_server = _direct_media_from_url(src)
@@ -593,6 +628,18 @@ class SamehadakuScraper:
                                 server['direct_url'] = direct_server['url']
                                 server['direct_type'] = direct_server['type']
                                 server['direct_mime'] = direct_server['mime']
+                                server['direct_headers'] = direct_server.get('headers') or {}
+                                server['expires_at'] = direct_server.get('expires_at')
+                            elif provider == 'blogspot':
+                                blogger_media = _resolve_blogger_media(src)
+                                if blogger_media:
+                                    server['direct_url'] = _media_proxy_url(blogger_media['url'])
+                                    server['source_direct_url'] = blogger_media['url']
+                                    server['direct_type'] = blogger_media['type']
+                                    server['direct_mime'] = blogger_media['mime']
+                                    server['direct_headers'] = blogger_media['headers']
+                                    server['expires_at'] = blogger_media['expires_at']
+                                    server['type'] = 'direct'
                             elif provider == 'vip_streaming' and _is_filedon_url(src):
                                 # Filedon wraps the signed R2/S3 URL in its
                                 # Inertia payload. Keep it as metadata while
@@ -613,23 +660,31 @@ class SamehadakuScraper:
                 best_server = None
                 active_opt = soup.select_one('.east_player_option.on')
                 active_name = active_opt.text.strip().lower() if active_opt else ''
+
+                # Prefer browser-native progressive/HLS sources. Filedon's
+                # VIP source is commonly MKV, which Chrome/Safari cannot play
+                # reliably even though the signed URL itself is valid.
+                def server_score(server):
+                    name = (server.get('name') or '').lower()
+                    media_type = (server.get('direct_type') or '').lower()
+                    direct = bool(server.get('direct_url'))
+                    browser_native = media_type in ('mp4', 'm3u8', 'webm', 'ogg')
+                    quality = 1080 if '1080' in name or 'fullhd' in name else 720 if '720' in name or 'hd' in name else 480 if '480' in name else 0
+                    return (
+                        3 if direct and browser_native else 2 if direct else 1,
+                        1 if server.get('provider') == 'blogspot' and direct else 0,
+                        quality,
+                    )
+
+                best_server = max(result['servers'], key=server_score)
                 
-                for srv in result['servers']:
-                    srv_lower = srv['name'].lower()
-                    if 'premium' in srv_lower or '1080' in srv_lower or '720' in srv_lower:
-                        best_server = srv
-                        break
-                
-                if not best_server and active_name:
+                if best_server and server_score(best_server)[0] <= 1 and active_name:
                     for srv in result['servers']:
                         if srv['name'].lower() == active_name:
                             best_server = srv
                             break
-                            
-                if not best_server:
-                    best_server = result['servers'][0]
                     
-                result['stream_url'] = best_server['url']
+                result['stream_url'] = best_server.get('direct_url') or best_server['url']
                 result['embed_url'] = best_server['url']
                 if best_server.get('direct_url'):
                     result['direct_url'] = best_server['direct_url']
@@ -657,10 +712,10 @@ class SamehadakuScraper:
                 result['direct_headers'] = direct_media['headers']
                 result['expires_at'] = direct_media['expires_at']
                 result['resolver'] = 'direct'
-            else:
+            elif not result.get('direct_url'):
                 blogger_media = _resolve_blogger_media(result.get('embed_url'))
                 if blogger_media:
-                    result['direct_url'] = blogger_media['url']
+                    result['direct_url'] = _media_proxy_url(blogger_media['url'])
                     result['direct_type'] = blogger_media['type']
                     result['direct_mime'] = blogger_media['mime']
                     result['direct_headers'] = blogger_media['headers']

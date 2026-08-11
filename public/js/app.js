@@ -2778,6 +2778,10 @@ const ANIME = {
   selectedAnime: null,
   episodes: [],
   seenLinks: new Set(),
+  servers: [],
+  currentEpisodeUrl: '',
+  playerHls: null,
+  progressSaveAt: 0,
 };
 
 function animeStatus(show, txt) {
@@ -2939,6 +2943,8 @@ function saveAnimeContinueProgress(epUrl, epTitle) {
     const id = `anime_${anime.link || anime.title}`;
     const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
     const existing = all.findIndex(x => x.id === id);
+    const previous = existing >= 0 ? all[existing] : null;
+    const sameEpisode = previous?.epUrl === epUrl;
     const entry = {
       id,
       mediaType: 'anime',
@@ -2947,7 +2953,10 @@ function saveAnimeContinueProgress(epUrl, epTitle) {
       href: '#',
       epTitle: epTitle || 'Episode Anime',
       epUrl,
-      pct: 0.5,
+      pct: sameEpisode ? (previous?.pct || 0) : 0,
+      position: sameEpisode ? (previous?.position || 0) : 0,
+      duration: sameEpisode ? (previous?.duration || 0) : 0,
+      updatedAt: Date.now(),
       item: anime,
     };
     if (existing >= 0) all[existing] = entry; else all.unshift(entry);
@@ -2981,14 +2990,16 @@ function renderAnimeContinueWatching() {
     items.forEach(cw => {
       const card = document.createElement('div');
       card.className = 'cw-card';
-      card.onclick = () => {
-        if (cw.item) openAnimeDetail(cw.item);
+      card.onclick = async () => {
+        if (!cw.item) return;
+        await openAnimeDetail(cw.item);
+        await playAnimeEpisode(cw.epUrl, cw.epTitle || 'Lanjut menonton');
       };
       card.innerHTML = `
         <div class="cw-poster"><img src="${esc(cw.poster || '')}" alt="${esc(cw.title)}"></div>
         <div style="min-width:0">
           <div class="cw-name">${esc(cw.title)}</div>
-          <div class="cw-meta">${esc(cw.epTitle || 'Lanjut nonton')}</div>
+          <div class="cw-meta">${esc(cw.epTitle || 'Lanjut nonton')}${cw.pct > 0 ? ` • ${Math.round(cw.pct * 100)}%` : ''}</div>
           <div class="cw-action">▶ PUTAR KEMBALI</div>
         </div>
       `;
@@ -3034,6 +3045,52 @@ async function syncAnimeBookmarksToServer(bookmarks = getAnimeBookmarks()) {
   } catch (e) {
     console.warn('[Anime] Sinkronisasi bookmark gagal:', e.message || e);
     return [];
+  }
+}
+
+function getAnimeContinueEntry(epUrl = ANIME.currentEpisodeUrl) {
+  if (!epUrl) return null;
+  try {
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    return all.find(item => item && item.mediaType === 'anime' && item.epUrl === epUrl) || null;
+  } catch {
+    return null;
+  }
+}
+
+function updateAnimeContinuePosition(position, duration) {
+  const epUrl = ANIME.currentEpisodeUrl;
+  if (!epUrl || !ANIME.selectedAnime) return;
+  const now = Date.now();
+  if (now - ANIME.progressSaveAt < 1800 && position < duration - 2) return;
+  ANIME.progressSaveAt = now;
+  try {
+    const all = JSON.parse(localStorage.getItem('cw_progress') || '[]');
+    const anime = ANIME.selectedAnime;
+    const id = `anime_${anime.link || anime.title}`;
+    const index = all.findIndex(item => item && item.id === id);
+    const existing = index >= 0 ? all[index] : {};
+    const entry = {
+      ...existing,
+      id,
+      mediaType: 'anime',
+      title: anime.title || 'Anime',
+      poster: anime.thumbnail || '',
+      href: '#',
+      epTitle: existing.epTitle || 'Episode Anime',
+      epUrl,
+      position: Math.max(0, Number(position) || 0),
+      duration: Math.max(0, Number(duration) || 0),
+      pct: duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0,
+      updatedAt: now,
+      item: anime,
+    };
+    if (index >= 0) all[index] = entry; else all.unshift(entry);
+    if (all.length > 24) all.length = 24;
+    localStorage.setItem('cw_progress', JSON.stringify(all));
+    renderAnimeContinueWatching();
+  } catch (e) {
+    console.warn('[Anime] Gagal menyimpan posisi:', e);
   }
 }
 
@@ -3154,49 +3211,134 @@ function closeAnimeDetail() {
 }
 
 async function playAnimeEpisode(epUrl, epTitle) {
+  if (!epUrl) return;
+  ANIME.currentEpisodeUrl = epUrl;
+  ANIME.progressSaveAt = 0;
   saveAnimeContinueProgress(epUrl, epTitle);
   closeAnimeDetail();
   enterWatchingOrientationMode();
   const modal = document.getElementById('animePlayerModal');
+  const video = document.getElementById('animeVideo');
   const iframe = document.getElementById('animeIframe');
+  const loading = document.getElementById('animePlayerLoading');
   const titleEl = document.getElementById('animePlayerTitle');
   const subEl = document.getElementById('animePlayerSub');
   const serverList = document.getElementById('animeServerList');
 
   if (titleEl) titleEl.textContent = ANIME.selectedAnime?.title || 'Anime';
   if (subEl) subEl.textContent = epTitle || 'Memuat server...';
-  if (iframe) iframe.src = '';
+  resetAnimePlayerMedia();
+  if (loading) loading.style.display = '';
   if (serverList) serverList.innerHTML = 'Memuat server...';
   if (modal) modal.style.display = 'flex';
 
   try {
     const data = await animeFetchPayload(`/api/anime/stream?url=${encodeURIComponent(epUrl)}`);
-    if (data && data.stream_url) {
-      if (iframe) iframe.src = data.stream_url;
+    if (data && (data.direct_url || data.stream_url)) {
+      ANIME.servers = Array.isArray(data.servers) ? data.servers : [];
+      const defaultServer = {
+        name: 'Default',
+        url: data.embed_url || data.stream_url,
+        direct_url: data.direct_url,
+        direct_type: data.direct_type,
+        direct_mime: data.direct_mime,
+        provider: data.resolver,
+      };
+      playAnimeServer(defaultServer);
       if (subEl) subEl.textContent = epTitle || 'Sedang Diputar';
 
-      if (serverList && data.servers && data.servers.length) {
-        serverList.innerHTML = data.servers.map(srv => `
-          <button onclick="switchAnimeServer('${esc(srv.url)}', this)" style="background:#21262d;color:#fff;border:1px solid rgba(255,255,255,0.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">
-            ${esc(srv.name)}
+      if (serverList && ANIME.servers.length) {
+        serverList.innerHTML = ANIME.servers.map((srv, index) => `
+          <button data-anime-server="${index}" onclick="switchAnimeServer(${index}, this)" style="background:#21262d;color:#fff;border:1px solid rgba(255,255,255,0.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap">
+            ${esc(srv.name)}${srv.direct_url ? ' • Player' : ' • Embed'}
           </button>
         `).join('');
       } else if (serverList) {
         serverList.innerHTML = `<span style="color:#8b949e;font-size:12px">Default Server</span>`;
       }
     } else {
+      if (loading) {
+        loading.style.display = '';
+        loading.textContent = 'Video tidak tersedia.';
+      }
       if (subEl) subEl.textContent = 'Gagal memuat video stream.';
       if (serverList) serverList.innerHTML = '';
     }
   } catch (e) {
     console.error(e);
+    if (loading) {
+      loading.style.display = '';
+      loading.textContent = 'Gagal memuat video.';
+    }
     if (subEl) subEl.textContent = 'Error koneksi server.';
   }
 }
 
-function switchAnimeServer(url, btn) {
+function resetAnimePlayerMedia() {
+  const video = document.getElementById('animeVideo');
   const iframe = document.getElementById('animeIframe');
-  if (iframe) iframe.src = url;
+  if (ANIME.playerHls) {
+    try { ANIME.playerHls.destroy(); } catch {}
+    ANIME.playerHls = null;
+  }
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.style.display = 'none';
+  }
+  if (iframe) {
+    iframe.src = '';
+    iframe.style.display = 'none';
+  }
+}
+
+function playAnimeServer(server) {
+  if (!server) return;
+  const video = document.getElementById('animeVideo');
+  const iframe = document.getElementById('animeIframe');
+  const loading = document.getElementById('animePlayerLoading');
+  const mediaUrl = server.direct_url || (server.type === 'direct' ? server.url : '');
+  const mediaType = String(server.direct_type || '').toLowerCase();
+  const nativeType = mediaType === 'mp4' || mediaType === 'm3u8' || mediaType === 'webm' || mediaType === 'ogg';
+  resetAnimePlayerMedia();
+
+  if (mediaUrl && nativeType && video) {
+    const saved = getAnimeContinueEntry();
+    video.style.display = 'block';
+    if (loading) loading.style.display = 'none';
+    if ((mediaType === 'm3u8' || mediaUrl.includes('.m3u8')) && window.Hls && Hls.isSupported()) {
+      ANIME.playerHls = new Hls();
+      ANIME.playerHls.loadSource(mediaUrl);
+      ANIME.playerHls.attachMedia(video);
+    } else {
+      video.src = mediaUrl;
+    }
+    video.addEventListener('loadedmetadata', () => {
+      if (saved?.position > 5 && saved.position < video.duration - 8) {
+        video.currentTime = saved.position;
+      }
+      video.play().catch(() => {});
+    }, { once: true });
+    video.play().catch(() => {});
+    return;
+  }
+
+  if (server.url && iframe) {
+    iframe.style.display = 'block';
+    iframe.src = server.url;
+    if (loading) loading.style.display = 'none';
+    return;
+  }
+  if (loading) {
+    loading.style.display = '';
+    loading.textContent = 'Server ini tidak memiliki sumber yang dapat diputar.';
+  }
+}
+
+function switchAnimeServer(index, btn) {
+  const server = ANIME.servers[Number(index)];
+  playAnimeServer(server);
   if (btn && btn.parentNode) {
     btn.parentNode.querySelectorAll('button').forEach(b => b.style.borderColor = 'rgba(255,255,255,0.1)');
     btn.style.borderColor = '#ff9900';
@@ -3205,11 +3347,30 @@ function switchAnimeServer(url, btn) {
 
 function closeAnimePlayer() {
   const modal = document.getElementById('animePlayerModal');
-  const iframe = document.getElementById('animeIframe');
-  if (iframe) iframe.src = '';
+  const video = document.getElementById('animeVideo');
+  if (video && Number.isFinite(video.duration)) updateAnimeContinuePosition(video.currentTime, video.duration);
+  resetAnimePlayerMedia();
   if (modal) modal.style.display = 'none';
   enterBrowseOrientationMode();
 }
+
+function initAnimeVideoProgress() {
+  const video = document.getElementById('animeVideo');
+  if (!video || video.dataset.progressBound === '1') return;
+  video.dataset.progressBound = '1';
+  video.addEventListener('loadedmetadata', () => {
+    const saved = getAnimeContinueEntry();
+    if (saved?.position > 5 && saved.position < video.duration - 8) {
+      video.currentTime = saved.position;
+    }
+  });
+  video.addEventListener('timeupdate', () => {
+    if (Number.isFinite(video.duration)) updateAnimeContinuePosition(video.currentTime, video.duration);
+  });
+  video.addEventListener('ended', () => updateAnimeContinuePosition(video.duration, video.duration));
+}
+
+initAnimeVideoProgress();
 
 async function animeLoadMore() {
   if (ANIME.loading || !ANIME.hasMore) return;
