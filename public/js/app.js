@@ -3568,6 +3568,8 @@ window["renderContinueWatching"] = window.renderContinueWatching = renderContinu
 window["enterBrowseOrientationMode"] = window.enterBrowseOrientationMode = enterBrowseOrientationMode;
 window["startStream"] = window.startStream = startStream;
 window["enterWatchingOrientationMode"] = window.enterWatchingOrientationMode = enterWatchingOrientationMode;
+window["playPlayerEpisode"] = window.playPlayerEpisode = playPlayerEpisode;
+window["selectPlayerSeason"] = window.selectPlayerSeason = selectPlayerSeason;
 
 /* Dracin */
 window["dracinSwitchPlatform"] = window.dracinSwitchPlatform = dracinSwitchPlatform;
