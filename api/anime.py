@@ -2,7 +2,8 @@
 api/anime.py
 Handler endpoint Anime streaming berbasis scraper Samehadaku.
 """
-import os, sys, json, time, re
+import os, sys, json, time, re, html as html_lib
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote, unquote
 
@@ -14,6 +15,310 @@ except Exception:
     cloudscraper = None
 
 from bs4 import BeautifulSoup
+
+try:
+    import yt_dlp
+except Exception:
+    yt_dlp = None
+
+
+BLOGGER_HOSTS = {
+    "blogger.com",
+    "www.blogger.com",
+    "blogspot.com",
+}
+
+FILEDON_HOSTS = {
+    "filedon.co",
+    "www.filedon.co",
+}
+
+DIRECT_MEDIA_EXTENSIONS = (".mp4", ".m3u8", ".webm", ".ogg")
+
+
+def _is_filedon_url(url):
+    try:
+        return (urlparse(url).hostname or "").lower() in FILEDON_HOSTS
+    except Exception:
+        return False
+
+
+def _filedon_proxy_url(url):
+    """Return the local relay URL used for Filedon VIP embeds."""
+    if not _is_filedon_url(url):
+        return url
+    # Reuse the application's proxy signature format, but point it at the
+    # HTML relay route. The iframe navigation cannot carry X-Subscription-
+    # Token headers, so a short-lived signed query is required here.
+    try:
+        try:
+            from .lib.proxy_signing import sign_proxy_url
+        except ImportError:
+            from lib.proxy_signing import sign_proxy_url
+        signed = sign_proxy_url(url)
+        query = signed.split("?", 1)[1]
+        return f"/api/anime/embed?{query}"
+    except Exception:
+        # Development environments without subscription configuration can use
+        # the unsigned path; production validation below still rejects it.
+        return f"/api/anime/embed?url={quote(url, safe='')}"
+
+
+def _rewrite_filedon_embed(html_text):
+    """Make a Filedon embed usable from our player without leaking secrets."""
+    soup = BeautifulSoup(html_text or "", "html.parser")
+    fallback_media_url = ""
+    fallback_mime = "video/mp4"
+    app_node = soup.find(id="app")
+    if app_node:
+        raw_page = app_node.get("data-page") or ""
+        try:
+            page = json.loads(html_lib.unescape(raw_page))
+            props = page.get("props") if isinstance(page, dict) else None
+
+            if isinstance(props, dict):
+                media = props.get("media") if isinstance(props.get("media"), dict) else {}
+                fallback_media_url = media.get("hls_url") or props.get("url") or ""
+                if media.get("hls_url"):
+                    fallback_mime = "application/vnd.apple.mpegurl"
+                player_setting = props.get("player_setting")
+                if isinstance(player_setting, dict):
+                    # The upstream embed only allows Samehadaku domains. The
+                    # relay is already fetching the page on behalf of that site.
+                    player_setting["domain_whitelist_enabled"] = False
+                    player_setting["domain_whitelist"] = []
+
+                # The upstream data-page contains S3 access credentials in the
+                # storage config. They are not required by the public player.
+                files = props.get("files")
+                if isinstance(files, dict):
+                    fallback_mime = files.get("mime_type") or fallback_mime
+                storage = files.get("storage") if isinstance(files, dict) else None
+                if isinstance(storage, dict):
+                    storage.pop("config", None)
+
+            app_node["data-page"] = json.dumps(page, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+
+    # Filedon's JS uses relative routes/assets. Keep those requests on the
+    # original host even though the document itself is served by our relay.
+    if soup.head and not soup.head.find("base"):
+        base = soup.new_tag("base", href="https://filedon.co/")
+        soup.head.insert(0, base)
+
+    # Cross-origin module loading can vary between Filedon/Cloudflare
+    # deployments. If their normal player did not render a <video>, fall back
+    # to the signed media URL already present in the public Inertia payload.
+    if soup.body and fallback_media_url:
+        fallback = soup.new_tag("script")
+        source_json = json.dumps(fallback_media_url, ensure_ascii=False)
+        mime_json = json.dumps(fallback_mime, ensure_ascii=False)
+        fallback.string = f"""
+        (() => {{
+          const source = {source_json};
+          const mime = {mime_json};
+          window.setTimeout(() => {{
+            if (document.querySelector('video')) return;
+            document.body.innerHTML = '';
+            document.body.style.cssText = 'margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh';
+            const video = document.createElement('video');
+            video.controls = true;
+            video.autoplay = true;
+            video.playsInline = true;
+            video.style.cssText = 'width:100%;height:100vh;background:#000';
+            const item = document.createElement('source');
+            item.src = source;
+            item.type = mime;
+            video.appendChild(item);
+            document.body.appendChild(video);
+          }}, 2500);
+        }})();
+        """
+        soup.body.append(fallback)
+    return str(soup)
+
+
+def proxy_filedon_embed(url):
+    """Fetch and sanitize a Filedon embed for the VIP Streaming provider."""
+    if not _is_filedon_url(url):
+        return None, 400
+
+    import requests
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                "Referer": "https://v2.samehadaku.how/",
+                "Upgrade-Insecure-Requests": "1",
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        print(f"Filedon embed relay failed: {exc}")
+        return None, 502
+
+    final_url = getattr(response, "url", url)
+    if not _is_filedon_url(final_url):
+        print(f"Filedon embed relay rejected redirect: {final_url}")
+        return None, 502
+    if response.status_code != 200:
+        return None, response.status_code
+    return _rewrite_filedon_embed(response.text), 200
+
+
+def _filedon_page_props(html_text):
+    soup = BeautifulSoup(html_text or "", "html.parser")
+    app_node = soup.find(id="app")
+    if not app_node:
+        return None
+    raw_page = app_node.get("data-page") or ""
+    try:
+        page = json.loads(raw_page)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        try:
+            page = json.loads(html_lib.unescape(raw_page))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+    props = page.get("props") if isinstance(page, dict) else None
+    return props if isinstance(props, dict) else None
+
+
+def _filedon_expiry(media_url):
+    """Read expiry from an S3/R2 signed URL when available."""
+    try:
+        query = parse_qs(urlparse(media_url).query)
+        signed_at = query.get("X-Amz-Date", [""])[0]
+        lifetime = int(query.get("X-Amz-Expires", [0])[0])
+        if not signed_at or not lifetime:
+            return None
+        created = datetime.strptime(signed_at, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        return int(created.timestamp()) + lifetime
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_filedon_media(url, referer="https://v2.samehadaku.how/"):
+    """Resolve the signed media URL embedded in Filedon's Inertia payload."""
+    if not _is_filedon_url(url):
+        return None
+
+    import requests
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                "Referer": referer or "https://v2.samehadaku.how/",
+            },
+            timeout=12,
+        )
+        final_url = getattr(response, "url", url)
+        if not _is_filedon_url(final_url) or response.status_code != 200:
+            return None
+    except requests.RequestException as exc:
+        print(f"Filedon media resolve failed: {exc}")
+        return None
+
+    props = _filedon_page_props(response.text)
+    if not props:
+        return None
+
+    media = props.get("media") if isinstance(props.get("media"), dict) else {}
+    media_url = media.get("hls_url") or props.get("url") or ""
+    if not media_url:
+        return None
+
+    files = props.get("files") if isinstance(props.get("files"), dict) else {}
+    extension = (files.get("extension") or urlparse(media_url).path.rsplit(".", 1)[-1] or "mp4").lower()
+    mime = files.get("mime_type") or (
+        "application/vnd.apple.mpegurl" if media_url.lower().split("?", 1)[0].endswith(".m3u8")
+        else "video/x-matroska" if extension == "mkv"
+        else f"video/{extension}"
+    )
+    return {
+        "url": media_url,
+        "type": "m3u8" if media_url.lower().split("?", 1)[0].endswith(".m3u8") else extension,
+        "mime": mime,
+        "headers": {"Referer": "https://v2.samehadaku.how/"},
+        "expires_at": _filedon_expiry(media_url),
+    }
+
+
+def _direct_media_from_url(url):
+    """Return metadata when a provider response is already a media URL."""
+    if not url:
+        return None
+    path = (urlparse(url).path or "").lower()
+    if not path.endswith(DIRECT_MEDIA_EXTENSIONS):
+        return None
+
+    media_type = path.rsplit(".", 1)[-1]
+    mime = "application/vnd.apple.mpegurl" if media_type == "m3u8" else f"video/{media_type}"
+    return {
+        "url": url,
+        "type": media_type,
+        "mime": mime,
+        "headers": {},
+        "expires_at": None,
+    }
+
+
+def _resolve_blogger_media(url):
+    """Resolve a public Blogger video.g URL to its temporary media URL.
+
+    Blogger obtains the googlevideo URL through a batchexecute call.  yt-dlp
+    already implements that protocol, so use it server-side instead of
+    attempting to read the cross-origin iframe from the browser.
+    """
+    if not url or yt_dlp is None:
+        return None
+
+    try:
+        host = (urlparse(url).hostname or "").lower()
+        if host not in BLOGGER_HOSTS:
+            return None
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "format": "best[ext=mp4]/best",
+            "socket_timeout": 10,
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        if not info:
+            return None
+        media_url = info.get("url") or ""
+        if not media_url:
+            formats = info.get("formats") or []
+            formats = [f for f in formats if f.get("url")]
+            if formats:
+                media_url = formats[-1]["url"]
+        if not media_url:
+            return None
+
+        expiry = info.get("expiry")
+        if not expiry:
+            try:
+                expiry = int(parse_qs(urlparse(media_url).query).get("expire", [0])[0])
+            except (TypeError, ValueError):
+                expiry = None
+
+        return {
+            "url": media_url,
+            "type": info.get("ext") or "mp4",
+            "mime": info.get("http_headers", {}).get("Content-Type", "video/mp4"),
+            "headers": info.get("http_headers") or {},
+            "expires_at": expiry,
+        }
+    except Exception as exc:
+        print(f"Blogger media resolve failed: {exc}")
+        return None
 
 class SamehadakuScraper:
     def __init__(self):
@@ -214,40 +519,87 @@ class SamehadakuScraper:
         
         result = {
             'stream_url': None,
+            'embed_url': None,
+            'direct_url': None,
+            'direct_type': None,
+            'direct_mime': None,
+            'direct_headers': {},
+            'expires_at': None,
+            'resolver': None,
             'servers': [],
             'downloads': []
         }
         
         try:
-            opts = soup.find_all('div', class_='east_player_option') or soup.find_all('div', id=lambda i: i and 'player-option' in i)
+            # Samehadaku currently renders all providers as east_player_option
+            # nodes (Blogspot, VIP Streaming, Wibufile, Mega, ...). Keep the
+            # id selector as a fallback for theme changes.
+            opts = soup.select('.east_player_option, [id*="player-option"]')
             ajax_url = f"{self.base_url}/wp-admin/admin-ajax.php"
+            seen_option_keys = set()
             
             for opt in opts:
                 post_id = opt.get('data-post')
                 nume = opt.get('data-nume')
                 type_val = opt.get('data-type', 'schtml')
-                server_name = opt.text.strip()
+                server_name = opt.get_text(' ', strip=True)
                 
                 if not post_id or not nume:
                     continue
+
+                option_key = (str(post_id), str(nume), str(type_val))
+                if option_key in seen_option_keys:
+                    continue
+                seen_option_keys.add(option_key)
                 
                 headers = self.headers.copy()
                 headers['X-Requested-With'] = 'XMLHttpRequest'
                 headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+                headers['Accept'] = '*/*'
+                headers['Origin'] = self.base_url
+                headers['Referer'] = episode_url
                 
                 try:
                     res = self.scraper.post(ajax_url, data={'action': 'player_ajax', 'post': post_id, 'nume': nume, 'type': type_val}, headers=headers, timeout=5)
                     if res.status_code == 200:
                         iframe_soup = BeautifulSoup(res.text, 'html.parser')
                         iframe = iframe_soup.find('iframe')
-                        if iframe and iframe.get('src'):
-                            src = iframe['src']
+                        if iframe and (iframe.get('src') or iframe.get('data-src')):
+                            src = iframe.get('src') or iframe.get('data-src')
+                            src = html_lib.unescape(src).strip()
                             if src.startswith('//'):
                                 src = 'https:' + src
-                            result['servers'].append({
-                                'name': server_name,
-                                'url': src
-                            })
+                            provider = 'vip_streaming' if (
+                                _is_filedon_url(src)
+                                or ('vip' in server_name.lower() and 'stream' in server_name.lower())
+                            ) else 'embed'
+                            display_name = 'VIP Streaming' if provider == 'vip_streaming' else server_name
+                            player_url = _filedon_proxy_url(src) if provider == 'vip_streaming' else src
+                            direct_server = _direct_media_from_url(src)
+                            server = {
+                                'name': display_name or 'Server',
+                                'url': player_url,
+                                'source_url': src,
+                                'provider': provider,
+                                'type': 'direct' if direct_server else 'embed'
+                            }
+                            if direct_server:
+                                server['direct_url'] = direct_server['url']
+                                server['direct_type'] = direct_server['type']
+                                server['direct_mime'] = direct_server['mime']
+                            elif provider == 'vip_streaming' and _is_filedon_url(src):
+                                # Filedon wraps the signed R2/S3 URL in its
+                                # Inertia payload. Keep it as metadata while
+                                # the normal player URL remains the sanitized
+                                # relay above.
+                                filedon_media = _resolve_filedon_media(src, referer=episode_url)
+                                if filedon_media:
+                                    server['direct_url'] = filedon_media['url']
+                                    server['direct_type'] = filedon_media['type']
+                                    server['direct_mime'] = filedon_media['mime']
+                                    server['direct_headers'] = filedon_media['headers']
+                                    server['expires_at'] = filedon_media['expires_at']
+                            result['servers'].append(server)
                 except Exception as ex:
                     print(f"Error requesting player_ajax for {server_name}: {ex}")
             
@@ -272,6 +624,14 @@ class SamehadakuScraper:
                     best_server = result['servers'][0]
                     
                 result['stream_url'] = best_server['url']
+                result['embed_url'] = best_server['url']
+                if best_server.get('direct_url'):
+                    result['direct_url'] = best_server['direct_url']
+                    result['direct_type'] = best_server.get('direct_type')
+                    result['direct_mime'] = best_server.get('direct_mime')
+                    result['direct_headers'] = best_server.get('direct_headers') or {}
+                    result['expires_at'] = best_server.get('expires_at')
+                    result['resolver'] = 'filedon' if best_server.get('provider') == 'vip_streaming' else 'direct'
             
             if not result['stream_url']:
                 for iframe in soup.find_all('iframe'):
@@ -279,8 +639,27 @@ class SamehadakuScraper:
                     if src and 'facebook.com' not in src and 'twitter.com' not in src and 'ads' not in src:
                         if src.startswith('//'):
                             src = 'https:' + src
-                        result['stream_url'] = src
+                        result['stream_url'] = _filedon_proxy_url(src)
+                        result['embed_url'] = result['stream_url']
                         break
+
+            direct_media = _direct_media_from_url(result.get('embed_url'))
+            if direct_media and not result.get('direct_url'):
+                result['direct_url'] = direct_media['url']
+                result['direct_type'] = direct_media['type']
+                result['direct_mime'] = direct_media['mime']
+                result['direct_headers'] = direct_media['headers']
+                result['expires_at'] = direct_media['expires_at']
+                result['resolver'] = 'direct'
+            else:
+                blogger_media = _resolve_blogger_media(result.get('embed_url'))
+                if blogger_media:
+                    result['direct_url'] = blogger_media['url']
+                    result['direct_type'] = blogger_media['type']
+                    result['direct_mime'] = blogger_media['mime']
+                    result['direct_headers'] = blogger_media['headers']
+                    result['expires_at'] = blogger_media['expires_at']
+                    result['resolver'] = 'blogger'
             
             for container in soup.find_all('div', class_='download-eps'):
                 format_p = container.find('p')
@@ -520,7 +899,16 @@ def build_response(path: str, params: dict, body_data: dict = None):
 
         stream_data = scraper.get_stream_and_download(url)
         if stream_data and stream_data.get('stream_url'):
-            ANIME_CACHE.set(cache_key, stream_data, ttl=3600)  # 1 hour cache
+            # Direct googlevideo links are signed and temporary. Keep them only
+            # briefly; iframe-only responses can retain the longer cache.
+            ttl = 300 if stream_data.get('direct_url') else 3600
+            expires_at = stream_data.get('expires_at')
+            if expires_at:
+                try:
+                    ttl = max(30, min(ttl, int(expires_at) - int(time.time()) - 60))
+                except (TypeError, ValueError):
+                    pass
+            ANIME_CACHE.set(cache_key, stream_data, ttl=ttl)
         return {"status": "success", "data": stream_data}, 200
 
     return {"status": "error", "message": f"Route tidak dikenal: {path}"}, 400
@@ -530,6 +918,32 @@ class handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         params = parse_qs(parsed.query)
+        if path.endswith("/embed"):
+            embed_url = params.get("url", [""])[0].strip()
+            try:
+                try:
+                    from .lib.proxy_signing import validate_proxy_signature
+                except ImportError:
+                    from lib.proxy_signing import validate_proxy_signature
+                valid = validate_proxy_signature(embed_url, params.get("exp", [""])[0], params.get("sig", [""])[0])
+            except Exception:
+                valid = False
+            if not valid:
+                self._send_json({"status": "error", "message": "URL Filedon tidak valid atau sudah kedaluwarsa"}, 403)
+                return
+            html, code = proxy_filedon_embed(embed_url)
+            if html is None:
+                self._send_json({"status": "error", "message": "Filedon embed tidak tersedia"}, code)
+                return
+            body = html.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "text/html; charset=UTF-8")
+            self.send_header("Cache-Control", "no-store, private")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         data, code = build_response(path, params)
         self._send_json(data, code)
 

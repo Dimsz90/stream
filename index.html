@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 <script src="/js/orientation-lock.js"></script>
+<script src="/js/anime-fullscreen.js" defer></script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -360,7 +361,7 @@
     <button onclick="closeAnimePlayer()" style="background:#21262d;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer">TUTUP ✕</button>
   </div>
   <div style="flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center">
-    <iframe id="animeIframe" src="" style="width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+    <iframe id="animeIframe" src="" style="width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></iframe>
   </div>
   <div id="animeServerContainer" style="padding:12px;background:#0d1117;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:8px;overflow-x:auto;align-items:center;">
     <span style="color:#8b949e;font-size:12px;white-space:nowrap;">PILIH SERVER:</span>

@@ -7,6 +7,7 @@ import sys
 import os
 import json
 import re
+import hmac
 import importlib
 from urllib.parse import urlparse, parse_qs
 
@@ -103,6 +104,12 @@ class handler(BaseHTTPRequestHandler):
 
         # /api/anime/*
         if path.startswith("/api/anime/") or path == "/api/anime":
+            if path == "/api/anime/cron/check":
+                return self._dispatch_module("anime_notifications", "GET")
+            if path == "/api/anime/bookmarks":
+                return self._dispatch_module("anime_notifications", "GET")
+            if path == "/api/anime/telegram/test":
+                return self._dispatch_module("anime_notifications", "POST")
             return self._dispatch_module("anime", "GET")
 
         self._send_json({"error": "Route tidak ditemukan"}, 404)
@@ -113,6 +120,10 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/anime/"):
+            if path == "/api/anime/cron/check":
+                return self._dispatch_module("anime_notifications", "POST")
+            if path in ("/api/anime/bookmarks", "/api/anime/telegram/test"):
+                return self._dispatch_module("anime_notifications", "POST")
             return self._dispatch_module("anime", "POST")
 
         if path == "/api/scan":
@@ -184,6 +195,27 @@ class handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Internal error: {e}"}, 500)
 
     def _subscription_denied(self, path: str) -> bool:
+        # Iframe navigations cannot attach X-Subscription-Token. The anime
+        # stream API therefore returns a signed Filedon relay URL instead.
+        if path == "/api/anime/embed":
+            params = parse_qs(urlparse(self.path).query)
+            try:
+                from lib.proxy_signing import validate_proxy_signature
+                if validate_proxy_signature(
+                    params.get("url", [""])[0],
+                    params.get("exp", [""])[0],
+                    params.get("sig", [""])[0],
+                ):
+                    return False
+            except Exception:
+                pass
+
+        if path == "/api/anime/cron/check":
+            supplied = self.headers.get("X-Cron-Secret") or parse_qs(urlparse(self.path).query).get("secret", [""])[0]
+            expected = os.environ.get("ANIME_CRON_SECRET", "")
+            if expected and hmac.compare_digest(str(supplied), expected):
+                return False
+
         protected = path in PROTECTED_PATHS or path.startswith("/api/dracin/") or path.startswith("/api/anime/")
         if not protected:
             return False

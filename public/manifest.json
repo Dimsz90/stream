@@ -8,7 +8,7 @@
   "display_override": ["standalone", "fullscreen"],
   "background_color": "#070709",
   "theme_color": "#ff3c5f",
-  "orientation": "portrait",
+  "orientation": "any",
   "scope": "/",
   "categories": ["entertainment", "utilities"],
   "lang": "id",

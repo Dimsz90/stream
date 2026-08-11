@@ -1662,9 +1662,46 @@ def captain_videos(platform="melolo"):
 @app.route("/api/anime/<path:subpath>", methods=["GET", "POST"])
 @app.route("/api/anime", methods=["GET", "POST"])
 def anime_api_route(subpath=""):
+    if subpath == "cron/check":
+        supplied_secret = request.headers.get("X-Cron-Secret") or request.args.get("secret", "")
+        expected_secret = os.environ.get("ANIME_CRON_SECRET", "")
+        if not expected_secret or not hmac.compare_digest(str(supplied_secret), expected_secret):
+            return jsonify({"status": "error", "message": "Cron secret tidak valid"}), 403
+        from api.anime_notifications import check_for_new_episodes
+        try:
+            return jsonify(check_for_new_episodes()), 200
+        except Exception as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
+    # VIP Streaming returns a Filedon iframe whose domain whitelist only
+    # permits Samehadaku. Relay that HTML through this app after fetching it
+    # with the Samehadaku referer and removing the upstream whitelist.
+    if subpath == "embed":
+        embed_url = request.args.get("url", "").strip()
+        denied = require_proxy_signature(embed_url)
+        if denied:
+            return denied
+        from api.anime import proxy_filedon_embed
+        html, code = proxy_filedon_embed(embed_url)
+        if html is None:
+            return jsonify({"status": "error", "message": "Filedon embed tidak tersedia"}), code
+        response = Response(html, status=code, content_type="text/html; charset=UTF-8")
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     denied = require_subscription()
     if denied:
         return denied
+
+    if subpath in ("bookmarks", "telegram/test"):
+        from api.anime_notifications import build_response as build_notification_response
+        data, code = build_notification_response(
+            f"/api/anime/{subpath}",
+            request.headers,
+            request.get_json(silent=True) or {},
+        )
+        return jsonify(data), code
 
     from api.anime import build_response
     full_path = f"/api/anime/{subpath}" if subpath else "/api/anime"
