@@ -491,11 +491,11 @@ class SamehadakuScraper:
                     seen_links.add(ep_url)
                     ep_text = link.text.strip()
                     
-                    ep_num = re.search(r'Episode\s*(\d+)', ep_text, re.IGNORECASE)
+                    ep_num = re.search(r'Episode\s*(\d+(?:\.\d+)?)', ep_text, re.IGNORECASE)
                     if not ep_num:
-                        ep_num = re.search(r'Eps\s*(\d+)', ep_text, re.IGNORECASE)
+                        ep_num = re.search(r'Eps\s*(\d+(?:\.\d+)?)', ep_text, re.IGNORECASE)
                     if not ep_num:
-                        ep_num = re.search(r'(\d+)', ep_text)
+                        ep_num = re.search(r'(\d+(?:\.\d+)?)', ep_text)
                     
                     episode_info = {
                         'number': ep_num.group(1) if ep_num else ep_text,
@@ -504,7 +504,13 @@ class SamehadakuScraper:
                     }
                     episodes.append(episode_info)
             
-            episodes.reverse()
+            # HTML order differs between Samehadaku templates. Sort by the
+            # numeric episode number so the newest episode is always first.
+            def episode_sort_key(item):
+                match = re.search(r'(\d+(?:\.\d+)?)', str(item.get('number') or ''))
+                return float(match.group(1)) if match else -1
+
+            episodes.sort(key=episode_sort_key, reverse=True)
             
         except Exception as e:
             print(f"Error getting episodes: {e}")

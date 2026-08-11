@@ -126,7 +126,8 @@ def replace_bookmarks(username, bookmarks):
             row["last_episode_url"] = previous.get("last_episode_url")
         else:
             try:
-                latest = (scraper.get_episodes(item["anime_url"]) or [None])[0]
+                latest_items = _episodes_latest_first(scraper.get_episodes(item["anime_url"]))
+                latest = latest_items[0] if latest_items else None
                 if latest:
                     row["last_episode_number"] = _episode_number(latest)
                     row["last_episode_url"] = latest.get("link")
@@ -144,7 +145,8 @@ def save_bookmark(username, item):
         return None
     row = {"username": username, **normalized}
     try:
-        latest = (SamehadakuScraper().get_episodes(normalized["anime_url"]) or [None])[0]
+        latest_items = _episodes_latest_first(SamehadakuScraper().get_episodes(normalized["anime_url"]))
+        latest = latest_items[0] if latest_items else None
         if latest:
             row["last_episode_number"] = _episode_number(latest)
             row["last_episode_url"] = latest.get("link")
@@ -186,6 +188,21 @@ def _episode_number(episode):
     return match.group(1) if match else value
 
 
+def _episodes_latest_first(episodes):
+    """Normalize scraper output because source HTML order is not reliable."""
+    def sort_key(episode):
+        try:
+            return float(_episode_number(episode))
+        except (TypeError, ValueError):
+            return -1
+
+    return sorted(
+        (episode for episode in (episodes or []) if isinstance(episode, dict)),
+        key=sort_key,
+        reverse=True,
+    )
+
+
 def _notification_text(bookmark, episode):
     title = bookmark.get("anime_title") or bookmark.get("title") or "Anime"
     number = _episode_number(episode)
@@ -208,7 +225,7 @@ def check_for_new_episodes():
             chat_id = connection.get("telegram_chat_id") if connection and connection.get("enabled", True) else None
             if not chat_id:
                 continue
-            episodes = scraper.get_episodes(bookmark.get("anime_url")) or []
+            episodes = _episodes_latest_first(scraper.get_episodes(bookmark.get("anime_url")))
             if not episodes:
                 continue
             latest = episodes[0]
