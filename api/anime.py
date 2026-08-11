@@ -2,7 +2,7 @@
 api/anime.py
 Handler endpoint Anime streaming berbasis scraper Samehadaku.
 """
-import os, sys, json, time, re, html as html_lib
+import os, sys, json, time, re, html as html_lib, base64, mimetypes
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote, unquote
@@ -21,6 +21,11 @@ try:
 except Exception:
     yt_dlp = None
 
+try:
+    from Crypto.Cipher import AES
+except Exception:
+    AES = None
+
 
 BLOGGER_HOSTS = {
     "blogger.com",
@@ -32,6 +37,16 @@ FILEDON_HOSTS = {
     "filedon.co",
     "www.filedon.co",
 }
+
+MEGA_HOSTS = {
+    "mega.nz",
+    "www.mega.nz",
+    "mega.co.nz",
+    "www.mega.co.nz",
+}
+
+MEGA_INFO_CACHE = {}
+MEGA_INFO_TTL = 5 * 60
 
 DIRECT_MEDIA_EXTENSIONS = (".mp4", ".m3u8", ".webm", ".ogg")
 
@@ -76,6 +91,141 @@ def _media_proxy_url(url):
         return sign_proxy_url(url)
     except Exception:
         return f"/api/proxy?url={quote(url, safe='')}"
+
+
+def _mega_proxy_url(url):
+    """Return a signed local URL that decrypts a public Mega file."""
+    if not url:
+        return ""
+    try:
+        try:
+            from .lib.proxy_signing import sign_proxy_url
+        except ImportError:
+            from lib.proxy_signing import sign_proxy_url
+        signed = sign_proxy_url(url)
+        return signed.replace("/api/proxy?", "/api/anime/mega?", 1)
+    except Exception:
+        return f"/api/anime/mega?url={quote(url, safe='')}"
+
+
+def _mega_b64decode(value):
+    value = str(value or "").replace("-", "+").replace("_", "/")
+    value += "=" * ((4 - len(value) % 4) % 4)
+    return base64.b64decode(value)
+
+
+def _mega_link_parts(url):
+    """Parse public Mega /embed/id#key, /file/id#key, and legacy links."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    if (parsed.hostname or "").lower() not in MEGA_HOSTS:
+        return None
+
+    file_id = ""
+    key = parsed.fragment or ""
+    match = re.search(r"/(?:embed|file)/([^/#?]+)", parsed.path or "", re.I)
+    if match:
+        file_id = match.group(1)
+    elif parsed.fragment.startswith("!"):
+        legacy = parsed.fragment.lstrip("!").split("!")
+        if len(legacy) >= 2:
+            file_id, key = legacy[0], legacy[1]
+    if not file_id or not key:
+        return None
+    return file_id, key
+
+
+def get_mega_file_info(url):
+    """Resolve Mega's encrypted CDN URL and derive its AES-CTR parameters."""
+    if AES is None:
+        raise RuntimeError("Dukungan AES Mega belum terpasang")
+    parts = _mega_link_parts(url)
+    if not parts:
+        raise ValueError("URL Mega tidak valid")
+
+    cached = MEGA_INFO_CACHE.get(url)
+    if cached and cached.get("cached_until", 0) > time.time():
+        return cached
+
+    file_id, public_key = parts
+    raw_key = _mega_b64decode(public_key)
+    if len(raw_key) != 32:
+        raise ValueError("Kunci file Mega tidak valid")
+    aes_key = bytes(raw_key[i] ^ raw_key[i + 16] for i in range(16))
+    base_iv = raw_key[16:24] + (b"\0" * 8)
+
+    import requests
+    response = requests.post(
+        "https://g.api.mega.co.nz/cs",
+        params={"id": str(int(time.time() * 1000))},
+        json=[{"a": "g", "g": 1, "p": file_id}],
+        timeout=15,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    item = payload[0] if isinstance(payload, list) and payload else payload
+    if isinstance(item, int):
+        raise RuntimeError(f"Mega API error {item}")
+    if not isinstance(item, dict) or not item.get("g"):
+        raise RuntimeError("Mega tidak memberikan URL file")
+
+    name = f"{file_id}.mp4"
+    encrypted_attributes = item.get("at") or ""
+    if encrypted_attributes:
+        try:
+            encrypted = _mega_b64decode(encrypted_attributes)
+            cipher = AES.new(aes_key, AES.MODE_CBC, iv=b"\0" * 16)
+            decoded = cipher.decrypt(encrypted).rstrip(b"\0").decode("utf-8", "replace")
+            if decoded.startswith("MEGA"):
+                attributes = json.loads(decoded[4:])
+                name = str(attributes.get("n") or name)
+        except Exception as exc:
+            print(f"Mega attribute decode failed: {exc}")
+
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    extension = name.rsplit(".", 1)[-1].lower() if "." in name else "mp4"
+    info = {
+        "file_id": file_id,
+        "file_url": item["g"],
+        "size": int(item.get("s") or 0),
+        "name": name,
+        "type": extension,
+        "mime": mime,
+        "aes_key": aes_key,
+        "base_iv": base_iv,
+        "cached_until": time.time() + MEGA_INFO_TTL,
+    }
+    MEGA_INFO_CACHE[url] = info
+    return info
+
+
+def create_mega_ctr_cipher(info, byte_offset=0):
+    """Create an AES-CTR cipher positioned at an aligned byte offset."""
+    if AES is None:
+        raise RuntimeError("Dukungan AES Mega belum terpasang")
+    if byte_offset < 0 or byte_offset % 16:
+        raise ValueError("Offset Mega harus kelipatan 16 byte")
+    counter = (int.from_bytes(info["base_iv"], "big") + (byte_offset // 16)) % (1 << 128)
+    return AES.new(info["aes_key"], AES.MODE_CTR, nonce=b"", initial_value=counter)
+
+
+def _resolve_mega_media(url):
+    try:
+        info = get_mega_file_info(url)
+    except Exception as exc:
+        print(f"Mega media resolve failed: {exc}")
+        return None
+    return {
+        "url": _mega_proxy_url(url),
+        "type": info["type"],
+        "mime": info["mime"],
+        "headers": {},
+        "expires_at": None,
+        "size": info["size"],
+        "name": info["name"],
+    }
 
 
 def _rewrite_filedon_embed(html_text):
@@ -613,7 +763,7 @@ class SamehadakuScraper:
                             provider = 'vip_streaming' if (
                                 _is_filedon_url(src)
                                 or ('vip' in server_name.lower() and 'stream' in server_name.lower())
-                            ) else 'blogspot' if (urlparse(src).hostname or '').lower() in BLOGGER_HOSTS else 'embed'
+                            ) else 'blogspot' if (urlparse(src).hostname or '').lower() in BLOGGER_HOSTS else 'mega' if (urlparse(src).hostname or '').lower() in MEGA_HOSTS else 'embed'
                             display_name = 'VIP Streaming' if provider == 'vip_streaming' else server_name
                             player_url = _filedon_proxy_url(src) if provider == 'vip_streaming' else src
                             direct_server = _direct_media_from_url(src)
@@ -639,6 +789,15 @@ class SamehadakuScraper:
                                     server['direct_mime'] = blogger_media['mime']
                                     server['direct_headers'] = blogger_media['headers']
                                     server['expires_at'] = blogger_media['expires_at']
+                                    server['type'] = 'direct'
+                            elif provider == 'mega':
+                                mega_media = _resolve_mega_media(src)
+                                if mega_media:
+                                    server['direct_url'] = mega_media['url']
+                                    server['direct_type'] = mega_media['type']
+                                    server['direct_mime'] = mega_media['mime']
+                                    server['direct_headers'] = mega_media['headers']
+                                    server['expires_at'] = mega_media['expires_at']
                                     server['type'] = 'direct'
                             elif provider == 'vip_streaming' and _is_filedon_url(src):
                                 # Filedon wraps the signed R2/S3 URL in its
@@ -672,8 +831,8 @@ class SamehadakuScraper:
                     quality = 1080 if '1080' in name or 'fullhd' in name else 720 if '720' in name or 'hd' in name else 480 if '480' in name else 0
                     return (
                         3 if direct and browser_native else 2 if direct else 1,
-                        1 if server.get('provider') == 'blogspot' and direct else 0,
                         quality,
+                        1 if server.get('provider') == 'blogspot' and direct else 0,
                     )
 
                 best_server = max(result['servers'], key=server_score)

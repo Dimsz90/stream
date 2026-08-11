@@ -3228,7 +3228,10 @@ async function playAnimeEpisode(epUrl, epTitle) {
   if (titleEl) titleEl.textContent = ANIME.selectedAnime?.title || 'Anime';
   if (subEl) subEl.textContent = epTitle || 'Memuat server...';
   resetAnimePlayerMedia();
-  if (loading) loading.style.display = '';
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.textContent = 'Memuat video...';
+  }
   if (serverList) serverList.innerHTML = 'Memuat server...';
   if (modal) modal.style.display = 'flex';
 
@@ -3250,7 +3253,7 @@ async function playAnimeEpisode(epUrl, epTitle) {
       if (serverList && ANIME.servers.length) {
         serverList.innerHTML = ANIME.servers.map((srv, index) => `
           <button data-anime-server="${index}" onclick="switchAnimeServer(${index}, this)" style="background:#21262d;color:#fff;border:1px solid rgba(255,255,255,0.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap">
-            ${esc(srv.name)}${srv.direct_url ? ' • Player' : ' • Embed'}
+            ${esc(srv.name)}${['mp4','m3u8','webm','ogg'].includes(String(srv.direct_type || '').toLowerCase()) ? ' • Player' : ' • Embed'}
           </button>
         `).join('');
       } else if (serverList) {
@@ -3258,7 +3261,7 @@ async function playAnimeEpisode(epUrl, epTitle) {
       }
     } else {
       if (loading) {
-        loading.style.display = '';
+        loading.style.display = 'flex';
         loading.textContent = 'Video tidak tersedia.';
       }
       if (subEl) subEl.textContent = 'Gagal memuat video stream.';
@@ -3267,7 +3270,7 @@ async function playAnimeEpisode(epUrl, epTitle) {
   } catch (e) {
     console.error(e);
     if (loading) {
-      loading.style.display = '';
+      loading.style.display = 'flex';
       loading.textContent = 'Gagal memuat video.';
     }
     if (subEl) subEl.textContent = 'Error koneksi server.';
@@ -3288,6 +3291,7 @@ function resetAnimePlayerMedia() {
     video.style.display = 'none';
   }
   if (iframe) {
+    iframe.onload = null;
     iframe.src = '';
     iframe.style.display = 'none';
   }
@@ -3303,10 +3307,18 @@ function playAnimeServer(server) {
   const nativeType = mediaType === 'mp4' || mediaType === 'm3u8' || mediaType === 'webm' || mediaType === 'ogg';
   resetAnimePlayerMedia();
 
+  // Show the overlay for every server switch and hide it only after the
+  // browser has loaded enough media to render/play it.  Hiding it immediately
+  // made a slow source look blank, while leaving it visible after playback
+  // started made the overlay cover an otherwise working video.
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.textContent = 'Memuat video...';
+  }
+
   if (mediaUrl && nativeType && video) {
     const saved = getAnimeContinueEntry();
     video.style.display = 'block';
-    if (loading) loading.style.display = 'none';
     if ((mediaType === 'm3u8' || mediaUrl.includes('.m3u8')) && window.Hls && Hls.isSupported()) {
       ANIME.playerHls = new Hls();
       ANIME.playerHls.loadSource(mediaUrl);
@@ -3315,10 +3327,23 @@ function playAnimeServer(server) {
       video.src = mediaUrl;
     }
     video.addEventListener('loadedmetadata', () => {
+      if (loading) loading.style.display = 'none';
       if (saved?.position > 5 && saved.position < video.duration - 8) {
         video.currentTime = saved.position;
       }
       video.play().catch(() => {});
+    }, { once: true });
+    video.addEventListener('canplay', () => {
+      if (loading) loading.style.display = 'none';
+    }, { once: true });
+    video.addEventListener('playing', () => {
+      if (loading) loading.style.display = 'none';
+    }, { once: true });
+    video.addEventListener('error', () => {
+      if (loading) {
+        loading.style.display = 'flex';
+        loading.textContent = 'Video gagal dimuat. Coba pilih server lain.';
+      }
     }, { once: true });
     video.play().catch(() => {});
     return;
@@ -3326,12 +3351,14 @@ function playAnimeServer(server) {
 
   if (server.url && iframe) {
     iframe.style.display = 'block';
+    iframe.onload = () => {
+      if (loading) loading.style.display = 'none';
+    };
     iframe.src = server.url;
-    if (loading) loading.style.display = 'none';
     return;
   }
   if (loading) {
-    loading.style.display = '';
+    loading.style.display = 'flex';
     loading.textContent = 'Server ini tidak memiliki sumber yang dapat diputar.';
   }
 }

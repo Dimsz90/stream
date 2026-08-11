@@ -1666,6 +1666,114 @@ def captain_videos(platform="melolo"):
 
 # ── ANIME ROUTES ─────────────────────────────────────────────────────────────
 
+@app.route("/api/anime/mega", methods=["GET"])
+def anime_mega_media():
+    """Stream and decrypt a signed public Mega file with HTTP Range support."""
+    import requests as req
+    from api.anime import create_mega_ctr_cipher, get_mega_file_info
+
+    target_url = request.args.get("url", "").strip()
+    if not target_url:
+        return jsonify({"status": "error", "message": "URL Mega diperlukan"}), 400
+    denied = require_proxy_signature(target_url)
+    if denied:
+        return denied
+
+    try:
+        info = get_mega_file_info(target_url)
+        total_size = int(info.get("size") or 0)
+        if total_size <= 0:
+            return jsonify({"status": "error", "message": "Ukuran file Mega tidak valid"}), 502
+
+        range_header = (request.headers.get("Range") or "").strip()
+        start, end, partial = 0, total_size - 1, False
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header, re.I)
+            if not match or (not match.group(1) and not match.group(2)):
+                return Response(status=416, headers={"Content-Range": f"bytes */{total_size}"})
+            if match.group(1):
+                start = int(match.group(1))
+                end = int(match.group(2)) if match.group(2) else total_size - 1
+            else:
+                suffix = int(match.group(2))
+                start = max(0, total_size - suffix)
+                end = total_size - 1
+            if start >= total_size or start > end:
+                return Response(status=416, headers={"Content-Range": f"bytes */{total_size}"})
+            end = min(end, total_size - 1)
+            partial = True
+
+        aligned_start = start - (start % 16)
+        prefix_to_drop = start - aligned_start
+        expected_length = end - start + 1
+        response_headers = {
+            "Content-Type": info.get("mime") or "application/octet-stream",
+            "Content-Length": str(expected_length),
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(info.get('name') or 'video.mp4', safe='')}",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if partial:
+            response_headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+
+        # Flask automatically enables HEAD for GET routes. Avoid opening a
+        # long-lived Mega CDN stream when the browser only probes metadata.
+        if request.method == "HEAD":
+            return Response(status=206 if partial else 200, headers=response_headers)
+
+        upstream = req.get(
+            info["file_url"],
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+                "Range": f"bytes={aligned_start}-{end}",
+                "Accept": "*/*",
+            },
+            stream=True,
+            timeout=(10, 35),
+        )
+        if upstream.status_code not in (200, 206):
+            upstream.close()
+            return jsonify({
+                "status": "error",
+                "message": "Mega CDN menolak permintaan video",
+                "upstream_status": upstream.status_code,
+            }), 502
+        if aligned_start and upstream.status_code != 206:
+            upstream.close()
+            return jsonify({"status": "error", "message": "Mega CDN tidak mendukung seek"}), 502
+
+        cipher = create_mega_ctr_cipher(info, aligned_start)
+
+        def decrypted_chunks():
+            remaining = expected_length
+            drop = prefix_to_drop
+            try:
+                for encrypted_chunk in upstream.iter_content(chunk_size=256 * 1024):
+                    if remaining <= 0:
+                        break
+                    if not encrypted_chunk:
+                        continue
+                    plain = cipher.decrypt(encrypted_chunk)
+                    if drop:
+                        plain = plain[drop:]
+                        drop = 0
+                    if len(plain) > remaining:
+                        plain = plain[:remaining]
+                    remaining -= len(plain)
+                    if plain:
+                        yield plain
+            finally:
+                upstream.close()
+
+        return Response(decrypted_chunks(), status=206 if partial else 200, headers=response_headers)
+    except Exception as exc:
+        app.logger.exception("Mega media relay failed")
+        return jsonify({"status": "error", "message": str(exc)[:400]}), 502
+
+
 @app.route("/api/anime/<path:subpath>", methods=["GET", "POST"])
 @app.route("/api/anime", methods=["GET", "POST"])
 def anime_api_route(subpath=""):
