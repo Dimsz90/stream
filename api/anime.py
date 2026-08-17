@@ -1112,12 +1112,7 @@ def build_response(path: str, params: dict, body_data: dict = None):
         if not url:
             return {"status": "error", "message": "Parameter 'url' required"}, 400
             
-        cache_key = f"anime:stream:{url.strip()}"
-        cached = ANIME_CACHE.get(cache_key)
-        if cached:
-            return {"status": "success", "data": cached, "cached": True}, 200
-
-        # --- Integrasi Cloudflare R2 ---
+        # --- Integrasi Cloudflare R2: Cek R2 terlebih dahulu ---
         try:
             from api.r2_storage import is_configured as r2_is_configured, get_presigned_url
             from api.anime_archiver import get_r2_episode, trigger_background_archive
@@ -1159,8 +1154,18 @@ def build_response(path: str, params: dict, body_data: dict = None):
                         ],
                         'downloads': []
                     }
-                    ANIME_CACHE.set(cache_key, r2_stream_data, ttl=7200 - 300) # cache 1h 55m
+                    ANIME_CACHE.set(cache_key, r2_stream_data, ttl=7200 - 300)
                     return {"status": "success", "data": r2_stream_data, "source": "r2"}, 200
+
+        # Cek Cache umum jika belum ada di R2
+        nocache = "nocache" in params or "refresh" in params
+        if not nocache:
+            cached = ANIME_CACHE.get(cache_key)
+            if cached:
+                # Trigger background archive jika belum jalan di R2
+                if r2_is_configured():
+                    trigger_background_archive(url)
+                return {"status": "success", "data": cached, "cached": True}, 200
 
         # Fallback ke scraper biasa jika tidak ada di R2 atau R2 belum terkonfigurasi
         stream_data = scraper.get_stream_and_download(url)

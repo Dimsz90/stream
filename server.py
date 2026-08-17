@@ -1801,6 +1801,18 @@ def anime_api_route(subpath=""):
         except Exception as exc:
             return jsonify({"status": "error", "message": str(exc)}), 500
 
+    if subpath == "archive/trigger":
+        episode_url = request.args.get("episode_url", "").strip()
+        anime_url = request.args.get("anime_url", "").strip()
+        if not episode_url:
+            return jsonify({"status": "error", "message": "Parameter 'episode_url' diperlukan"}), 400
+        from api.anime_archiver import trigger_background_archive, get_r2_episode
+        existing = get_r2_episode(episode_url)
+        if existing and existing.get("status") == "done":
+            return jsonify({"status": "already_done", "data": existing}), 200
+        trigger_background_archive(episode_url, anime_url)
+        return jsonify({"status": "triggered", "message": "Background archiving initiated", "episode_url": episode_url}), 200
+
     if subpath == "archive/cron":
         supplied_secret = request.headers.get("X-Cron-Secret") or request.args.get("secret", "")
         expected_secret = os.environ.get("ANIME_CRON_SECRET", "")
