@@ -1116,18 +1116,32 @@ def build_response(path: str, params: dict, body_data: dict = None):
 
         # --- Integrasi Cloudflare R2: Cek R2 terlebih dahulu ---
         try:
-            from api.r2_storage import is_configured as r2_is_configured, get_presigned_url
-            from api.anime_archiver import get_r2_episode, trigger_background_archive
+            from api.r2_storage import is_configured as r2_is_configured, get_presigned_url, key_exists
+            from api.anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode
         except ImportError:
-            from r2_storage import is_configured as r2_is_configured, get_presigned_url
-            from anime_archiver import get_r2_episode, trigger_background_archive
+            from r2_storage import is_configured as r2_is_configured, get_presigned_url, key_exists
+            from anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode
 
         r2_stream_data = None
         if r2_is_configured():
             r2_episode = get_r2_episode(url)
-            if r2_episode and r2_episode.get("status") == "done":
-                r2_key = r2_episode.get("r2_key")
+            is_done = False
+            r2_key = ""
+            r2_quality = "mp4"
+
+            if r2_episode:
+                r2_key = r2_episode.get("r2_key") or ""
                 r2_quality = r2_episode.get("quality") or "mp4"
+                if r2_episode.get("status") == "done" and r2_key:
+                    is_done = True
+                elif r2_key and key_exists(r2_key):
+                    is_done = True
+                    try:
+                        _upsert_r2_episode(url, r2_episode.get("anime_url") or "", "done", r2_key=r2_key, quality=r2_quality)
+                    except Exception:
+                        pass
+
+            if is_done and r2_key:
                 r2_url = get_presigned_url(r2_key)
                 if r2_url:
                     r2_mime = "video/mp4" if r2_quality == "mp4" else "application/vnd.apple.mpegurl" if r2_quality == "m3u8" else f"video/{r2_quality}"
