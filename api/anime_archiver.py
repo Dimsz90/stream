@@ -289,13 +289,20 @@ def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
                 continue
 
         if wibufile_candidates:
-            # Prioritas: pilih yang nama servernya mengandung 'fullhd' atau '1080'
-            # agar kualitas tertinggi yang diarsipkan
+            # 1. Prioritas Utama: 720p (HD)
             for url, quality in wibufile_candidates:
-                if any(q in quality for q in ('fullhd', '1080')):
-                    logger.info(f"[Archiver] Wibufile 1080p: {url}")
+                # Cek apakah 720p (hindari false positive dengan 'fullhd' atau '1080')
+                if "720" in quality or ("hd" in quality and "full" not in quality and "1080" not in quality):
+                    logger.info(f"[Archiver] Wibufile 720p (Prioritas Utama): {url}")
                     return url, "mp4"
-            # Kalau tidak ada 1080p, ambil yang pertama (biasanya terbaik dari scraping)
+
+            # 2. Prioritas Kedua: 1080p (FULLHD) jika 720p tidak tersedia
+            for url, quality in wibufile_candidates:
+                if any(q in quality for q in ('fullhd', '1080', 'fhd')):
+                    logger.info(f"[Archiver] Wibufile 1080p (Fallback): {url}")
+                    return url, "mp4"
+
+            # 3. Kualitas lainnya (480p / 360p)
             url, quality = wibufile_candidates[0]
             logger.info(f"[Archiver] Wibufile ({quality}): {url}")
             return url, "mp4"
@@ -404,7 +411,7 @@ def _download_with_ytdlp(
                     pass
 
     opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": out_template,
         "quiet": True,
         "no_warnings": True,
