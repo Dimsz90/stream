@@ -169,9 +169,22 @@ def _upsert_r2_episode(episode_url: str, anime_url: str, status: str, **kwargs):
 
 # ── Download + Upload pipeline ───────────────────────────────────────────────
 
+WIBUFILE_HOSTS = ("wibufile.com", "api.wibufile.com", "s0.wibufile.com", "cdn.wibufile.com")
+
+
+def _is_wibufile_url(url: str) -> bool:
+    """Return True jika URL berasal dari domain Wibufile."""
+    try:
+        from urllib.parse import urlparse
+        host = (urlparse(url).hostname or "").lower()
+        return any(host == h or host.endswith("." + h) for h in WIBUFILE_HOSTS)
+    except Exception:
+        return False
+
+
 def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
     """
-    Resolve direct video URL terbaik dari episode Samehadaku.
+    Resolve direct video URL dari Wibufile saja — skip Blogger, Mega, VIP.
 
     Returns:
         (stream_url, ext) tuple. ext adalah 'mp4', 'm3u8', dll.
@@ -181,42 +194,125 @@ def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
             from api.anime import SamehadakuScraper
         except ImportError:
             from anime import SamehadakuScraper
+        from urllib.parse import urlparse
+        import html as html_lib
 
         scraper = SamehadakuScraper()
+        soup = scraper._get_soup(episode_url)
+        if not soup:
+            return "", "mp4"
+
+        opts = soup.select('.east_player_option, [id*="player-option"]')
+        ajax_url = f"{scraper.base_url}/wp-admin/admin-ajax.php"
+        seen_option_keys: set = set()
+
+        wibufile_candidates: list[tuple[str, str]] = []  # (direct_url, quality_tag)
+
+        for opt in opts:
+            post_id = opt.get('data-post')
+            nume = opt.get('data-num') or opt.get('data-nume')
+            type_val = opt.get('data-type', 'schtml')
+            server_name = opt.get_text(' ', strip=True).lower()
+
+            if not post_id or not nume:
+                continue
+
+            option_key = (str(post_id), str(nume), str(type_val))
+            if option_key in seen_option_keys:
+                continue
+            seen_option_keys.add(option_key)
+
+            # Hanya proses server yang namanya mengandung 'wibu'
+            if 'wibu' not in server_name:
+                continue
+
+            try:
+                headers = scraper.headers.copy()
+                headers['X-Requested-With'] = 'XMLHttpRequest'
+                headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+                headers['Accept'] = '*/*'
+                headers['Origin'] = scraper.base_url
+                headers['Referer'] = episode_url
+
+                res = scraper.scraper.post(
+                    ajax_url,
+                    data={'action': 'player_ajax', 'post': post_id, 'nume': nume, 'type': type_val},
+                    headers=headers,
+                    timeout=10,
+                )
+                if res.status_code != 200:
+                    continue
+
+                from bs4 import BeautifulSoup
+                iframe_soup = BeautifulSoup(res.text, 'html.parser')
+
+                # Cari direct URL: cek tag <source> atau <video> terlebih dahulu
+                for tag in iframe_soup.find_all(['source', 'video'], src=True):
+                    src = (tag.get('src') or '').strip()
+                    if src and _is_wibufile_url(src) and src.endswith('.mp4'):
+                        quality = server_name
+                        wibufile_candidates.append((src, quality))
+
+                # Cek iframe src (embed player wibufile)
+                iframe = iframe_soup.find('iframe')
+                if iframe:
+                    src = html_lib.unescape((iframe.get('src') or iframe.get('data-src') or '')).strip()
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    if _is_wibufile_url(src) or 'wibufile' in src:
+                        # Kalau direct mp4
+                        if src.endswith('.mp4'):
+                            wibufile_candidates.append((src, server_name))
+                        else:
+                            # Coba fetch iframe untuk ambil source mp4
+                            try:
+                                iframe_res = scraper.scraper.get(src, headers=headers, timeout=10)
+                                if iframe_res.status_code == 200:
+                                    inner = BeautifulSoup(iframe_res.text, 'html.parser')
+                                    for tag in inner.find_all(['source', 'video'], src=True):
+                                        mp4_url = (tag.get('src') or '').strip()
+                                        if mp4_url and mp4_url.endswith('.mp4'):
+                                            wibufile_candidates.append((mp4_url, server_name))
+                                            break
+                                    # Coba cari juga dari script atau JSON
+                                    for script in inner.find_all('script'):
+                                        text = script.string or ''
+                                        mp4_match = re.search(r'(https?://[^\s"\']+\.mp4)', text)
+                                        if mp4_match and _is_wibufile_url(mp4_match.group(1)):
+                                            wibufile_candidates.append((mp4_match.group(1), server_name))
+                                            break
+                            except Exception as inner_exc:
+                                logger.warning(f"[Archiver] Gagal fetch Wibufile embed: {inner_exc}")
+
+            except Exception as exc:
+                logger.warning(f"[Archiver] Gagal proses Wibufile server '{server_name}': {exc}")
+                continue
+
+        if wibufile_candidates:
+            # Prioritas: pilih yang nama servernya mengandung 'fullhd' atau '1080'
+            # agar kualitas tertinggi yang diarsipkan
+            for url, quality in wibufile_candidates:
+                if any(q in quality for q in ('fullhd', '1080')):
+                    logger.info(f"[Archiver] Wibufile 1080p: {url}")
+                    return url, "mp4"
+            # Kalau tidak ada 1080p, ambil yang pertama (biasanya terbaik dari scraping)
+            url, quality = wibufile_candidates[0]
+            logger.info(f"[Archiver] Wibufile ({quality}): {url}")
+            return url, "mp4"
+
+        # Fallback: jika tidak ada Wibufile sama sekali, gunakan get_stream_and_download biasa
+        logger.warning("[Archiver] Tidak ada Wibufile ditemukan, fallback ke scraper umum")
         result = scraper.get_stream_and_download(episode_url)
         if not result:
             return "", "mp4"
 
-        # Prioritas 1: Server yang namanya mengandung 'wibufile' atau 'wibu'
-        for server in (result.get("servers") or []):
-            name = (server.get("name") or "").lower()
-            if "wibufile" in name or "wibu" in name:
-                srv_url = server.get("direct_url") or server.get("url") or ""
-                srv_type = (server.get("direct_type") or "mp4").lower()
-                if srv_url:
-                    logger.info(f"[Archiver] Menggunakan server prioritas (Wibufile): {server.get('name')}")
-                    return srv_url, srv_type
-
-        # Prioritas 2: direct URL (mp4 lebih baik dari m3u8 untuk download)
         direct_url = result.get("direct_url") or ""
         direct_type = (result.get("direct_type") or "mp4").lower()
-
-        # Cari server dengan direct mp4
         for server in (result.get("servers") or []):
             srv_url = server.get("direct_url") or ""
-            srv_type = (server.get("direct_type") or "").lower()
+            srv_type = (server.get("direct_type") or "mp4").lower()
             if srv_url and srv_type == "mp4":
                 return srv_url, "mp4"
-
-        if direct_url:
-            return direct_url, direct_type
-
-        # Fallback ke m3u8 kalau tidak ada mp4
-        for server in (result.get("servers") or []):
-            srv_url = server.get("direct_url") or ""
-            srv_type = (server.get("direct_type") or "").lower()
-            if srv_url and srv_type in ("m3u8", "mp4"):
-                return srv_url, srv_type
 
         return direct_url, direct_type
     except Exception as exc:
