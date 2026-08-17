@@ -320,9 +320,27 @@ def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
         return "", "mp4"
 
 
-def _download_with_ytdlp(stream_url: str, out_dir: str, episode_slug: str) -> tuple[str, str]:
+def _fmt_speed(speed_bps: float | None) -> str:
+    """Format kecepatan download menjadi string yang mudah dibaca."""
+    if not speed_bps:
+        return "?"
+    for unit in ("B/s", "KB/s", "MB/s", "GB/s"):
+        if speed_bps < 1024:
+            return f"{speed_bps:.1f} {unit}"
+        speed_bps /= 1024
+    return f"{speed_bps:.1f} TB/s"
+
+
+def _download_with_ytdlp(
+    stream_url: str,
+    out_dir: str,
+    episode_slug: str,
+    episode_url: str = "",
+    anime_url: str = "",
+) -> tuple[str, str]:
     """
     Download video dengan yt-dlp ke out_dir.
+    Progress di-update ke Supabase secara real-time via progress hook.
 
     Returns:
         (filepath, ext) tuple. filepath kosong jika gagal.
@@ -334,6 +352,57 @@ def _download_with_ytdlp(stream_url: str, out_dir: str, episode_slug: str) -> tu
         return "", "mp4"
 
     out_template = os.path.join(out_dir, f"{episode_slug}.%(ext)s")
+
+    # --- Progress hook: update Supabase setiap 5 detik ---
+    _last_update: list[float] = [0.0]
+
+    def _progress_hook(d: dict):
+        now = time.time()
+        if now - _last_update[0] < 5:   # throttle: update maks 1x per 5 detik
+            return
+        _last_update[0] = now
+
+        status = d.get("status", "")
+        if status == "downloading":
+            try:
+                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+                downloaded = d.get("downloaded_bytes") or 0
+                pct = round((downloaded / total) * 100, 1) if total > 0 else 0
+                speed_str = _fmt_speed(d.get("speed"))
+                eta = d.get("eta")
+
+                logger.info(
+                    f"[Archiver] Progress {episode_url}: {pct}% "
+                    f"({downloaded:,}/{total:,} bytes) @ {speed_str} ETA {eta}s"
+                )
+
+                if episode_url and anime_url:
+                    _upsert_r2_episode(
+                        episode_url,
+                        anime_url,
+                        "downloading",
+                        progress_pct=pct,
+                        download_speed=speed_str,
+                        eta_seconds=eta,
+                    )
+            except Exception as hook_err:
+                logger.debug(f"[Archiver] progress hook error: {hook_err}")
+
+        elif status == "finished":
+            logger.info(f"[Archiver] Download selesai: {d.get('filename')}")
+            if episode_url and anime_url:
+                try:
+                    _upsert_r2_episode(
+                        episode_url,
+                        anime_url,
+                        "downloading",
+                        progress_pct=100.0,
+                        download_speed=None,
+                        eta_seconds=0,
+                    )
+                except Exception:
+                    pass
+
     opts = {
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": out_template,
@@ -343,6 +412,7 @@ def _download_with_ytdlp(stream_url: str, out_dir: str, episode_slug: str) -> tu
         "merge_output_format": "mp4",
         "socket_timeout": 30,
         "retries": 3,
+        "progress_hooks": [_progress_hook],
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -368,6 +438,8 @@ def _download_with_ytdlp(stream_url: str, out_dir: str, episode_slug: str) -> tu
     except Exception as exc:
         logger.error(f"[Archiver] yt-dlp download gagal: {exc}")
         return "", "mp4"
+
+
 
 
 def download_and_archive(episode_url: str, anime_url: str = "") -> dict:
@@ -446,7 +518,7 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
         # 2. Download ke temp dir
         episode_slug = _slugify(episode_url)
         with tempfile.TemporaryDirectory(prefix="anime_archive_") as tmpdir:
-            filepath, ext = _download_with_ytdlp(stream_url, tmpdir, episode_slug)
+            filepath, ext = _download_with_ytdlp(stream_url, tmpdir, episode_slug, episode_url, anime_url)
 
             if not filepath or not os.path.exists(filepath):
                 _upsert_r2_episode(episode_url, anime_url, "error", error_msg="Download gagal: file tidak ditemukan")
