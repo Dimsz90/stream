@@ -1,4 +1,4 @@
-const CACHE_NAME = "StreamVault-v1.8";
+const CACHE_NAME = "StreamVault-v1.9";
 
 const PRECACHE = [
   "/extractor.html",
@@ -11,9 +11,6 @@ const PRECACHE = [
 ];
 
 // Domain CDN yang harus bypass SW sepenuhnya.
-// ByteDance/TikTok CDN (DramaBox, Melolo, ReelShort) pakai signed URL
-// dengan validasi host — server proxy maupun SW tidak bisa akses, harus
-// langsung dari browser (pastikan img pakai referrerpolicy="no-referrer").
 const BYPASS_HOSTS = [
   "fizzopic.org",
   "tiktokcdn.com",
@@ -21,6 +18,11 @@ const BYPASS_HOSTS = [
   "byteimg.com",
   "bytedance.com",
   "sgsnssdk.com",
+  "r2.dev",
+  "cloudflarestorage.com",
+  "wibufile.com",
+  "samehadaku.care",
+  "samehadaku.how",
 ];
 
 self.addEventListener("install", (event) => {
@@ -46,12 +48,22 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // CDN bypass → jangan intercept, biarkan browser fetch langsung
+  // 1. Bypass video/audio media & range requests
+  if (
+    event.request.destination === "video" ||
+    event.request.destination === "audio" ||
+    event.request.headers.has("range") ||
+    /\.(mp4|m3u8|ts|mkv|webm|mp3|m4a)(\?.*)?$/i.test(url.pathname)
+  ) {
+    return;
+  }
+
+  // 2. CDN & R2 bypass → jangan intercept, biarkan browser fetch langsung
   if (BYPASS_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith("." + h))) {
     return;
   }
 
-  // API calls → network only
+  // 3. API calls → network only
   if (url.pathname.startsWith("/api/")) return;
 
   if (event.request.mode === "navigate" || event.request.destination === "document") {
