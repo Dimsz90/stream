@@ -566,11 +566,28 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
 
 def trigger_background_archive(episode_url: str, anime_url: str = ""):
     """
-    Spawn background thread untuk download_and_archive.
-    Non-blocking — aman dipanggil dari request handler.
+    Trigger archiving.
+    Jika ARCHIVE_MODE='worker' atau 'queue' (misal di Fly.io), cukup daftarkan task 'pending' ke Supabase
+    agar diproses oleh komputer/server worker lokal Anda.
+    Jika mode default, spawn background thread lokal.
     """
     if not r2_is_configured():
         return
+
+    # Cek apakah sudah terdaftar
+    existing = get_r2_episode(episode_url)
+    if existing:
+        if existing.get("status") in ("done", "downloading", "pending", "queued"):
+            return
+
+    mode = os.environ.get("ARCHIVE_MODE", "direct").strip().lower()
+    if mode in ("worker", "queue"):
+        # Cukup masukkan ke database queue Supabase
+        logger.info(f"[Archiver] Enqueue task ke Supabase (mode={mode}): {episode_url}")
+        _upsert_r2_episode(episode_url, anime_url, "pending")
+        return
+
+    # Default mode: download langsung di background thread mesin ini
     t = threading.Thread(
         target=download_and_archive,
         args=(episode_url, anime_url),
