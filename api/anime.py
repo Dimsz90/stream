@@ -1111,7 +1111,9 @@ def build_response(path: str, params: dict, body_data: dict = None):
             url = params.get("url", [""])[0] if isinstance(params.get("url"), list) else params.get("url", "")
         if not url:
             return {"status": "error", "message": "Parameter 'url' required"}, 400
-            
+
+        cache_key = f"anime:stream:{url.strip()}"
+
         # --- Integrasi Cloudflare R2: Cek R2 terlebih dahulu ---
         try:
             from api.r2_storage import is_configured as r2_is_configured, get_presigned_url
