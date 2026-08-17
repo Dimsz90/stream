@@ -1788,6 +1788,30 @@ def anime_api_route(subpath=""):
         except Exception as exc:
             return jsonify({"status": "error", "message": str(exc)}), 500
 
+    if subpath == "archive/status":
+        episode_url = request.args.get("episode_url", "").strip()
+        if not episode_url:
+            return jsonify({"status": "error", "message": "Parameter 'episode_url' diperlukan"}), 400
+        from api.anime_archiver import get_r2_episode
+        try:
+            info = get_r2_episode(episode_url)
+            if not info:
+                return jsonify({"status": "not_found", "message": "Episode belum terdaftar di R2"}), 404
+            return jsonify({"status": "success", "data": info}), 200
+        except Exception as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
+    if subpath == "archive/cron":
+        supplied_secret = request.headers.get("X-Cron-Secret") or request.args.get("secret", "")
+        expected_secret = os.environ.get("ANIME_CRON_SECRET", "")
+        if not expected_secret or not hmac.compare_digest(str(supplied_secret), expected_secret):
+            return jsonify({"status": "error", "message": "Cron secret tidak valid"}), 403
+        from api.anime_archiver import run_archiver_cron
+        try:
+            return jsonify(run_archiver_cron()), 200
+        except Exception as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
     # VIP Streaming returns a Filedon iframe whose domain whitelist only
     # permits Samehadaku. Relay that HTML through this app after fetching it
     # with the Samehadaku referer and removing the upstream whitelist.

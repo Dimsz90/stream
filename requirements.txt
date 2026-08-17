@@ -12,3 +12,4 @@ pillow-heif>=0.18.0
 playwright>=1.40.0
 curl_cffi>=0.7.4
 pycryptodome>=3.20.0
+boto3>=1.35.0

@@ -295,6 +295,13 @@ def check_for_new_episodes():
                     prefer="resolution=ignore-duplicates",
                 )
                 sent += 1
+
+                # --- Integrasi Cloudflare R2 ---
+                try:
+                    from api.anime_archiver import trigger_background_archive
+                    trigger_background_archive(episode_url, bookmark.get("anime_url", ""))
+                except Exception as r2_err:
+                    print(f"Gagal men-trigger background archiving untuk {episode_url}: {r2_err}")
             if new_episodes:
                 _supabase(
                     "PATCH",

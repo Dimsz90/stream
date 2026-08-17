@@ -1117,6 +1117,52 @@ def build_response(path: str, params: dict, body_data: dict = None):
         if cached:
             return {"status": "success", "data": cached, "cached": True}, 200
 
+        # --- Integrasi Cloudflare R2 ---
+        try:
+            from api.r2_storage import is_configured as r2_is_configured, get_presigned_url
+            from api.anime_archiver import get_r2_episode, trigger_background_archive
+        except ImportError:
+            from r2_storage import is_configured as r2_is_configured, get_presigned_url
+            from anime_archiver import get_r2_episode, trigger_background_archive
+
+        r2_stream_data = None
+        if r2_is_configured():
+            r2_episode = get_r2_episode(url)
+            if r2_episode and r2_episode.get("status") == "done":
+                r2_key = r2_episode.get("r2_key")
+                r2_quality = r2_episode.get("quality") or "mp4"
+                r2_url = get_presigned_url(r2_key)
+                if r2_url:
+                    r2_mime = "video/mp4" if r2_quality == "mp4" else "application/vnd.apple.mpegurl" if r2_quality == "m3u8" else f"video/{r2_quality}"
+                    r2_stream_data = {
+                        'stream_url': r2_url,
+                        'embed_url': r2_url,
+                        'direct_url': r2_url,
+                        'direct_type': r2_quality,
+                        'direct_mime': r2_mime,
+                        'direct_headers': {},
+                        'expires_at': None,
+                        'resolver': 'r2',
+                        'servers': [
+                            {
+                                'name': 'Cloudflare R2 (Self-Hosted)',
+                                'url': r2_url,
+                                'source_url': r2_url,
+                                'provider': 'r2',
+                                'type': 'direct',
+                                'direct_url': r2_url,
+                                'direct_type': r2_quality,
+                                'direct_mime': r2_mime,
+                                'direct_headers': {},
+                                'expires_at': None
+                            }
+                        ],
+                        'downloads': []
+                    }
+                    ANIME_CACHE.set(cache_key, r2_stream_data, ttl=7200 - 300) # cache 1h 55m
+                    return {"status": "success", "data": r2_stream_data, "source": "r2"}, 200
+
+        # Fallback ke scraper biasa jika tidak ada di R2 atau R2 belum terkonfigurasi
         stream_data = scraper.get_stream_and_download(url)
         if stream_data and stream_data.get('stream_url'):
             # Direct googlevideo links are signed and temporary. Keep them only
@@ -1129,6 +1175,12 @@ def build_response(path: str, params: dict, body_data: dict = None):
                 except (TypeError, ValueError):
                     pass
             ANIME_CACHE.set(cache_key, stream_data, ttl=ttl)
+
+            # Trigger background download ke R2
+            if r2_is_configured():
+                # trigger_background_archive akan mendeteksi parent anime_url sendiri secara otomatis
+                trigger_background_archive(url)
+                
         return {"status": "success", "data": stream_data}, 200
 
     return {"status": "error", "message": f"Route tidak dikenal: {path}"}, 400
