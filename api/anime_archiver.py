@@ -539,19 +539,25 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
         if status == "done":
             r2_url = existing.get("r2_url") or get_public_url(existing.get("r2_key", ""))
             return {"status": "already_done", "r2_url": r2_url}
-        if status == "downloading":
+        if status in ("downloading", "resolving"):
             return {"status": "already_downloading"}
 
-    # Mark sebagai "downloading"
-    _upsert_r2_episode(episode_url, anime_url, "downloading")
+    # Mark sebagai "resolving" dulu (sedang scrape URL)
+    _upsert_r2_episode(episode_url, anime_url, "resolving")
     logger.info(f"[Archiver] Mulai download: {episode_url} dengan anime: {anime_url}")
 
     try:
         # 1. Resolve stream URL
+        t0 = time.time()
+        logger.info(f"[Archiver] Resolving stream URL: {episode_url}")
         stream_url, detected_ext = _resolve_best_stream_url(episode_url)
+        logger.info(f"[Archiver] Resolve selesai dalam {time.time()-t0:.1f}s — URL: {stream_url[:80] if stream_url else 'TIDAK DITEMUKAN'}")
         if not stream_url:
             _upsert_r2_episode(episode_url, anime_url, "error", error_msg="Tidak ada stream URL yang bisa didownload")
             return {"status": "error", "error": "No stream URL"}
+
+        # Mark downloading setelah URL berhasil di-resolve
+        _upsert_r2_episode(episode_url, anime_url, "downloading")
 
         # 2. Download ke temp dir
         episode_slug = _slugify(episode_url)
