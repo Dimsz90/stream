@@ -61,7 +61,9 @@ except ImportError:
     from r2_storage import upload_to_r2, get_public_url, is_configured as r2_is_configured
 
 # Semaphore agar tidak ada lebih dari N download serentak
-_download_semaphore = threading.Semaphore(2)
+# Dibaca dari env WORKER_CONCURRENCY (default 2), fallback ke 2
+_max_concurrent = int(os.environ.get("WORKER_CONCURRENCY", "2"))
+_download_semaphore = threading.Semaphore(_max_concurrent)
 
 # Set untuk track episode yang sedang dalam proses download (hindari duplikat job)
 _in_progress: set[str] = set()
@@ -238,7 +240,7 @@ def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
                     ajax_url,
                     data={'action': 'player_ajax', 'post': post_id, 'nume': nume, 'type': type_val},
                     headers=headers,
-                    timeout=10,
+                    timeout=30,
                 )
                 if res.status_code != 200:
                     continue
@@ -266,7 +268,7 @@ def _resolve_best_stream_url(episode_url: str) -> tuple[str, str]:
                         else:
                             # Coba fetch iframe untuk ambil source mp4
                             try:
-                                iframe_res = scraper.scraper.get(src, headers=headers, timeout=10)
+                                iframe_res = scraper.scraper.get(src, headers=headers, timeout=30)
                                 if iframe_res.status_code == 200:
                                     inner = BeautifulSoup(iframe_res.text, 'html.parser')
                                     for tag in inner.find_all(['source', 'video'], src=True):
@@ -384,14 +386,13 @@ def _download_with_ytdlp(
                 )
 
                 if episode_url and anime_url:
-                    _upsert_r2_episode(
-                        episode_url,
-                        anime_url,
-                        "downloading",
-                        progress_pct=pct,
-                        download_speed=speed_str,
-                        eta_seconds=eta,
-                    )
+                    # Jalankan upsert di thread terpisah agar tidak memblokir download
+                    threading.Thread(
+                        target=_upsert_r2_episode,
+                        args=(episode_url, anime_url, "downloading"),
+                        kwargs={"progress_pct": pct, "download_speed": speed_str, "eta_seconds": eta},
+                        daemon=True,
+                    ).start()
             except Exception as hook_err:
                 logger.debug(f"[Archiver] progress hook error: {hook_err}")
 
@@ -399,14 +400,13 @@ def _download_with_ytdlp(
             logger.info(f"[Archiver] Download selesai: {d.get('filename')}")
             if episode_url and anime_url:
                 try:
-                    _upsert_r2_episode(
-                        episode_url,
-                        anime_url,
-                        "downloading",
-                        progress_pct=100.0,
-                        download_speed=None,
-                        eta_seconds=0,
-                    )
+                    # Jalankan di thread terpisah agar tidak memblokir yt-dlp
+                    threading.Thread(
+                        target=_upsert_r2_episode,
+                        args=(episode_url, anime_url, "downloading"),
+                        kwargs={"progress_pct": 100.0, "download_speed": None, "eta_seconds": 0},
+                        daemon=True,
+                    ).start()
                 except Exception:
                     pass
 
@@ -417,8 +417,16 @@ def _download_with_ytdlp(
         "no_warnings": True,
         "noplaylist": True,
         "merge_output_format": "mp4",
-        "socket_timeout": 30,
-        "retries": 3,
+        # ── Speed boosts ──────────────────────────────────────────────────
+        "socket_timeout": 60,           # lebih toleran untuk koneksi lambat
+        "retries": 5,                   # retry lebih banyak kalau putus
+        "fragment_retries": 5,          # retry per fragment (HLS/DASH)
+        "concurrent_fragment_downloads": 4,   # download 4 fragment serentak
+        "buffersize": 1024 * 256,       # 256 KB read buffer (default 1KB)
+        "http_chunk_size": 1024 * 1024 * 10,  # 10 MB HTTP chunk
+        "file_access_retries": 3,
+        "extractor_retries": 3,
+        # ─────────────────────────────────────────────────────────────────
         "progress_hooks": [_progress_hook],
         "http_headers": {
             "User-Agent": (

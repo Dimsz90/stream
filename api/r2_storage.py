@@ -70,10 +70,22 @@ def _multipart_config(file_size: int):
     """Config multipart upload berdasarkan ukuran file."""
     try:
         from boto3.s3.transfer import TransferConfig
+
+        if file_size >= 500 * 1024 * 1024:        # >= 500 MB: chunk 100 MB, 8 thread
+            chunk = 100 * 1024 * 1024
+            concurrency = 8
+        elif file_size >= 100 * 1024 * 1024:      # >= 100 MB: chunk 50 MB, 6 thread
+            chunk = 50 * 1024 * 1024
+            concurrency = 6
+        else:                                       # < 100 MB: chunk 16 MB, 4 thread
+            chunk = 16 * 1024 * 1024
+            concurrency = 4
+
         return TransferConfig(
-            multipart_threshold=100 * 1024 * 1024,   # 100 MB
-            multipart_chunksize=50 * 1024 * 1024,    # 50 MB per chunk
-            max_concurrency=4,
+            multipart_threshold=16 * 1024 * 1024,  # mulai multipart dari 16 MB
+            multipart_chunksize=chunk,
+            max_concurrency=concurrency,
+            use_threads=True,
         )
     except ImportError:
         return None

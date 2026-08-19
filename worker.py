@@ -14,6 +14,7 @@ import os
 import sys
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
 # Load .env
@@ -25,6 +26,10 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("ArchiverWorker")
+
+# Jumlah task yang diproses secara paralel (download + upload serentak)
+# Sesuaikan dengan kecepatan internet & CPU kamu. Default: 2
+WORKER_CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "2"))
 
 # Import komponen archiver dan R2
 try:
@@ -85,25 +90,33 @@ def run_worker_loop(interval_seconds: int = 15):
     logger.info("==================================================")
     logger.info("🚀 Anime Archiver Worker AKTIF di Mesin Lokal")
     logger.info(f"⏱️  Interval polling: {interval_seconds} detik")
+    logger.info(f"⚡ Concurrency: {WORKER_CONCURRENCY} task paralel")
     logger.info("==================================================")
 
-    while True:
-        try:
-            tasks = fetch_pending_tasks()
-            if tasks:
-                logger.info(f"[Worker] Ditemukan {len(tasks)} task pending.")
-                for task in tasks:
-                    process_task(task)
-            else:
-                # Tidak ada task, idle
-                pass
-        except KeyboardInterrupt:
-            logger.info("\n[Worker] Dihentikan oleh pengguna (Ctrl+C). Keluar...")
-            break
-        except Exception as e:
-            logger.error(f"[Worker] Exception tidak terduga: {e}")
+    with ThreadPoolExecutor(max_workers=WORKER_CONCURRENCY, thread_name_prefix="worker") as executor:
+        while True:
+            try:
+                # Ambil task sebanyak concurrency supaya penuh
+                tasks = fetch_pending_tasks(limit=WORKER_CONCURRENCY)
+                if tasks:
+                    logger.info(f"[Worker] Ditemukan {len(tasks)} task pending — menjalankan {len(tasks)} thread paralel.")
+                    futures = {executor.submit(process_task, task): task for task in tasks}
+                    for future in as_completed(futures):
+                        task = futures[future]
+                        try:
+                            future.result()
+                        except Exception as exc:
+                            logger.error(f"[Worker] Thread error untuk task #{task.get('id')}: {exc}")
+                else:
+                    # Tidak ada task, idle
+                    pass
+            except KeyboardInterrupt:
+                logger.info("\n[Worker] Dihentikan oleh pengguna (Ctrl+C). Keluar...")
+                break
+            except Exception as e:
+                logger.error(f"[Worker] Exception tidak terduga: {e}")
 
-        time.sleep(interval_seconds)
+            time.sleep(interval_seconds)
 
 
 if __name__ == "__main__":
