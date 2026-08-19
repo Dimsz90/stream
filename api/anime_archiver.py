@@ -410,6 +410,10 @@ def _download_with_ytdlp(
                 except Exception:
                     pass
 
+    # Cek apakah aria2c tersedia — jauh lebih cepat untuk server yang throttle per koneksi
+    import shutil
+    _aria2c_bin = shutil.which("aria2c")
+
     opts = {
         "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": out_template,
@@ -418,12 +422,12 @@ def _download_with_ytdlp(
         "noplaylist": True,
         "merge_output_format": "mp4",
         # ── Speed boosts ──────────────────────────────────────────────────
-        "socket_timeout": 60,           # lebih toleran untuk koneksi lambat
-        "retries": 5,                   # retry lebih banyak kalau putus
-        "fragment_retries": 5,          # retry per fragment (HLS/DASH)
-        "concurrent_fragment_downloads": 8,   # download 8 fragment serentak
-        "buffersize": 1024 * 512,       # 512 KB read buffer
-        "http_chunk_size": 1024 * 1024 * 20,  # 20 MB HTTP chunk
+        "socket_timeout": 60,
+        "retries": 5,
+        "fragment_retries": 5,
+        "concurrent_fragment_downloads": 8,
+        "buffersize": 1024 * 512,
+        "http_chunk_size": 1024 * 1024 * 20,
         "file_access_retries": 3,
         "extractor_retries": 3,
         # ─────────────────────────────────────────────────────────────────
@@ -436,6 +440,25 @@ def _download_with_ytdlp(
             "Referer": "https://v2.samehadaku.how/",
         },
     }
+
+    if _aria2c_bin:
+        # aria2c membuka banyak koneksi paralel ke server yang sama
+        # sangat efektif untuk server yang throttle per-koneksi seperti Wibufile
+        logger.info("[Archiver] aria2c ditemukan — menggunakan sebagai external downloader")
+        opts["external_downloader"] = "aria2c"
+        opts["external_downloader_args"] = [
+            "--min-split-size=1M",
+            "--max-connection-per-server=16",  # 16 koneksi per server
+            "--split=16",                       # split file jadi 16 bagian
+            "--max-concurrent-downloads=1",
+            "--continue=true",
+            "--retry-wait=3",
+            "--max-tries=5",
+            "--file-allocation=none",           # lebih cepat di SSD
+            "--console-log-level=warn",
+        ]
+    else:
+        logger.warning("[Archiver] aria2c tidak ditemukan. Install aria2 untuk download lebih cepat: https://github.com/aria2/aria2/releases")
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
