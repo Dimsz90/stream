@@ -3381,6 +3381,37 @@ function closeAnimePlayer() {
   enterBrowseOrientationMode();
 }
 
+function playNextAnimeEpisodeIfExists() {
+  if (!ANIME.episodes || !ANIME.episodes.length) return false;
+  const currIdx = ANIME.episodes.findIndex(e => e.link === ANIME.currentEpisodeUrl);
+  if (currIdx === -1) return false;
+
+  let nextEp = null;
+  // If list is sorted Ep 1 -> Ep 2 (ascending), next is currIdx + 1
+  // If list is sorted Ep 12 -> Ep 1 (descending), next is currIdx - 1
+  if (currIdx + 1 < ANIME.episodes.length) {
+    const nextCandidate = ANIME.episodes[currIdx + 1];
+    const currNum = parseFloat(ANIME.episodes[currIdx].number);
+    const nextNum = parseFloat(nextCandidate.number);
+    if (!isNaN(currNum) && !isNaN(nextNum)) {
+      if (nextNum > currNum) nextEp = nextCandidate;
+      else if (currIdx - 1 >= 0) nextEp = ANIME.episodes[currIdx - 1];
+    } else {
+      nextEp = nextCandidate;
+    }
+  } else if (currIdx - 1 >= 0) {
+    nextEp = ANIME.episodes[currIdx - 1];
+  }
+
+  if (nextEp && nextEp.link) {
+    const nextTitle = nextEp.title || `Episode ${nextEp.number || ''}`;
+    console.log('Auto continue next episode:', nextTitle);
+    playAnimeEpisode(nextEp.link, nextTitle);
+    return true;
+  }
+  return false;
+}
+
 function initAnimeVideoProgress() {
   const video = document.getElementById('animeVideo');
   if (!video || video.dataset.progressBound === '1') return;
@@ -3394,7 +3425,10 @@ function initAnimeVideoProgress() {
   video.addEventListener('timeupdate', () => {
     if (Number.isFinite(video.duration)) updateAnimeContinuePosition(video.currentTime, video.duration);
   });
-  video.addEventListener('ended', () => updateAnimeContinuePosition(video.duration, video.duration));
+  video.addEventListener('ended', () => {
+    updateAnimeContinuePosition(video.duration, video.duration);
+    playNextAnimeEpisodeIfExists();
+  });
 }
 
 initAnimeVideoProgress();

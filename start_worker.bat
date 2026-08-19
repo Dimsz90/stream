@@ -16,14 +16,14 @@ if %errorlevel% neq 0 (
 
 :: Buat venv jika belum ada
 if not exist "venv" (
-    echo [1/3] Membuat Python virtual environment (venv)...
+    echo [1/3] Membuat Python virtual environment venv...
     python -m venv venv
 )
 
 :: Aktifkan venv dan install requirements
-echo [2/3] Mengaktifkan venv dan memeriksa dependencies...
+echo [2/3] Mengaktifkan venv dan memeriksa / menginstall dependencies...
 call venv\Scripts\activate.bat
-pip install -r requirements.txt --quiet
+pip install -r requirements.txt
 
 :: Jalankan Worker
 echo [3/3] Menjalankan worker.py...
