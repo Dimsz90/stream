@@ -421,9 +421,9 @@ def _download_with_ytdlp(
         "socket_timeout": 60,           # lebih toleran untuk koneksi lambat
         "retries": 5,                   # retry lebih banyak kalau putus
         "fragment_retries": 5,          # retry per fragment (HLS/DASH)
-        "concurrent_fragment_downloads": 4,   # download 4 fragment serentak
-        "buffersize": 1024 * 256,       # 256 KB read buffer (default 1KB)
-        "http_chunk_size": 1024 * 1024 * 10,  # 10 MB HTTP chunk
+        "concurrent_fragment_downloads": 8,   # download 8 fragment serentak
+        "buffersize": 1024 * 512,       # 512 KB read buffer
+        "http_chunk_size": 1024 * 1024 * 20,  # 20 MB HTTP chunk
         "file_access_retries": 3,
         "extractor_retries": 3,
         # ─────────────────────────────────────────────────────────────────
