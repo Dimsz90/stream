@@ -427,6 +427,24 @@
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
       </iframe>
 
+      <!-- Next Episode Card Overlay -->
+      <div id="nextEpCard" class="next-ep-card hidden">
+        <div class="next-ep-inner">
+          <div class="next-ep-label">EPISODE BERIKUTNYA</div>
+          <div class="next-ep-title" id="nextEpTitle">S1E2</div>
+          <div class="next-ep-actions">
+            <button class="next-ep-btn next-ep-play" id="btnNextEpPlay" onclick="nextEpPlayNow()">
+              <span>▶</span> TONTON SEKARANG
+            </button>
+            <button class="next-ep-btn next-ep-cancel" onclick="nextEpDismiss()">LEWATI</button>
+          </div>
+          <div class="next-ep-countdown-bar">
+            <div class="next-ep-bar-fill" id="nextEpBarFill"></div>
+          </div>
+          <div class="next-ep-countdown-txt" id="nextEpCountdownTxt">Otomatis dalam 15 detik</div>
+        </div>
+      </div>
+
       <!-- Player top overlay bar (auto-hide on video) -->
       <div class="player-bar" id="playerBar">
         <div class="player-title" id="playerTitle">Memuat...</div>
