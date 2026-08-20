@@ -2,9 +2,6 @@
 title Anime Archiver Worker (Mini PC)
 cd /d "%~dp0"
 
-:: Matikan QuickEdit Mode biar proses gak stuck kalau window ke-klik
-reg add "HKCU\Console" /v QuickEdit /t REG_DWORD /d 0 /f >nul 2>&1
-
 echo ===================================================
 echo   Starting Anime Archiver Worker on Windows Mini PC
 echo ===================================================
@@ -12,23 +9,20 @@ echo ===================================================
 :: Periksa Python
 where python >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] Python tidak ditemukan! Harap install Python 3.10+ dan centang 'Add Python to PATH'.
+    echo [ERROR] Python tidak ditemukan!
     pause
     exit /b
 )
 
-:: Buat venv jika belum ada
 if not exist "venv" (
     echo [1/3] Membuat Python virtual environment venv...
     python -m venv venv
 )
 
-:: Aktifkan venv dan install requirements
 echo [2/3] Mengaktifkan venv dan memeriksa / menginstall dependencies...
 call venv\Scripts\activate.bat
 pip install -r requirements.txt -q
 
-:: Jalankan Worker
 echo [3/3] Menjalankan worker.py...
 echo ===================================================
 python worker.py 15
