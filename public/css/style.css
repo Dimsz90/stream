@@ -448,7 +448,6 @@ nav::-webkit-scrollbar{display:none}
 }
 
 #videoContainer{
-  width:100vw;height:100vh;
   position:absolute;top:0;left:0;z-index:201;background:#000;
   display:none;
   align-items:center;
@@ -622,7 +621,7 @@ nav::-webkit-scrollbar{display:none}
   text-align: right;
 }
 #playerFrame{
-  width:100vw;height:100vh;border:none;background:#000;
+  border:none;background:#000;
   position:absolute;top:0;left:0;z-index:201;display:none;
 }
 
@@ -1751,4 +1750,21 @@ nav{height:64px;background:rgba(8,9,11,.88);border-bottom:1px solid rgba(255,255
 @media(max-width:400px){
   #anime-grid{grid-template-columns:repeat(2,1fr);gap:8px}
   #andEpisodes{grid-template-columns:repeat(auto-fill,minmax(44px,1fr))}
+}
+
+
+/* ═══════════════════════════════════════
+   PLAYER — PAKSA PORTRAIT DI MOBILE BROWSER
+   Saat device landscape tapi bukan native fullscreen,
+   rotate #playerMode 90° via CSS agar tetap terlihat portrait.
+   Class .player-force-portrait ditambah via JS.
+═══════════════════════════════════════ */
+@media (orientation: landscape) and (max-width: 960px) {
+  #playerMode.player-force-portrait {
+    width: 100vh;
+    height: 100vw;
+    transform-origin: top left;
+    transform: rotate(90deg) translateY(-100%);
+    overflow: hidden;
+  }
 }
