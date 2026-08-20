@@ -15,7 +15,7 @@ venv/
 env/
 .venv/
 .env/
-
+node_modules/
 # Environment variables (JANGAN pernah commit ini)
 .env
 .env.local

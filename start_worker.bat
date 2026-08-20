@@ -2,6 +2,9 @@
 title Anime Archiver Worker (Mini PC)
 cd /d "%~dp0"
 
+:: Matikan QuickEdit Mode biar proses gak stuck kalau window ke-klik
+reg add "HKCU\Console" /v QuickEdit /t REG_DWORD /d 0 /f >nul 2>&1
+
 echo ===================================================
 echo   Starting Anime Archiver Worker on Windows Mini PC
 echo ===================================================
@@ -23,7 +26,7 @@ if not exist "venv" (
 :: Aktifkan venv dan install requirements
 echo [2/3] Mengaktifkan venv dan memeriksa / menginstall dependencies...
 call venv\Scripts\activate.bat
-pip install -r requirements.txt
+pip install -r requirements.txt -q
 
 :: Jalankan Worker
 echo [3/3] Menjalankan worker.py...

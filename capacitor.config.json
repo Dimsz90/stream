@@ -1,0 +1,42 @@
+{
+  "appId": "id.my.masdifox.app",
+  "appName": "MasdiFox",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://masdifox.my.id",
+    "cleartext": true,
+    "allowNavigation": [
+      "masdifox.my.id",
+      "*.masdifox.my.id",
+      "stream-production-3097.up.railway.app",
+      "*.railway.app",
+      "*.bayar.gg",
+      "*.supabase.co",
+      "*.themoviedb.org",
+      "*.tmdb.org",
+      "*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#070709"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#070709",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "backgroundColor": "#070709",
+      "style": "DARK"
+    }
+  }
+}
