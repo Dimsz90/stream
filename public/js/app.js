@@ -3214,6 +3214,7 @@ async function playAnimeEpisode(epUrl, epTitle) {
   if (!epUrl) return;
   ANIME.currentEpisodeUrl = epUrl;
   ANIME.progressSaveAt = 0;
+  resetAnimeNextEpCard();
   saveAnimeContinueProgress(epUrl, epTitle);
   closeAnimeDetail();
   enterWatchingOrientationMode();
@@ -3280,6 +3281,7 @@ async function playAnimeEpisode(epUrl, epTitle) {
 function resetAnimePlayerMedia() {
   const video = document.getElementById('animeVideo');
   const iframe = document.getElementById('animeIframe');
+  hideAnimeNextEpCard();
   if (ANIME.playerHls) {
     try { ANIME.playerHls.destroy(); } catch {}
     ANIME.playerHls = null;
@@ -3375,16 +3377,17 @@ function switchAnimeServer(index, btn) {
 function closeAnimePlayer() {
   const modal = document.getElementById('animePlayerModal');
   const video = document.getElementById('animeVideo');
+  resetAnimeNextEpCard();
   if (video && Number.isFinite(video.duration)) updateAnimeContinuePosition(video.currentTime, video.duration);
   resetAnimePlayerMedia();
   if (modal) modal.style.display = 'none';
   enterBrowseOrientationMode();
 }
 
-function playNextAnimeEpisodeIfExists() {
-  if (!ANIME.episodes || !ANIME.episodes.length) return false;
+function getAnimeNextEpisode() {
+  if (!ANIME.episodes || !ANIME.episodes.length) return null;
   const currIdx = ANIME.episodes.findIndex(e => e.link === ANIME.currentEpisodeUrl);
-  if (currIdx === -1) return false;
+  if (currIdx === -1) return null;
 
   let nextEp = null;
   // If list is sorted Ep 1 -> Ep 2 (ascending), next is currIdx + 1
@@ -3403,13 +3406,90 @@ function playNextAnimeEpisodeIfExists() {
     nextEp = ANIME.episodes[currIdx - 1];
   }
 
-  if (nextEp && nextEp.link) {
-    const nextTitle = nextEp.title || `Episode ${nextEp.number || ''}`;
-    console.log('Auto continue next episode:', nextTitle);
-    playAnimeEpisode(nextEp.link, nextTitle);
-    return true;
+  return nextEp && nextEp.link ? nextEp : null;
+}
+
+/* ── Anime next episode card ── */
+let _animeNextEpTimer     = null;
+let _animeNextEpDismissed = false;
+const ANIME_NEXT_EP_COUNTDOWN = 15;  // detik auto-next
+const ANIME_NEXT_EP_TRIGGER   = 15;  // detik sebelum akhir video → card muncul
+
+function _animeNextEpLabel(nextEp) {
+  return nextEp.title || `Episode ${nextEp.number || ''}`;
+}
+
+function showAnimeNextEpCard(startCountdown = true) {
+  const nextEp = getAnimeNextEpisode();
+  if (!nextEp || _animeNextEpDismissed) return false;
+  const card = document.getElementById('animeNextEpCard');
+  if (!card) return false;
+
+  document.getElementById('animeNextEpTitle').textContent = _animeNextEpLabel(nextEp);
+  card.classList.remove('hidden');
+  clearInterval(_animeNextEpTimer);
+  _animeNextEpTimer = null;
+
+  const barFill = document.getElementById('animeNextEpBarFill');
+  const countTxt = document.getElementById('animeNextEpCountdownTxt');
+  if (startCountdown) {
+    barFill.style.transition = 'none';
+    barFill.style.width = '100%';
+    void barFill.offsetWidth; // reflow
+    barFill.style.transition = `width ${ANIME_NEXT_EP_COUNTDOWN}s linear`;
+    barFill.style.width = '0%';
+
+    let remaining = ANIME_NEXT_EP_COUNTDOWN;
+    countTxt.textContent = `Otomatis dalam ${remaining} detik`;
+    _animeNextEpTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(_animeNextEpTimer);
+        _animeNextEpTimer = null;
+        animeNextEpPlayNow();
+      } else {
+        countTxt.textContent = `Otomatis dalam ${remaining} detik`;
+      }
+    }, 1000);
+  } else {
+    countTxt.textContent = 'Klik untuk lanjut';
   }
-  return false;
+  return true;
+}
+
+function hideAnimeNextEpCard() {
+  clearInterval(_animeNextEpTimer);
+  _animeNextEpTimer = null;
+  const card = document.getElementById('animeNextEpCard');
+  if (card) card.classList.add('hidden');
+}
+
+function resetAnimeNextEpCard() {
+  _animeNextEpDismissed = false;
+  hideAnimeNextEpCard();
+}
+
+function animeNextEpPlayNow() {
+  hideAnimeNextEpCard();
+  _animeNextEpDismissed = false;
+  const nextEp = getAnimeNextEpisode();
+  if (nextEp) playAnimeEpisode(nextEp.link, _animeNextEpLabel(nextEp));
+}
+
+function animeNextEpDismiss() {
+  _animeNextEpDismissed = true;
+  hideAnimeNextEpCard();
+}
+
+window.animeNextEpPlayNow = animeNextEpPlayNow;
+window.animeNextEpDismiss = animeNextEpDismiss;
+
+function playNextAnimeEpisodeIfExists() {
+  const nextEp = getAnimeNextEpisode();
+  if (!nextEp) return false;
+  console.log('Auto continue next episode:', _animeNextEpLabel(nextEp));
+  playAnimeEpisode(nextEp.link, _animeNextEpLabel(nextEp));
+  return true;
 }
 
 function initAnimeVideoProgress() {
@@ -3424,10 +3504,16 @@ function initAnimeVideoProgress() {
   });
   video.addEventListener('timeupdate', () => {
     if (Number.isFinite(video.duration)) updateAnimeContinuePosition(video.currentTime, video.duration);
+    // Munculkan card saat mendekati akhir video
+    if (video.duration > 0 && video.duration - video.currentTime <= ANIME_NEXT_EP_TRIGGER) {
+      showAnimeNextEpCard();
+    }
   });
   video.addEventListener('ended', () => {
     updateAnimeContinuePosition(video.duration, video.duration);
-    playNextAnimeEpisodeIfExists();
+    // Fallback: jika card tidak tampil (mis. episode terakhir / list kosong),
+    // tetap coba auto-next langsung
+    if (!showAnimeNextEpCard()) playNextAnimeEpisodeIfExists();
   });
 }
 

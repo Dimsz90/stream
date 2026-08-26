@@ -366,6 +366,24 @@
       preload="metadata"></video>
     <iframe id="animeIframe" src="" style="display:none;border:none;" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></iframe>
     <div id="animePlayerLoading" style="display:none;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;color:#8b949e;font-size:13px;pointer-events:none;background:rgba(0,0,0,.12);">Memuat video...</div>
+
+    <!-- Anime Next Episode Card Overlay -->
+    <div id="animeNextEpCard" class="next-ep-card hidden">
+      <div class="next-ep-inner">
+        <div class="next-ep-label">EPISODE BERIKUTNYA</div>
+        <div class="next-ep-title" id="animeNextEpTitle">Episode selanjutnya</div>
+        <div class="next-ep-actions">
+          <button class="next-ep-btn next-ep-play" onclick="animeNextEpPlayNow()">
+            <span>▶</span> TONTON SEKARANG
+          </button>
+          <button class="next-ep-btn next-ep-cancel" onclick="animeNextEpDismiss()">LEWATI</button>
+        </div>
+        <div class="next-ep-countdown-bar">
+          <div class="next-ep-bar-fill" id="animeNextEpBarFill"></div>
+        </div>
+        <div class="next-ep-countdown-txt" id="animeNextEpCountdownTxt">Otomatis dalam 15 detik</div>
+      </div>
+    </div>
   </div>
   <div id="animeServerContainer" style="padding:12px;background:#0d1117;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:8px;overflow-x:auto;align-items:center;">
     <span style="color:#8b949e;font-size:12px;white-space:nowrap;">PILIH SERVER:</span>

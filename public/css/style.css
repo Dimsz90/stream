@@ -620,6 +620,19 @@ nav::-webkit-scrollbar{display:none}
   color: rgba(255,255,255,.4);
   text-align: right;
 }
+/* Anime player next episode card */
+#animeNextEpCard {
+  position: absolute;
+  bottom: 72px;
+  right: 16px;
+  z-index: 6;
+  transition: opacity .3s, transform .3s;
+}
+#animeNextEpCard.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
 #playerFrame{
   border:none;background:#000;
   position:absolute;top:0;left:0;z-index:201;display:none;
