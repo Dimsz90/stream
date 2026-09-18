@@ -1114,38 +1114,62 @@ def build_response(path: str, params: dict, body_data: dict = None):
 
         cache_key = f"anime:stream:{url.strip()}"
 
-        # --- Integrasi Cloudflare R2: Cek R2 terlebih dahulu ---
+        # --- Integrasi Cloudflare Stream & R2: Cek Arsip Terlebih Dahulu ---
         try:
             from api.r2_storage import is_configured as r2_is_configured, get_presigned_url, key_exists
-            from api.anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode
+            from api.cloudflare_stream import is_configured as stream_is_configured, get_hls_url, get_iframe_url
+            from api.anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode, is_storage_configured
         except ImportError:
             from r2_storage import is_configured as r2_is_configured, get_presigned_url, key_exists
-            from anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode
+            from cloudflare_stream import is_configured as stream_is_configured, get_hls_url, get_iframe_url
+            from anime_archiver import get_r2_episode, trigger_background_archive, _upsert_r2_episode, is_storage_configured
 
-        r2_stream_data = None
-        if r2_is_configured():
-            r2_episode = get_r2_episode(url)
-            is_done = False
-            r2_key = ""
-            r2_quality = "mp4"
+        storage_stream_data = None
+        archived_episode = get_r2_episode(url)
 
-            if r2_episode:
-                r2_key = r2_episode.get("r2_key") or ""
-                r2_quality = r2_episode.get("quality") or "mp4"
-                if r2_episode.get("status") == "done" and r2_key:
-                    is_done = True
-                elif r2_key and key_exists(r2_key):
-                    is_done = True
-                    try:
-                        _upsert_r2_episode(url, r2_episode.get("anime_url") or "", "done", r2_key=r2_key, quality=r2_quality)
-                    except Exception:
-                        pass
+        if archived_episode and archived_episode.get("status") == "done":
+            # 1. Cek jika video tersimpan di Cloudflare Stream
+            stream_uid = archived_episode.get("stream_uid")
+            if stream_uid or archived_episode.get("storage_provider") == "stream":
+                hls_url = archived_episode.get("stream_hls_url") or get_hls_url(stream_uid or "")
+                embed_url = archived_episode.get("stream_embed_url") or get_iframe_url(stream_uid or "")
+                if hls_url:
+                    storage_stream_data = {
+                        'stream_url': hls_url,
+                        'embed_url': embed_url,
+                        'direct_url': hls_url,
+                        'direct_type': 'm3u8',
+                        'direct_mime': 'application/vnd.apple.mpegurl',
+                        'direct_headers': {},
+                        'expires_at': None,
+                        'resolver': 'cloudflare_stream',
+                        'servers': [
+                            {
+                                'name': 'Cloudflare Stream (Adaptive HLS)',
+                                'url': hls_url,
+                                'source_url': hls_url,
+                                'provider': 'cloudflare_stream',
+                                'type': 'hls',
+                                'direct_url': hls_url,
+                                'direct_type': 'm3u8',
+                                'direct_mime': 'application/vnd.apple.mpegurl',
+                                'direct_headers': {},
+                                'expires_at': None
+                            }
+                        ],
+                        'downloads': []
+                    }
+                    ANIME_CACHE.set(cache_key, storage_stream_data, ttl=7200 - 300)
+                    return {"status": "success", "data": storage_stream_data, "source": "cloudflare_stream"}, 200
 
-            if is_done and r2_key:
-                r2_url = get_presigned_url(r2_key)
+            # 2. Cek jika video tersimpan di Cloudflare R2
+            r2_key = archived_episode.get("r2_key") or ""
+            r2_quality = archived_episode.get("quality") or "mp4"
+            if r2_key and (r2_is_configured() or archived_episode.get("r2_url")):
+                r2_url = archived_episode.get("r2_url") or get_presigned_url(r2_key)
                 if r2_url:
                     r2_mime = "video/mp4" if r2_quality == "mp4" else "application/vnd.apple.mpegurl" if r2_quality == "m3u8" else f"video/{r2_quality}"
-                    r2_stream_data = {
+                    storage_stream_data = {
                         'stream_url': r2_url,
                         'embed_url': r2_url,
                         'direct_url': r2_url,
@@ -1170,24 +1194,22 @@ def build_response(path: str, params: dict, body_data: dict = None):
                         ],
                         'downloads': []
                     }
-                    ANIME_CACHE.set(cache_key, r2_stream_data, ttl=7200 - 300)
-                    return {"status": "success", "data": r2_stream_data, "source": "r2"}, 200
+                    ANIME_CACHE.set(cache_key, storage_stream_data, ttl=7200 - 300)
+                    return {"status": "success", "data": storage_stream_data, "source": "r2"}, 200
 
-        # Cek Cache umum jika belum ada di R2
+        # Cek Cache umum jika belum di-resolve dari storage
         nocache = "nocache" in params or "refresh" in params
         if not nocache:
             cached = ANIME_CACHE.get(cache_key)
             if cached:
-                # Trigger background archive jika belum jalan di R2
-                if r2_is_configured():
+                # Trigger background archive jika belum jalan
+                if is_storage_configured():
                     trigger_background_archive(url)
                 return {"status": "success", "data": cached, "cached": True}, 200
 
-        # Fallback ke scraper biasa jika tidak ada di R2 atau R2 belum terkonfigurasi
+        # Fallback ke scraper biasa jika belum ada di arsip
         stream_data = scraper.get_stream_and_download(url)
         if stream_data and stream_data.get('stream_url'):
-            # Direct googlevideo links are signed and temporary. Keep them only
-            # briefly; iframe-only responses can retain the longer cache.
             ttl = 300 if stream_data.get('direct_url') else 3600
             expires_at = stream_data.get('expires_at')
             if expires_at:
@@ -1197,10 +1219,10 @@ def build_response(path: str, params: dict, body_data: dict = None):
                     pass
             ANIME_CACHE.set(cache_key, stream_data, ttl=ttl)
 
-            # Trigger background download ke R2
-            if r2_is_configured():
-                # trigger_background_archive akan mendeteksi parent anime_url sendiri secara otomatis
+            # Trigger background download ke Cloudflare Stream / R2
+            if is_storage_configured():
                 trigger_background_archive(url)
+
                 
         return {"status": "success", "data": stream_data}, 200
 

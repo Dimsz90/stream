@@ -31,15 +31,16 @@ logger = logging.getLogger("ArchiverWorker")
 # Sesuaikan dengan kecepatan internet & CPU kamu. Default: 2
 WORKER_CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "2"))
 
-# Import komponen archiver dan R2
+# Import komponen archiver dan Storage (R2 / Cloudflare Stream)
 try:
     from api.anime_archiver import (
         _supabase,
         _do_download_and_archive,
         get_r2_episode,
         _upsert_r2_episode,
+        is_storage_configured,
+        get_storage_provider,
     )
-    from api.r2_storage import is_configured as r2_is_configured
 except ImportError:
     logger.error("Pastikan script dijalankan dari root direktori project!")
     sys.exit(1)
@@ -63,7 +64,7 @@ def fetch_pending_tasks(limit: int = 5) -> list[dict]:
 
 
 def process_task(task: dict):
-    """Memproses satu task download dan upload ke R2."""
+    """Memproses satu task download dan upload (Stream / R2)."""
     episode_url = task.get("episode_url")
     anime_url = task.get("anime_url") or ""
     task_id = task.get("id")
@@ -83,15 +84,19 @@ def process_task(task: dict):
 
 def run_worker_loop(interval_seconds: int = 15):
     """Loop utama worker yang berjalan terus menerus."""
-    if not r2_is_configured():
-        logger.error("[Worker] Cloudflare R2 belum terkonfigurasi di .env! Harap periksa file .env.")
+    if not is_storage_configured():
+        provider = get_storage_provider()
+        logger.error(f"[Worker] Storage provider '{provider}' belum terkonfigurasi di .env! Harap periksa file .env.")
         sys.exit(1)
 
+    provider = get_storage_provider()
     logger.info("==================================================")
     logger.info("🚀 Anime Archiver Worker AKTIF di Mesin Lokal")
+    logger.info(f"📦 Storage Provider: {provider.upper()}")
     logger.info(f"⏱️  Interval polling: {interval_seconds} detik")
     logger.info(f"⚡ Concurrency: {WORKER_CONCURRENCY} task paralel")
     logger.info("==================================================")
+
 
     with ThreadPoolExecutor(max_workers=WORKER_CONCURRENCY, thread_name_prefix="worker") as executor:
         while True:

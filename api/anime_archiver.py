@@ -54,11 +54,46 @@ except ImportError:
 
 ANIME_CRON_SECRET = os.environ.get("ANIME_CRON_SECRET", "").strip()
 
-# Download hanya dilakukan jika R2 sudah dikonfigurasi
+# Storage helpers (R2 & Cloudflare Stream)
 try:
     from api.r2_storage import upload_to_r2, get_public_url, is_configured as r2_is_configured
 except ImportError:
     from r2_storage import upload_to_r2, get_public_url, is_configured as r2_is_configured
+
+try:
+    from api.cloudflare_stream import (
+        upload_to_stream,
+        get_hls_url,
+        get_iframe_url,
+        is_configured as stream_is_configured,
+    )
+except ImportError:
+    from cloudflare_stream import (
+        upload_to_stream,
+        get_hls_url,
+        get_iframe_url,
+        is_configured as stream_is_configured,
+    )
+
+
+def get_storage_provider() -> str:
+    """Return active storage provider: 'stream' atau 'r2'."""
+    p = os.environ.get("STORAGE_PROVIDER", "").strip().lower()
+    if p in ("stream", "cloudflare_stream", "cf_stream"):
+        return "stream"
+    if p in ("r2", "cloudflare_r2", "s3"):
+        return "r2"
+    if stream_is_configured() and not r2_is_configured():
+        return "stream"
+    return "r2"
+
+
+def is_storage_configured() -> bool:
+    """Cek apakah storage provider yang aktif sudah terkonfigurasi."""
+    provider = get_storage_provider()
+    if provider == "stream":
+        return stream_is_configured()
+    return r2_is_configured()
 
 # Semaphore agar tidak ada lebih dari N download serentak
 # Dibaca dari env WORKER_CONCURRENCY (default 2), fallback ke 2
@@ -482,15 +517,16 @@ def _download_with_ytdlp(
 
 def download_and_archive(episode_url: str, anime_url: str = "") -> dict:
     """
-    Pipeline lengkap: resolve stream → download → upload R2 → update Supabase.
+    Pipeline lengkap: resolve stream → download → upload (Stream / R2) → update Supabase.
 
     Aman dipanggil dari thread background.
 
     Returns:
-        Dict dengan 'status', 'r2_url', 'error' (jika gagal).
+        Dict dengan 'status', 'stream_uid' / 'r2_url', 'error' (jika gagal).
     """
-    if not r2_is_configured():
-        return {"status": "skipped", "reason": "R2 tidak dikonfigurasi"}
+    if not is_storage_configured():
+        provider = get_storage_provider()
+        return {"status": "skipped", "reason": f"Storage provider '{provider}' tidak dikonfigurasi"}
 
     # Cegah double download untuk episode yang sama
     with _in_progress_lock:
@@ -527,24 +563,31 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
                         break
         except Exception as e:
             logger.warning(f"Gagal mendeteksi parent anime_url dari {episode_url}: {e}")
-    
+
     if not anime_url:
         # Fallback agar key name tetap teratur
         anime_url = episode_url.rsplit("-episode-", 1)[0] if "-episode-" in episode_url else episode_url
+
+    provider = get_storage_provider()
 
     # Cek apakah sudah ada di DB
     existing = get_r2_episode(episode_url)
     if existing:
         status = existing.get("status", "")
         if status == "done":
-            r2_url = existing.get("r2_url") or get_public_url(existing.get("r2_key", ""))
-            return {"status": "already_done", "r2_url": r2_url}
+            if existing.get("storage_provider") == "stream" or existing.get("stream_uid"):
+                stream_uid = existing.get("stream_uid") or ""
+                hls_url = existing.get("stream_hls_url") or get_hls_url(stream_uid)
+                return {"status": "already_done", "storage_provider": "stream", "stream_uid": stream_uid, "hls_url": hls_url}
+            else:
+                r2_url = existing.get("r2_url") or get_public_url(existing.get("r2_key", ""))
+                return {"status": "already_done", "storage_provider": "r2", "r2_url": r2_url}
         if status in ("downloading", "resolving"):
             return {"status": "already_downloading"}
 
     # Mark sebagai "resolving" dulu (sedang scrape URL)
-    _upsert_r2_episode(episode_url, anime_url, "resolving")
-    logger.info(f"[Archiver] Mulai download: {episode_url} dengan anime: {anime_url}")
+    _upsert_r2_episode(episode_url, anime_url, "resolving", storage_provider=provider)
+    logger.info(f"[Archiver] Mulai download ({provider}): {episode_url} dengan anime: {anime_url}")
 
     try:
         # 1. Resolve stream URL
@@ -553,11 +596,11 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
         stream_url, detected_ext = _resolve_best_stream_url(episode_url)
         logger.info(f"[Archiver] Resolve selesai dalam {time.time()-t0:.1f}s — URL: {stream_url[:80] if stream_url else 'TIDAK DITEMUKAN'}")
         if not stream_url:
-            _upsert_r2_episode(episode_url, anime_url, "error", error_msg="Tidak ada stream URL yang bisa didownload")
+            _upsert_r2_episode(episode_url, anime_url, "error", storage_provider=provider, error_msg="Tidak ada stream URL yang bisa didownload")
             return {"status": "error", "error": "No stream URL"}
 
         # Mark downloading setelah URL berhasil di-resolve
-        _upsert_r2_episode(episode_url, anime_url, "downloading")
+        _upsert_r2_episode(episode_url, anime_url, "downloading", storage_provider=provider)
 
         # 2. Download ke temp dir
         episode_slug = _slugify(episode_url)
@@ -565,46 +608,87 @@ def _do_download_and_archive(episode_url: str, anime_url: str = "") -> dict:
             filepath, ext = _download_with_ytdlp(stream_url, tmpdir, episode_slug, episode_url, anime_url)
 
             if not filepath or not os.path.exists(filepath):
-                _upsert_r2_episode(episode_url, anime_url, "error", error_msg="Download gagal: file tidak ditemukan")
+                _upsert_r2_episode(episode_url, anime_url, "error", storage_provider=provider, error_msg="Download gagal: file tidak ditemukan")
                 return {"status": "error", "error": "Download failed"}
 
             file_size = os.path.getsize(filepath)
             if file_size < 1024 * 100:  # < 100 KB — kemungkinan error page
-                _upsert_r2_episode(episode_url, anime_url, "error", error_msg=f"File terlalu kecil ({file_size} bytes)")
+                _upsert_r2_episode(episode_url, anime_url, "error", storage_provider=provider, error_msg=f"File terlalu kecil ({file_size} bytes)")
                 return {"status": "error", "error": "File too small"}
 
-            # 3. Determine R2 key & MIME type
-            content_type = "video/mp4" if ext == "mp4" else "application/vnd.apple.mpegurl" if ext == "m3u8" else f"video/{ext}"
-            r2_key = _r2_key(anime_url, episode_url, ext)
+            # 3. Upload sesuai STORAGE_PROVIDER
+            if provider == "stream":
+                # Upload ke Cloudflare Stream via TUS
+                video_name = f"{_slugify(anime_url)} - {episode_slug}"
+                logger.info(f"[Archiver] Uploading ke Cloudflare Stream: {video_name} ({file_size:,} bytes)")
+                stream_res = upload_to_stream(
+                    filepath,
+                    name=video_name,
+                    meta={"anime_url": anime_url, "episode_url": episode_url},
+                )
+                if not stream_res.get("success"):
+                    err_msg = stream_res.get("error", "Cloudflare Stream upload failed")
+                    _upsert_r2_episode(episode_url, anime_url, "error", storage_provider="stream", error_msg=err_msg)
+                    return {"status": "error", "error": err_msg}
 
-            # 4. Upload ke R2
-            logger.info(f"[Archiver] Uploading ke R2: {r2_key} ({file_size:,} bytes)")
-            ok = upload_to_r2(filepath, r2_key, content_type)
+                # Simpan metadata Cloudflare Stream ke DB
+                stream_uid = stream_res.get("uid", "")
+                hls_url = stream_res.get("hls_url", "")
+                iframe_url = stream_res.get("iframe_url", "")
+                _upsert_r2_episode(
+                    episode_url,
+                    anime_url,
+                    "done",
+                    storage_provider="stream",
+                    stream_uid=stream_uid,
+                    stream_hls_url=hls_url,
+                    stream_embed_url=iframe_url,
+                    file_size=file_size,
+                    quality="m3u8",
+                    error_msg=None,
+                )
+                logger.info(f"[Archiver] Selesai (CF Stream): {episode_url} -> {hls_url}")
+                return {
+                    "status": "done",
+                    "storage_provider": "stream",
+                    "stream_uid": stream_uid,
+                    "hls_url": hls_url,
+                    "iframe_url": iframe_url,
+                    "file_size": file_size,
+                }
 
-        if not ok:
-            _upsert_r2_episode(episode_url, anime_url, "error", error_msg="Upload ke R2 gagal")
-            return {"status": "error", "error": "R2 upload failed"}
+            else:
+                # Default: Upload ke Cloudflare R2
+                content_type = "video/mp4" if ext == "mp4" else "application/vnd.apple.mpegurl" if ext == "m3u8" else f"video/{ext}"
+                r2_key = _r2_key(anime_url, episode_url, ext)
 
-        # 5. Simpan ke Supabase dengan status done
-        r2_url = get_public_url(r2_key)
-        _upsert_r2_episode(
-            episode_url,
-            anime_url,
-            "done",
-            r2_key=r2_key,
-            r2_url=r2_url,
-            file_size=file_size,
-            quality=ext,
-            error_msg=None,
-        )
+                logger.info(f"[Archiver] Uploading ke R2: {r2_key} ({file_size:,} bytes)")
+                ok = upload_to_r2(filepath, r2_key, content_type)
 
-        logger.info(f"[Archiver] Selesai: {episode_url} -> {r2_url}")
-        return {"status": "done", "r2_url": r2_url, "r2_key": r2_key, "file_size": file_size}
+                if not ok:
+                    _upsert_r2_episode(episode_url, anime_url, "error", storage_provider="r2", error_msg="Upload ke R2 gagal")
+                    return {"status": "error", "error": "R2 upload failed"}
+
+                # Simpan metadata R2 ke DB
+                r2_url = get_public_url(r2_key)
+                _upsert_r2_episode(
+                    episode_url,
+                    anime_url,
+                    "done",
+                    storage_provider="r2",
+                    r2_key=r2_key,
+                    r2_url=r2_url,
+                    file_size=file_size,
+                    quality=ext,
+                    error_msg=None,
+                )
+                logger.info(f"[Archiver] Selesai (R2): {episode_url} -> {r2_url}")
+                return {"status": "done", "storage_provider": "r2", "r2_url": r2_url, "r2_key": r2_key, "file_size": file_size}
 
     except Exception as exc:
         err_msg = str(exc)[:400]
         logger.error(f"[Archiver] Exception untuk {episode_url}: {err_msg}")
-        _upsert_r2_episode(episode_url, anime_url, "error", error_msg=err_msg)
+        _upsert_r2_episode(episode_url, anime_url, "error", storage_provider=provider, error_msg=err_msg)
         return {"status": "error", "error": err_msg}
 
 
@@ -615,7 +699,7 @@ def trigger_background_archive(episode_url: str, anime_url: str = ""):
     agar diproses oleh komputer/server worker lokal Anda.
     Jika mode default, spawn background thread lokal.
     """
-    if not r2_is_configured():
+    if not is_storage_configured():
         return
 
     # Cek apakah sudah terdaftar
@@ -628,7 +712,7 @@ def trigger_background_archive(episode_url: str, anime_url: str = ""):
     if mode in ("worker", "queue"):
         # Cukup masukkan ke database queue Supabase
         logger.info(f"[Archiver] Enqueue task ke Supabase (mode={mode}): {episode_url}")
-        _upsert_r2_episode(episode_url, anime_url, "pending")
+        _upsert_r2_episode(episode_url, anime_url, "pending", storage_provider=get_storage_provider())
         return
 
     # Default mode: download langsung di background thread mesin ini
@@ -663,12 +747,14 @@ def _episodes_latest_first(episodes: list) -> list:
 
 def run_archiver_cron() -> dict:
     """
-    Cek semua bookmark di Supabase dan download episode baru ke R2.
+    Cek semua bookmark di Supabase dan download episode baru ke Storage (Stream / R2).
 
     Dipanggil oleh endpoint POST /api/anime/archive/cron.
     """
-    if not r2_is_configured():
-        return {"status": "skipped", "reason": "R2 tidak dikonfigurasi"}
+    if not is_storage_configured():
+        provider = get_storage_provider()
+        return {"status": "skipped", "reason": f"Storage provider '{provider}' tidak dikonfigurasi"}
+
 
     try:
         bookmarks = _supabase(
