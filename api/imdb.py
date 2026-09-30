@@ -178,28 +178,145 @@ def get_fast_stream(imdb_id: str, media_type: str = "movie", season=None, episod
 
 
 # ═══════════════════════════════════════════════
-#  HTTP HANDLER
+#  IMDB SUGGESTION API (fallback untuk search)
+#  imdb.iamidiotareyoutoo.com/search sedang down (SERVER_FAILURE_25)
+#  Gunakan IMDb Suggestion API resmi yang selalu tersedia.
+
+IMDB_SUGGESTION_BASE = "https://v3.sg.media-imdb.com/suggestion/titles"
+IMDB_SUGGESTION_FALLBACK = "https://v2.sg.media-imdb.com/suggestion/titles"
+
+def _format_imdb_suggestion_item(it: dict) -> dict | None:
+    """
+    Format satu item dari IMDb Suggestion API ke format yang digunakan frontend:
+    #TITLE, #YEAR, #IMDB_ID, #IMG_POSTER, #TYPE, #ACTORS, #RANK, dll.
+    """
+    imdb_id = it.get("id") or ""
+    if not str(imdb_id).startswith("tt"):
+        return None
+    qid    = str(it.get("qid") or "").lower()
+    q_type = str(it.get("q") or "").lower()
+    if "tvseries" in qid or "series" in q_type or "mini" in qid:
+        media_type = "tvseries"
+    elif "tvepisode" in qid or "episode" in q_type:
+        media_type = "tvepisode"
+    else:
+        media_type = "movie"
+    img_obj    = it.get("i") or {}
+    poster_url = img_obj.get("imageUrl") or ""
+    return {
+        "#TITLE":      it.get("l") or "Untitled",
+        "#YEAR":       it.get("y") or "",
+        "#IMDB_ID":    imdb_id,
+        "#RANK":       it.get("rank") or 0,
+        "#ACTORS":     it.get("s") or "",
+        "#AKA":        it.get("l") or "",
+        "#IMDB_URL":   f"https://imdb.com/title/{imdb_id}",
+        "#IMDB_IV":    f"https://t.me/iv?url=https://imdb.com/title/{imdb_id}",
+        "#IMG_POSTER": poster_url,
+        "#TYPE":       media_type,
+        "photo_width":  img_obj.get("width", 0),
+        "photo_height": img_obj.get("height", 0),
+    }
+
+
+def _search_via_imdb_suggestion(query: str) -> bytes | None:
+    """
+    Cari judul via IMDb Suggestion API dan kembalikan JSON bytes
+    dalam format list yang kompatibel dengan frontend (field #TITLE, #IMDB_ID, dll).
+    Return None jika gagal.
+    """
+    from urllib.parse import quote as _quote
+    q      = re.sub(r"\s+", " ", query.strip())
+    if not q:
+        return None
+    first  = q[0].lower() if q[0].isalnum() else "x"
+    enc    = _quote(q)
+    urls   = [
+        f"{IMDB_SUGGESTION_BASE}/{first}/{enc}.json",
+        f"{IMDB_SUGGESTION_FALLBACK}/{first}/{enc}.json",
+        f"{IMDB_SUGGESTION_BASE}/x/{enc}.json",
+    ]
+    spoof = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    }
+    for url in urls:
+        try:
+            r = requests.get(url, headers=spoof, timeout=6)
+            if r.status_code == 200:
+                data  = r.json()
+                items = data.get("d") or []
+                if items:
+                    results = []
+                    for it in items:
+                        fmt = _format_imdb_suggestion_item(it)
+                        if fmt:
+                            results.append(fmt)
+                    if results:
+                        return json.dumps(results, ensure_ascii=False).encode()
+        except Exception:
+            continue
+    return None
+
+
 def imdb_proxy_req(endpoint: str):
     """
-    Proxy request to https://imdb.iamidiotareyoutoo.com with caching.
+    Proxy request ke imdb.iamidiotareyoutoo.com dengan caching.
+    Intercept /search?q=... dan pakai IMDb Suggestion API karena
+    imdb.iamidiotareyoutoo.com/search mengalami SERVER_FAILURE_25.
     """
     if not endpoint.startswith("/"):
         endpoint = "/" + endpoint
-    
+
     cache_key = f"imdb_proxy:{endpoint}"
     cached = imdb_cache.get(cache_key)
     if cached:
         return cached
 
+    # ── Intercept /search?q=... → IMDb Suggestion API ──────────────────────
+    is_search = endpoint.startswith("/search")
+    if is_search:
+        from urllib.parse import parse_qs as _pqs, urlparse as _up
+        qs        = _pqs(_up(endpoint).query)
+        q_str     = (qs.get("q") or qs.get("Q") or [""])[0].strip()
+        if q_str:
+            body = _search_via_imdb_suggestion(q_str)
+            if body:
+                result = (body, 200, "application/json; charset=utf-8")
+                imdb_cache.set(cache_key, result, ttl=3600)
+                return result
+    # ────────────────────────────────────────────────────────────────────────
+
     target = f"https://imdb.iamidiotareyoutoo.com{endpoint}"
     try:
-        r = requests.get(target, headers=HEADERS, timeout=10)
+        r   = requests.get(target, headers=HEADERS, timeout=10)
         ttl = 3600 if "search" in endpoint else 86400
         result = (r.content, r.status_code, r.headers.get("Content-Type", "application/json"))
         if r.status_code == 200:
             imdb_cache.set(cache_key, result, ttl=ttl)
+        elif is_search and r.status_code != 200:
+            # Fallback ke Suggestion API jika iamidiotareyoutoo.com gagal
+            from urllib.parse import parse_qs as _pqs2, urlparse as _up2
+            qs2   = _pqs2(_up2(endpoint).query)
+            q2    = (qs2.get("q") or qs2.get("Q") or [""])[0].strip()
+            if q2:
+                body2 = _search_via_imdb_suggestion(q2)
+                if body2:
+                    result = (body2, 200, "application/json; charset=utf-8")
+                    imdb_cache.set(cache_key, result, ttl=3600)
         return result
     except Exception as e:
+        if is_search:
+            # Jika koneksi timeout/error, coba Suggestion API sebagai last resort
+            from urllib.parse import parse_qs as _pqs3, urlparse as _up3
+            qs3   = _pqs3(_up3(endpoint).query)
+            q3    = (qs3.get("q") or qs3.get("Q") or [""])[0].strip()
+            if q3:
+                body3 = _search_via_imdb_suggestion(q3)
+                if body3:
+                    result = (body3, 200, "application/json; charset=utf-8")
+                    imdb_cache.set(cache_key, result, ttl=3600)
+                    return result
         return json.dumps({"error": str(e)}).encode(), 500, "application/json"
 
 
